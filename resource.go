@@ -16,7 +16,7 @@ type resourceContent struct {
 
 // resourceTemplate is the wire format for a single entry in resources/templates/list.
 type resourceTemplate struct {
-	URITemplate string `json:"uriTemplate"` // e.g. "forge://posts/{slug}"
+	URITemplate string `json:"uriTemplate"` // e.g. "smeldr://posts/{slug}"
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	MimeType    string `json:"mimeType"`
@@ -39,7 +39,7 @@ func (s *Server) handleResourcesTemplatesList() any {
 		}
 		meta := m.MCPMeta()
 		templates = append(templates, resourceTemplate{
-			URITemplate: "forge:/" + meta.Prefix + "/{slug}",
+			URITemplate: "smeldr:/" + meta.Prefix + "/{slug}",
 			Name:        meta.TypeName + " by slug",
 			Description: "Retrieve a single " + meta.TypeName + " content item by its slug.",
 			MimeType:    "application/json",
@@ -48,8 +48,9 @@ func (s *Server) handleResourcesTemplatesList() any {
 	return map[string]any{"resourceTemplates": templates}
 }
 
-// parseResourceURI resolves a forge:// URI to its module and slug.
-// It iterates all MCPRead modules and matches on the module's prefix.
+// parseResourceURI resolves a smeldr:// or forge:// URI to its module and slug.
+// It accepts both the new smeldr:// scheme (preferred, T86) and the legacy
+// forge:// scheme (still accepted during the deprecation window — T87 removes it).
 // Returns (nil, "", false) for an unknown prefix, empty slug, or a slug
 // that contains extra path segments.
 func (s *Server) parseResourceURI(uri string) (smeldr.MCPModule, string, bool) {
@@ -58,7 +59,10 @@ func (s *Server) parseResourceURI(uri string) (smeldr.MCPModule, string, bool) {
 			continue
 		}
 		prefix := m.MCPMeta().Prefix
-		after, ok := strings.CutPrefix(uri, "forge:/"+prefix+"/")
+		after, ok := strings.CutPrefix(uri, "smeldr:/"+prefix+"/")
+		if !ok {
+			after, ok = strings.CutPrefix(uri, "forge:/"+prefix+"/")
+		}
 		if !ok || after == "" || strings.Contains(after, "/") {
 			continue
 		}
@@ -68,7 +72,7 @@ func (s *Server) parseResourceURI(uri string) (smeldr.MCPModule, string, bool) {
 }
 
 // handleResourcesRead returns the JSON content of a single Published item
-// identified by its forge:// URI. Returns a -32001 error if the URI is
+// identified by its smeldr:// (or legacy forge://) URI. Returns a -32001 error if the URI is
 // malformed, the item does not exist, or the item is not Published.
 func (s *Server) handleResourcesRead(ctx smeldr.Context, params json.RawMessage) (any, *jsonRPCError) {
 	var p struct {

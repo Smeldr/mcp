@@ -7,6 +7,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.15.0] — 2026-06-03
+
+### Changed (additive, non-breaking)
+
+- **Resource URI scheme `smeldr://` (Amendment A123, T86):** `resources/list`,
+  `resources/templates/list`, and subscription notifications now emit `smeldr://`
+  URIs. `resources/read` and `resources/subscribe` accept both `smeldr://` (new)
+  and `forge://` (legacy, still parsed during deprecation window — T87 removes it).
+  `serverInfo.name` updated from `"forge-mcp"` to `"smeldr-mcp"`.
+
+---
+
 ## [1.14.0] — 2026-06-01
 
 Block-system generic MCP tools (T32 component 3, Amendment A117). Dep bump: `smeldr.dev/core` v1.30.0 → v1.31.0, `smeldr.dev/oauth` v0.1.4 → v0.1.5.

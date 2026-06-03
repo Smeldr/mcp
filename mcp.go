@@ -85,7 +85,7 @@ func WithBlocks() ServerOption {
 // [Server.Handler] mounts:
 //
 //	GET  /.well-known/oauth-authorization-server  (RFC 8414 — served by forge-oauth)
-//	GET  /.well-known/oauth-protected-resource    (RFC 9728 — served by forge-mcp)
+//	GET  /.well-known/oauth-protected-resource    (RFC 9728 — served by smeldr.dev/mcp)
 //	GET  /oauth/authorize
 //	POST /oauth/authorize
 //	POST /oauth/token
@@ -144,7 +144,7 @@ func New(app *smeldr.App, opts ...ServerOption) *Server {
 		o(s)
 	}
 	if len(s.secret) > 0 && !bytes.Equal(s.secret, app.Secret()) {
-		log.Printf("forge-mcp: WithSecret value differs from app Config.Secret — " +
+		log.Printf("smeldr.dev/mcp: WithSecret value differs from app Config.Secret — " +
 			"tokens minted by smeldr.SignToken will fail SSE verification")
 	}
 	// Bridge app-level signals to resource-subscription notifications.
@@ -160,7 +160,7 @@ func New(app *smeldr.App, opts ...ServerOption) *Server {
 			if slug == "" {
 				return
 			}
-			uri := "forge:/" + m.MCPMeta().Prefix + "/" + slug
+			uri := "smeldr:/" + m.MCPMeta().Prefix + "/" + slug
 			subs.Notify(uri)
 			return
 		}
@@ -203,7 +203,7 @@ func (s *Server) allResources(ctx smeldr.Context) []mcpResource {
 				continue
 			}
 			out = append(out, mcpResource{
-				URI:      "forge:/" + prefix + "/" + slug,
+				URI:      "smeldr:/" + prefix + "/" + slug,
 				Name:     typeName + " — " + slug,
 				MimeType: "application/json",
 			})
@@ -446,7 +446,7 @@ func (s *Server) handle(ctx smeldr.Context, req jsonRPCRequest) jsonRPCResponse 
 func (s *Server) handleInitialize() any {
 	return map[string]any{
 		"protocolVersion": "2024-11-05",
-		"serverInfo":      map[string]any{"name": "forge-mcp", "version": "1.0.0"},
+		"serverInfo":      map[string]any{"name": "smeldr-mcp", "version": "1.0.0"},
 		"capabilities": map[string]any{
 			"resources": map[string]any{"subscribe": true, "listChanged": true},
 			"tools":     map[string]any{"listChanged": false},

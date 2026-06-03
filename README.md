@@ -180,8 +180,10 @@ uppercase letters treated as one word. `BlogPost` → `blog_post`,
 `MCPDocument` → `mcp_document`. Full examples:
 `create_blog_post`, `update_blog_post`, `publish_blog_post`.
 
-**Resource URI format:** `forge://{prefix}/{slug}` — for example,
-`forge://posts/hello-world` for a post at `/posts/hello-world`.
+**Resource URI format:** `smeldr://{prefix}/{slug}` — for example,
+`smeldr://posts/hello-world` for a post at `/posts/hello-world`.
+Legacy `forge://` URIs are still accepted on `resources/read` and `resources/subscribe`
+during the deprecation window (T87 removes legacy accept).
 
 **Field names in `create_*` and `update_*` arguments:** use the JSON field name
 (lowercase, respecting any `json:` tag). For `Title string` with no json tag,

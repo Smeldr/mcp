@@ -196,7 +196,7 @@ func TestInputSchema_datetimeField(t *testing.T) {
 }
 
 // TestMCPResourcesList verifies that resources/list returns only Published items
-// and formats URIs as forge://{prefix}/{slug}.
+// and formats URIs as smeldr://{prefix}/{slug}.
 func TestMCPResourcesList(t *testing.T) {
 	cfg := smeldr.Config{
 		BaseURL: "http://localhost",
@@ -230,8 +230,8 @@ func TestMCPResourcesList(t *testing.T) {
 	if len(resources) != 1 {
 		t.Fatalf("got %d resources, want 1 (Published only)", len(resources))
 	}
-	if resources[0].URI != "forge://posts/published-post" {
-		t.Errorf("URI = %q, want %q", resources[0].URI, "forge://posts/published-post")
+	if resources[0].URI != "smeldr://posts/published-post" {
+		t.Errorf("URI = %q, want %q", resources[0].URI, "smeldr://posts/published-post")
 	}
 }
 
@@ -284,6 +284,46 @@ func TestMCPResourcesRead_published(t *testing.T) {
 	}
 	if fields["Title"] != "Hello World" {
 		t.Errorf("Title = %v, want Hello World", fields["Title"])
+	}
+}
+
+// TestMCPResourcesRead_smeldrScheme verifies that resources/read accepts the new
+// smeldr:// scheme (T86) and echoes it back in the response URI.
+func TestMCPResourcesRead_smeldrScheme(t *testing.T) {
+	cfg := smeldr.Config{
+		BaseURL: "http://localhost",
+		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
+	}
+	app := smeldr.New(cfg)
+	repo := smeldr.NewMemoryRepo[*testMCPPost]()
+	mod := smeldr.NewModule(
+		(*testMCPPost)(nil),
+		smeldr.Repo(repo),
+		smeldr.At("/posts"),
+		smeldr.MCP(smeldr.MCPRead),
+	)
+	app.Content(mod)
+	seedPost(t, repo, "hello-world", smeldr.Published, "Hello World", "body content here")
+
+	srv := New(app)
+	ctx := newTestCtx()
+
+	params, _ := json.Marshal(map[string]string{"uri": "smeldr://posts/hello-world"})
+	result, rpcErr := srv.handleResourcesRead(ctx, params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	m, ok := result.(map[string]any)
+	if !ok {
+		t.Fatal("result is not map[string]any")
+	}
+	contents, ok := m["contents"].([]resourceContent)
+	if !ok || len(contents) != 1 {
+		t.Fatalf("contents = %T len=%d, want []resourceContent len=1", m["contents"], len(contents))
+	}
+	// handleResourcesRead echoes the caller's URI — smeldr:// in, smeldr:// out.
+	if contents[0].URI != "smeldr://posts/hello-world" {
+		t.Errorf("contents[0].URI = %q, want smeldr://posts/hello-world", contents[0].URI)
 	}
 }
 
@@ -367,11 +407,11 @@ func TestMCPResourcesTemplatesList(t *testing.T) {
 			t.Errorf("MimeType = %q, want application/json", tmpl.MimeType)
 		}
 	}
-	if !uriTemplates["forge://posts/{slug}"] {
-		t.Error("missing template for forge://posts/{slug}")
+	if !uriTemplates["smeldr://posts/{slug}"] {
+		t.Error("missing template for smeldr://posts/{slug}")
 	}
-	if !uriTemplates["forge://news/{slug}"] {
-		t.Error("missing template for forge://news/{slug}")
+	if !uriTemplates["smeldr://news/{slug}"] {
+		t.Error("missing template for smeldr://news/{slug}")
 	}
 }
 
