@@ -7,6 +7,22 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.16.0] — 2026-06-04
+
+### Added
+
+- **Redirect management tools (Amendment A125, T30):** three Editor-role tools
+  exposed automatically when `App.Redirects(db)` has been called:
+  - `create_redirect(from, to, code, is_prefix)` — creates or upserts a redirect
+    rule. Changes take effect immediately (in-memory + DB).
+  - `list_redirects()` — returns all registered redirect rules sorted by `from`.
+  - `delete_redirect(from)` — deletes a redirect rule by its `from` path.
+    Changes take effect immediately.
+- `Server.redirectEnabled` field — set in `New()` when `app.RedirectDB() != nil`;
+  gates the redirect tool list and dispatch.
+
+---
+
 ## [1.15.0] — 2026-06-03
 
 ### Changed (additive, non-breaking)

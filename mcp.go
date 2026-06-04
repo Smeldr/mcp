@@ -123,6 +123,10 @@ type Server struct {
 	// block-system node and composition tools.
 	blockRepo *smeldr.SQLRepo[*smeldr.DynamicNode]
 	edgeStore *smeldr.ContentEdgeStore
+
+	// redirectEnabled is true when the App has database-backed redirect
+	// management activated (App.Redirects was called). Set in New().
+	redirectEnabled bool
 }
 
 // New creates a Server for the given forge App, collecting all content modules
@@ -131,14 +135,15 @@ type Server struct {
 // Pass [WithSecret] to override (e.g. during secret rotation).
 func New(app *smeldr.App, opts ...ServerOption) *Server {
 	s := &Server{
-		app:           app,
-		modules:       app.MCPModules(),
-		secret:        app.Secret(),
-		tokenStore:    app.TokenStore(),
-		navTree:       app.NavTree(),
-		webhookStore:  app.WebhookStore(),
-		webhookPool:   app.WebhookPool(),
-		subscriptions: newSubscriptionRegistry(),
+		app:             app,
+		modules:         app.MCPModules(),
+		secret:          app.Secret(),
+		tokenStore:      app.TokenStore(),
+		navTree:         app.NavTree(),
+		webhookStore:    app.WebhookStore(),
+		webhookPool:     app.WebhookPool(),
+		subscriptions:   newSubscriptionRegistry(),
+		redirectEnabled: app.RedirectDB() != nil,
 	}
 	for _, o := range opts {
 		o(s)

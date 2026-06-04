@@ -128,6 +128,9 @@ func (s *Server) handleToolsList() any {
 		tools = append(tools, nodeToolDefs()...)
 		tools = append(tools, compositionToolDefs()...)
 	}
+	if s.redirectEnabled {
+		tools = append(tools, redirectToolDefs()...)
+	}
 	return map[string]any{"tools": tools}
 }
 
@@ -203,6 +206,15 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return nil, rpcErr
 		}
 		return s.handleUploadTool(s.app, p.Name)
+	}
+
+	// Redirect management tools require Editor role and are dispatched before
+	// module-scoped tool authorisation.
+	if s.redirectEnabled && isRedirectTool(p.Name) {
+		if rpcErr := s.authoriseEditor(ctx); rpcErr != nil {
+			return nil, rpcErr
+		}
+		return s.handleRedirectTool(ctx, p.Name, coalesceArgs(p.Arguments))
 	}
 
 	// Block-system tools (WithBlocks). Generic node lifecycle tools require
