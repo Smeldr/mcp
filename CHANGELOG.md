@@ -1,9 +1,32 @@
 # Changelog — smeldr.dev/mcp
 
-All notable changes to the `forge-mcp` module are documented here.
+All notable changes to the `smeldr.dev/mcp` module are documented here.
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+---
+
+## [1.17.0] — 2026-06-06
+
+### Changed (breaking)
+
+- Package renamed `forgemcp` → `mcp` (T100 Step 2). Update imports from
+  `forgemcp.X` to `mcp.X` (or drop the alias: `import "smeldr.dev/mcp"`). No
+  exported symbols changed — only the package qualifier.
+- Adopted `smeldr.dev/oauth` v0.2.0: dependency bumped from v0.1.5; the
+  `forgeoauth` import alias dropped and `forgeoauth.X` selectors updated to
+  `oauth.X`. Values are unchanged — `errors.Is(err, oauth.ErrTokenNotFound)`
+  still matches (oauth v0.2.0 changed only its package name and string prefixes).
+- `WithOAuth` parameter renamed `oauth` → `srv` to avoid shadowing the now-bare
+  `oauth` package name. Parameter names are not part of the call signature; no
+  caller breaks.
+
+### Preserved (not in T100 scope)
+
+- `WithForgeFallback` API and the `forge://` resource-URI parse-compat (A123,
+  T86/T87) are unchanged — legacy forge-bearer-token and resource-URI
+  compatibility remain intact.
 
 ---
 

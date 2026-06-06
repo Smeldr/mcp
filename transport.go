@@ -1,4 +1,4 @@
-package forgemcp
+package mcp
 
 import (
 	"bufio"
@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"smeldr.dev/core"
-	forgeoauth "smeldr.dev/oauth"
+	"smeldr.dev/oauth"
 )
 
 // ServeStdio runs the MCP server over newline-delimited JSON on the given
@@ -132,7 +132,7 @@ func (s *Server) Handler() http.Handler {
 //	POST /oauth/token                             — code exchange and token refresh
 //	POST /oauth/revoke                            — token revocation (RFC 7009)
 //
-// Register calls [Handler] once to obtain the forgemcp mux and then delegates
+// Register calls [Handler] once to obtain the mcp mux and then delegates
 // each route to it via [smeldr.App.Handle]. Go 1.22+ ServeMux priority rules
 // ensure existing forge routes are never overwritten.
 //
@@ -177,7 +177,7 @@ func (s *Server) sseHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		_, err := s.oauth.ValidateAccessToken(r.Context(), token)
 		if err != nil {
-			if s.forgeFallback && errors.Is(err, forgeoauth.ErrTokenNotFound) {
+			if s.forgeFallback && errors.Is(err, oauth.ErrTokenNotFound) {
 				if _, ok := smeldr.VerifyTokenString(token, s.secret, s.tokenStore); !ok {
 					s.writeOAuthChallenge(w)
 					return
@@ -235,7 +235,7 @@ func (s *Server) messageHandler(w http.ResponseWriter, r *http.Request) {
 	// Authentication boundary: HTTP-level 401 before any JSON-RPC decoding.
 	var forgeCtx smeldr.Context
 	if s.oauth != nil {
-		// OAuth 2.1 mode: validate Bearer access token issued by forge-oauth.
+		// OAuth 2.1 mode: validate Bearer access token issued by oauth.
 		// When WithForgeFallback is set, a forge bearer token is accepted as a
 		// fallback if the token is not found in the OAuth store (ErrTokenNotFound).
 		// An expired OAuth token is never eligible for fallback.
@@ -250,7 +250,7 @@ func (s *Server) messageHandler(w http.ResponseWriter, r *http.Request) {
 				ID:    at.ClientID,
 				Roles: []smeldr.Role{oauthScopeToRole(at.Scope)},
 			})
-		} else if s.forgeFallback && errors.Is(err, forgeoauth.ErrTokenNotFound) {
+		} else if s.forgeFallback && errors.Is(err, oauth.ErrTokenNotFound) {
 			// Token not found in OAuth store — try forge bearer token as fallback.
 			user, ok := smeldr.VerifyTokenString(token, s.secret, s.tokenStore)
 			if !ok {
@@ -314,7 +314,7 @@ func extractBearerToken(r *http.Request) string {
 // oauthScopeToRole maps an OAuth scope string to a Forge role.
 //
 //	"mcp:admin"      → smeldr.Admin
-//	all other values → smeldr.Author  (standard forge-operator scope for AI clients)
+//	all other values → smeldr.Author  (standard operator scope for AI clients)
 //
 // The scope "offline_access" is a modifier (enables refresh tokens) and does
 // not affect role mapping — it is combined with the primary scope as a

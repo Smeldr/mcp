@@ -1,4 +1,4 @@
-﻿package forgemcp
+package mcp
 
 import (
 	"bytes"
@@ -17,10 +17,10 @@ import (
 	"time"
 
 	"smeldr.dev/core"
-	forgeoauth "smeldr.dev/oauth"
+	"smeldr.dev/oauth"
 )
 
-// testMCPPost is the canonical content type for all forge-mcp tests.
+// testMCPPost is the canonical content type for all mcp tests.
 // It exercises: required fields, min constraints, a numeric field, a
 // json: tag override, and the embedded Node.
 type testMCPPost struct {
@@ -1820,19 +1820,19 @@ func TestPreviewURL_SingleInstance(t *testing.T) {
 	})
 }
 
-// — Lag 3: forge-mcp OAuth wiring tests ——————————————————————————————————
+// — Lag 3: mcp OAuth wiring tests ——————————————————————————————————
 
-// newTestOAuthServer builds an in-memory forge-oauth Server for Lag 3 tests.
+// newTestOAuthServer builds an in-memory oauth Server for Lag 3 tests.
 // VerifyBearer always returns true — tests don't exercise the bearer flow here;
-// that is covered by Lag 1/2 in forge-oauth.
-func newTestOAuthServer(t *testing.T) (*forgeoauth.Server, *forgeoauth.SQLiteStore) {
+// that is covered by Lag 1/2 in oauth.
+func newTestOAuthServer(t *testing.T) (*oauth.Server, *oauth.SQLiteStore) {
 	t.Helper()
-	store, err := forgeoauth.NewSQLiteStore(":memory:")
+	store, err := oauth.NewSQLiteStore(":memory:")
 	if err != nil {
 		t.Fatalf("NewSQLiteStore: %v", err)
 	}
 	t.Cleanup(func() { store.Close() })
-	srv := forgeoauth.New(forgeoauth.Config{
+	srv := oauth.New(oauth.Config{
 		Issuer:       "https://cms.example.com",
 		VerifyBearer: func(string) bool { return true },
 	}, store)
@@ -1840,9 +1840,9 @@ func newTestOAuthServer(t *testing.T) (*forgeoauth.Server, *forgeoauth.SQLiteSto
 }
 
 // seedOAuthToken saves a valid (non-expired) access token in the store.
-func seedOAuthToken(t *testing.T, store *forgeoauth.SQLiteStore, token, clientID, scope string) {
+func seedOAuthToken(t *testing.T, store *oauth.SQLiteStore, token, clientID, scope string) {
 	t.Helper()
-	err := store.SaveToken(context.Background(), forgeoauth.AccessToken{
+	err := store.SaveToken(context.Background(), oauth.AccessToken{
 		Token:     token,
 		ClientID:  clientID,
 		Scope:     scope,

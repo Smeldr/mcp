@@ -1,8 +1,8 @@
-// Package forgemcp implements an MCP (Model Context Protocol) server for Forge
+// Package mcp implements an MCP (Model Context Protocol) server for Smeldr
 // applications. It exposes content modules registered with smeldr.MCP(...) as
 // MCP resources and tools, enabling AI assistants to query and manage content
 // through a structured protocol.
-package forgemcp
+package mcp
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"log"
 
 	"smeldr.dev/core"
-	forgeoauth "smeldr.dev/oauth"
+	"smeldr.dev/oauth"
 )
 
 // ServerOption configures a [Server]. Use [WithSecret] to override the HMAC
@@ -26,13 +26,13 @@ func WithSecret(secret []byte) ServerOption {
 }
 
 // WithModule registers an additional [smeldr.MCPModule] with the MCP server.
-// Use this to expose modules from external sub-packages (e.g. forge-media)
+// Use this to expose modules from external sub-packages (e.g. media)
 // that cannot be wired through [smeldr.App.MCPModules] directly.
 //
 // Example:
 //
 //	mediaSrv := forgemedia.Register(app, store)
-//	mcpSrv := forgemcp.New(app, forgemcp.WithModule(mediaSrv))
+//	mcpSrv := mcp.New(app, mcp.WithModule(mediaSrv))
 func WithModule(m smeldr.MCPModule) ServerOption {
 	return func(s *Server) { s.modules = append(s.modules, m) }
 }
@@ -40,8 +40,8 @@ func WithModule(m smeldr.MCPModule) ServerOption {
 // WithForgeFallback enables forge bearer token authentication as a fallback
 // when [WithOAuth] is also configured. When both options are set, the server
 // first attempts OAuth access token validation; if the token is not found in
-// the OAuth store ([forgeoauth.ErrTokenNotFound]), it falls through to forge
-// bearer token validation. An expired OAuth token ([forgeoauth.ErrTokenExpired])
+// the OAuth store ([oauth.ErrTokenNotFound]), it falls through to forge
+// bearer token validation. An expired OAuth token ([oauth.ErrTokenExpired])
 // is never eligible for fallback — it returns HTTP 401 immediately.
 //
 // Use this when forge bearer token clients (Claude Desktop, forge-cli, internal
@@ -66,7 +66,7 @@ func WithForgeFallback() ServerOption {
 // tools are silently not exposed.
 //
 //	smeldr.CreateBlockTables(db)
-//	mcpSrv := forgemcp.New(app, forgemcp.WithBlocks())
+//	mcpSrv := mcp.New(app, mcp.WithBlocks())
 func WithBlocks() ServerOption {
 	return func(s *Server) {
 		if db := s.app.Config().DB; db != nil {
@@ -77,14 +77,14 @@ func WithBlocks() ServerOption {
 }
 
 // WithOAuth enables OAuth 2.1 authentication for the MCP server.
-// The provided forge-oauth [forgeoauth.Server] handles authorization and token
+// The provided oauth [oauth.Server] handles authorization and token
 // issuance; all MCP requests (both GET /mcp SSE and POST /mcp/message) must
 // carry a valid OAuth Bearer access token.
 //
 // The OAuth endpoints are served at the same HTTP address as the MCP endpoints.
 // [Server.Handler] mounts:
 //
-//	GET  /.well-known/oauth-authorization-server  (RFC 8414 — served by forge-oauth)
+//	GET  /.well-known/oauth-authorization-server  (RFC 8414 — served by oauth)
 //	GET  /.well-known/oauth-protected-resource    (RFC 9728 — served by smeldr.dev/mcp)
 //	GET  /oauth/authorize
 //	POST /oauth/authorize
@@ -92,17 +92,17 @@ func WithBlocks() ServerOption {
 //
 // Example:
 //
-//	store, _ := forgeoauth.NewSQLiteStore("./forge-oauth.db")
-//	oauthSrv := forgeoauth.New(forgeoauth.Config{
+//	store, _ := oauth.NewSQLiteStore("./oauth.db")
+//	oauthSrv := oauth.New(oauth.Config{
 //	    Issuer: "https://cms.example.com",
 //	    VerifyBearer: func(token string) bool {
 //	        _, ok := smeldr.VerifyTokenString(token, app.Secret(), app.TokenStore())
 //	        return ok
 //	    },
 //	}, store)
-//	mcpSrv := forgemcp.New(app, forgemcp.WithOAuth(oauthSrv))
-func WithOAuth(oauth *forgeoauth.Server) ServerOption {
-	return func(s *Server) { s.oauth = oauth }
+//	mcpSrv := mcp.New(app, mcp.WithOAuth(oauthSrv))
+func WithOAuth(srv *oauth.Server) ServerOption {
+	return func(s *Server) { s.oauth = srv }
 }
 
 // Server wraps a set of [smeldr.MCPModule] values and serves the MCP protocol
@@ -110,14 +110,14 @@ func WithOAuth(oauth *forgeoauth.Server) ServerOption {
 type Server struct {
 	app           *smeldr.App // the forge App; used for BaseURL, GeneratePreviewToken, etc.
 	modules       []smeldr.MCPModule
-	secret        []byte                // HMAC secret for SSE bearer-token verification
+	secret        []byte                 // HMAC secret for SSE bearer-token verification
 	tokenStore    *smeldr.TokenStore     // non-nil when the app has a TokenStore configured
 	navTree       *smeldr.NavTree        // non-nil when the app has a NavTree configured
 	webhookStore  *smeldr.WebhookStore   // non-nil when the app has Webhooks configured
 	webhookPool   smeldr.WebhookJobQueue // non-nil when the app has Webhooks configured
-	subscriptions *subscriptionRegistry // resource subscription fan-out registry
-	oauth         *forgeoauth.Server    // non-nil when OAuth 2.1 is enabled via WithOAuth
-	forgeFallback bool                  // accept forge bearer tokens as fallback when OAuth enabled
+	subscriptions *subscriptionRegistry  // resource subscription fan-out registry
+	oauth         *oauth.Server          // non-nil when OAuth 2.1 is enabled via WithOAuth
+	forgeFallback bool                   // accept forge bearer tokens as fallback when OAuth enabled
 
 	// blockRepo and edgeStore are non-nil when WithBlocks is set; they back the
 	// block-system node and composition tools.
@@ -358,11 +358,11 @@ func mcpAdminReadToolDefs(m smeldr.MCPModule) []mcpTool {
 
 // inputSchema converts []smeldr.MCPField to a JSON Schema object suitable for
 // MCP tools/list, marking Required fields in the required array.
-// When a field carries a forge_format or forge_description tag, a
+// When a field carries a smeldr_format or smeldr_description tag, a
 // "description" key is added to the property using the priority rules from
 // Decision 27:
-//   - Both present: forge_description + " (" + forge_format + ")"
-//   - Only forge_format: "(" + forge_format + ")"
+//   - Both present: smeldr_description + " (" + smeldr_format + ")"
+//   - Only smeldr_format: "(" + smeldr_format + ")"
 //   - Neither: no description key emitted
 func inputSchema(fields []smeldr.MCPField) map[string]any {
 	props := make(map[string]any, len(fields))
@@ -385,7 +385,7 @@ func inputSchema(fields []smeldr.MCPField) map[string]any {
 
 // inputSchemaUpdate builds an update tool schema: adds a required "slug" field
 // and makes all content fields optional (partial-update semantics).
-// Description hints from forge_format and forge_description tags are applied
+// Description hints from smeldr_format and smeldr_description tags are applied
 // using the same priority rules as [inputSchema] (Decision 27).
 func inputSchemaUpdate(fields []smeldr.MCPField) map[string]any {
 	props := map[string]any{

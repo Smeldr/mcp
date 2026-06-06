@@ -25,7 +25,7 @@ import (
 	"context"
 	"os"
 
-	forgemcp "smeldr.dev/mcp"
+	"smeldr.dev/mcp"
 
 	"smeldr.dev/core"
 )
@@ -50,7 +50,7 @@ func main() {
 	)
 	app.Content(posts)
 
-	srv := forgemcp.New(app)
+	srv := mcp.New(app)
 	if err := srv.ServeStdio(context.Background(), os.Stdin, os.Stdout); err != nil {
 		os.Exit(1)
 	}
@@ -62,6 +62,16 @@ Build the binary:
 ```bash
 go build -o myapp-mcp .
 ```
+
+---
+
+## Migrating from v1.16.x
+
+The package was renamed `forgemcp` → `mcp` in v1.17.0. Replace `forgemcp.X` with
+`mcp.X` at all call sites (or drop the import alias: `import "smeldr.dev/mcp"`). No
+exported symbols changed — only the package qualifier. The `smeldr.dev/oauth`
+dependency moved to v0.2.0 (`forgeoauth` → `oauth`); if you wire OAuth via
+`WithOAuth`, update that import too.
 
 ---
 
@@ -114,7 +124,7 @@ For remote access over HTTP, use the SSE transport:
 ```go
 // In your main app or a dedicated MCP server binary:
 mux := http.NewServeMux()
-mux.Handle("/", forgemcp.New(app).Handler())
+mux.Handle("/", mcp.New(app).Handler())
 http.ListenAndServe(":9090", mux)
 ```
 
@@ -227,7 +237,7 @@ them once at startup with `smeldr.CreateBlockTables(db)`.
 
 ```go
 smeldr.CreateBlockTables(db)
-mcpSrv := forgemcp.New(app, forgemcp.WithBlocks())
+mcpSrv := mcp.New(app, mcp.WithBlocks())
 ```
 
 Blocks are addressed by **ID** (they have no slug) and are not exposed as
@@ -303,12 +313,12 @@ protocol handling is implemented using the Go standard library only.
 
 ## Secret rotation (WithSecret)
 
-`forgemcp.New(app)` automatically inherits the HMAC secret from `app.Config.Secret`.
+`mcp.New(app)` automatically inherits the HMAC secret from `app.Config.Secret`.
 You only need `WithSecret` during a secret rotation window — when you need to
 accept tokens signed with a different secret than the one currently in `Config.Secret`:
 
 ```go
-srv := forgemcp.New(app, forgemcp.WithSecret(oldSecret))
+srv := mcp.New(app, mcp.WithSecret(oldSecret))
 ```
 
 If the provided secret differs from `app.Config.Secret`, a warning is logged at

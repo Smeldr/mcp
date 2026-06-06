@@ -1,4 +1,4 @@
-package forgemcp
+package mcp
 
 import (
 	"encoding/json"
