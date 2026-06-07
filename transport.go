@@ -29,7 +29,7 @@ import (
 // The stdio transport runs with [smeldr.Admin] privileges — the process runs
 // locally and the operator is trusted.
 func (s *Server) ServeStdio(ctx context.Context, in io.Reader, out io.Writer) error {
-	forgeCtx := smeldr.NewContextWithUser(smeldr.User{
+	smeldrCtx := smeldr.NewContextWithUser(smeldr.User{
 		ID:    "stdio",
 		Roles: []smeldr.Role{smeldr.Admin},
 	})
@@ -64,7 +64,7 @@ func (s *Server) ServeStdio(ctx context.Context, in io.Reader, out io.Writer) er
 					Error:   &jsonRPCError{Code: -32700, Message: "parse error"},
 				}
 			} else {
-				resp = s.handle(forgeCtx, req)
+				resp = s.handle(smeldrCtx, req)
 			}
 			b, _ := json.Marshal(resp)
 			fmt.Fprintf(out, "%s\n", b)
@@ -114,7 +114,7 @@ func (s *Server) Handler() http.Handler {
 	return mux
 }
 
-// Register mounts all MCP and OAuth routes on a forge [smeldr.App] in one call.
+// Register mounts all MCP and OAuth routes on a Smeldr [smeldr.App] in one call.
 // It replaces the pattern of calling [smeldr.App.Handle] for each endpoint individually.
 //
 // Registered routes (always):
@@ -134,7 +134,7 @@ func (s *Server) Handler() http.Handler {
 //
 // Register calls [Handler] once to obtain the mcp mux and then delegates
 // each route to it via [smeldr.App.Handle]. Go 1.22+ ServeMux priority rules
-// ensure existing forge routes are never overwritten.
+// ensure existing Smeldr routes are never overwritten.
 //
 // After Register returns, site-dev should update main.go to use this method
 // instead of five separate app.Handle calls.
@@ -177,7 +177,7 @@ func (s *Server) sseHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		_, err := s.oauth.ValidateAccessToken(r.Context(), token)
 		if err != nil {
-			if s.forgeFallback && errors.Is(err, oauth.ErrTokenNotFound) {
+			if s.fallback && errors.Is(err, oauth.ErrTokenNotFound) {
 				if _, ok := smeldr.VerifyTokenString(token, s.secret, s.tokenStore); !ok {
 					s.writeOAuthChallenge(w)
 					return
@@ -233,7 +233,7 @@ func (s *Server) sseHandler(w http.ResponseWriter, r *http.Request) {
 // limit, and writes a JSON-RPC response for every outcome.
 func (s *Server) messageHandler(w http.ResponseWriter, r *http.Request) {
 	// Authentication boundary: HTTP-level 401 before any JSON-RPC decoding.
-	var forgeCtx smeldr.Context
+	var smeldrCtx smeldr.Context
 	if s.oauth != nil {
 		// OAuth 2.1 mode: validate Bearer access token issued by oauth.
 		// When WithForgeFallback is set, a forge bearer token is accepted as a
@@ -246,33 +246,33 @@ func (s *Server) messageHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		at, err := s.oauth.ValidateAccessToken(r.Context(), token)
 		if err == nil {
-			forgeCtx = smeldr.NewContextWithUser(smeldr.User{
+			smeldrCtx = smeldr.NewContextWithUser(smeldr.User{
 				ID:    at.ClientID,
 				Roles: []smeldr.Role{oauthScopeToRole(at.Scope)},
 			})
-		} else if s.forgeFallback && errors.Is(err, oauth.ErrTokenNotFound) {
+		} else if s.fallback && errors.Is(err, oauth.ErrTokenNotFound) {
 			// Token not found in OAuth store — try forge bearer token as fallback.
 			user, ok := smeldr.VerifyTokenString(token, s.secret, s.tokenStore)
 			if !ok {
 				s.writeOAuthChallenge(w)
 				return
 			}
-			forgeCtx = smeldr.NewContextWithUser(user)
+			smeldrCtx = smeldr.NewContextWithUser(user)
 		} else {
 			s.writeOAuthChallenge(w)
 			return
 		}
 	} else if len(s.secret) > 0 {
-		// Forge bearer token mode.
+		// Smeldr bearer token mode.
 		user, ok := smeldr.VerifyBearerToken(r, s.secret, s.tokenStore)
 		if !ok {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		forgeCtx = smeldr.NewContextWithUser(user)
+		smeldrCtx = smeldr.NewContextWithUser(user)
 	} else {
 		// No authentication configured: treat caller as GuestUser.
-		forgeCtx = smeldr.NewContextWithUser(smeldr.GuestUser)
+		smeldrCtx = smeldr.NewContextWithUser(smeldr.GuestUser)
 	}
 
 	// Body limit: protect against large payloads.
@@ -294,7 +294,7 @@ func (s *Server) messageHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := s.handle(forgeCtx, req)
+	resp := s.handle(smeldrCtx, req)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp) //nolint:errcheck
 }
@@ -311,7 +311,7 @@ func extractBearerToken(r *http.Request) string {
 	return token
 }
 
-// oauthScopeToRole maps an OAuth scope string to a Forge role.
+// oauthScopeToRole maps an OAuth scope string to a Smeldr role.
 //
 //	"mcp:admin"      → smeldr.Admin
 //	all other values → smeldr.Author  (standard operator scope for AI clients)

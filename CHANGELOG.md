@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.17.1] — 2026-06-07
+
+### Changed
+
+- Brand-prose sweep (T101, A135): `forgeCtx` → `smeldrCtx`, `forgeFallback` field →
+  `fallback`, godoc/comment "Forge" → "Smeldr" in mcp.go, transport.go, tool.go,
+  mcp_test.go. User-visible MCP tool description updated. Preserved: `WithForgeFallback`,
+  `forge://`, T86/T87 fallback description. No exported-symbol or behaviour change.
+
+---
+
 ## [1.17.0] — 2026-06-06
 
 ### Changed (breaking)

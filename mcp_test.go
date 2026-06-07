@@ -158,7 +158,7 @@ func TestInputSchema(t *testing.T) {
 }
 
 // TestInputSchema_datetimeField verifies that a field with Type == "datetime"
-// (the internal Forge type identifier for time.Time) emits
+// (the internal Smeldr type identifier for time.Time) emits
 // {"type":"string","format":"date-time"} in both inputSchema and
 // inputSchemaUpdate, satisfying the JSON Schema specification.
 func TestInputSchema_datetimeField(t *testing.T) {

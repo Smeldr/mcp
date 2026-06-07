@@ -78,7 +78,7 @@ func (s *Server) authoriseAdmin(ctx smeldr.Context) *jsonRPCError {
 	return &jsonRPCError{Code: -32001, Message: "forbidden"}
 }
 
-// errorFor maps a forge error to a JSON-RPC error:
+// errorFor maps a smeldr error to a JSON-RPC error:
 //   - [smeldr.ValidationError] → -32602 (invalid params) with the validation message
 //   - [smeldr.ErrNotFound]      → -32001 (resource not found)
 //   - [smeldr.ErrForbidden]     → -32001 (permission denied)
@@ -564,7 +564,7 @@ func navToolDefs(hasDB bool) []mcpTool {
 					"label":      map[string]any{"type": "string", "description": "Display text for this navigation item."},
 					"path":       map[string]any{"type": "string", "description": "URL path prefix, e.g. /learn. Leave empty for a ghost (non-clickable) item."},
 					"parent_id":  map[string]any{"type": "string", "description": "ID of the parent item. Omit or leave empty for a top-level item."},
-					"module":     map[string]any{"type": "string", "description": "Forge module table name this item maps to. Omit for custom or ghost items."},
+					"module":     map[string]any{"type": "string", "description": "Smeldr module table name this item maps to. Omit for custom or ghost items."},
 					"hidden":     map[string]any{"type": "boolean", "description": "Exclude from navigation while keeping in breadcrumbs."},
 					"ghost":      map[string]any{"type": "boolean", "description": "Non-clickable structural grouping node. Still appears in navigation unless also hidden."},
 					"sort_order": map[string]any{"type": "number", "description": "Display order within the same parent level (lower = earlier)."},

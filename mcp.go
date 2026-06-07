@@ -48,7 +48,7 @@ func WithModule(m smeldr.MCPModule) ServerOption {
 // tooling) must continue to work alongside OAuth clients (ChatGPT, Claude.ai).
 // Without WithForgeFallback, WithOAuth rejects all non-OAuth tokens.
 func WithForgeFallback() ServerOption {
-	return func(s *Server) { s.forgeFallback = true }
+	return func(s *Server) { s.fallback = true }
 }
 
 // WithBlocks enables the block-system MCP tools for the App's DB.
@@ -108,7 +108,7 @@ func WithOAuth(srv *oauth.Server) ServerOption {
 // Server wraps a set of [smeldr.MCPModule] values and serves the MCP protocol
 // over stdio (see [Server.ServeStdio]) or HTTP SSE (see [Server.Handler]).
 type Server struct {
-	app           *smeldr.App // the forge App; used for BaseURL, GeneratePreviewToken, etc.
+	app           *smeldr.App // the Smeldr App; used for BaseURL, GeneratePreviewToken, etc.
 	modules       []smeldr.MCPModule
 	secret        []byte                 // HMAC secret for SSE bearer-token verification
 	tokenStore    *smeldr.TokenStore     // non-nil when the app has a TokenStore configured
@@ -117,7 +117,7 @@ type Server struct {
 	webhookPool   smeldr.WebhookJobQueue // non-nil when the app has Webhooks configured
 	subscriptions *subscriptionRegistry  // resource subscription fan-out registry
 	oauth         *oauth.Server          // non-nil when OAuth 2.1 is enabled via WithOAuth
-	forgeFallback bool                   // accept forge bearer tokens as fallback when OAuth enabled
+	fallback bool                   // accept smeldr bearer tokens as fallback when OAuth enabled
 
 	// blockRepo and edgeStore are non-nil when WithBlocks is set; they back the
 	// block-system node and composition tools.
@@ -129,7 +129,7 @@ type Server struct {
 	redirectEnabled bool
 }
 
-// New creates a Server for the given forge App, collecting all content modules
+// New creates a Server for the given Smeldr App, collecting all content modules
 // registered with smeldr.MCP(...). The App's HMAC secret (Config.Secret) is
 // inherited automatically and used for SSE bearer-token verification.
 // Pass [WithSecret] to override (e.g. during secret rotation).
@@ -236,7 +236,7 @@ func fieldToProp(f smeldr.MCPField) map[string]any {
 			"items": map[string]any{"type": "string"},
 		}
 	case "datetime":
-		// "datetime" is an internal Forge type identifier. JSON Schema
+		// "datetime" is an internal Smeldr type identifier. JSON Schema
 		// requires the RFC 3339 date-time format expressed as a string.
 		prop = map[string]any{"type": "string", "format": "date-time"}
 	default:
@@ -507,7 +507,7 @@ func slugOf(item any) string {
 //	BlogPost → blog_post
 //	MCPPost  → mcp_post
 //
-// NOTE: This function is intentionally duplicated in module.go (forge core).
+// NOTE: This function is intentionally duplicated in module.go (smeldr core).
 // The two packages cannot import each other, so each carries its own copy.
 // Any change to the algorithm here must be mirrored in module.go, and vice versa.
 func snakeCase(s string) string {
