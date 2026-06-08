@@ -7,6 +7,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.17.2] — 2026-06-08
+
+### Fixed
+
+- List tool names for types whose snake_case name ends in a consonant + "y" now
+  use the correct English plural: `Story` → `list_stories` (not `list_storys`),
+  `Category` → `list_categories`. Types without a trailing consonant-y are
+  unchanged (`Post` → `list_posts`, `Key` → `list_keys`). The reverse lookup in
+  `moduleForAdminList` is updated to match (A136).
+
+---
+
 ## [1.17.1] — 2026-06-07
 
 ### Changed

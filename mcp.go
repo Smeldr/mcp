@@ -340,7 +340,7 @@ func mcpAdminReadToolDefs(m smeldr.MCPModule) []mcpTool {
 	}
 
 	list := mcpTool{
-		Name:        "list_" + typeSnake + "s",
+		Name:        "list_" + pluralSnake(typeSnake),
 		Description: "List all " + meta.TypeName + " items. Requires Editor or Admin role. Returns items at any lifecycle status.",
 		InputSchema: map[string]any{
 			"type": "object",
@@ -499,6 +499,22 @@ func slugOf(item any) string {
 		return s.GetSlug()
 	}
 	return ""
+}
+
+// pluralSnake returns the English plural of a lower_snake_case type name.
+// If the name ends in a consonant followed by "y", the trailing "y" is
+// replaced with "ies" (story → stories, category → categories).
+// All other names get a plain "s" suffix (post → posts, key → keys).
+func pluralSnake(s string) string {
+	if len(s) >= 2 && s[len(s)-1] == 'y' && !isVowel(s[len(s)-2]) {
+		return s[:len(s)-1] + "ies"
+	}
+	return s + "s"
+}
+
+// isVowel reports whether b is an ASCII vowel (a, e, i, o, u).
+func isVowel(b byte) bool {
+	return b == 'a' || b == 'e' || b == 'i' || b == 'o' || b == 'u'
 }
 
 // snakeCase converts a PascalCase or camelCase string to lower_snake_case.

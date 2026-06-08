@@ -484,6 +484,102 @@ func TestMCPToolName(t *testing.T) {
 	}
 }
 
+// TestPluralSnake verifies the consonant-y pluralization helper.
+func TestPluralSnake(t *testing.T) {
+	tests := []struct {
+		in, want string
+	}{
+		{"story", "stories"},      // consonant before y → ies
+		{"category", "categories"}, // consonant before y → ies
+		{"post", "posts"},          // no y → plain s
+		{"key", "keys"},            // vowel (e) before y → plain s
+		{"essay", "essays"},        // vowel (a) before y → plain s
+		{"day", "days"},            // vowel (a) before y → plain s
+	}
+	for _, tc := range tests {
+		got := pluralSnake(tc.in)
+		if got != tc.want {
+			t.Errorf("pluralSnake(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// testStory is a content type whose snake_case name ends in consonant+"y".
+// Used to verify that the list tool is named list_stories, not list_storys.
+type testStory struct {
+	smeldr.Node
+	Title string `smeldr:"required"`
+}
+
+// TestMCPConsonantYPlural_toolName verifies that mcpAdminReadToolDefs generates
+// "list_stories" (not "list_storys") for a type named Story.
+func TestMCPConsonantYPlural_toolName(t *testing.T) {
+	cfg := smeldr.Config{
+		BaseURL: "http://localhost",
+		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
+	}
+	app := smeldr.New(cfg)
+	repo := smeldr.NewMemoryRepo[*testStory]()
+	mod := smeldr.NewModule((*testStory)(nil),
+		smeldr.Repo(repo),
+		smeldr.At("/stories"),
+		smeldr.MCP(smeldr.MCPWrite),
+	)
+	app.Content(mod)
+
+	mods := app.MCPModules()
+	var storyMod smeldr.MCPModule
+	for _, m := range mods {
+		if m.MCPMeta().TypeName == "testStory" {
+			storyMod = m
+			break
+		}
+	}
+	if storyMod == nil {
+		t.Fatal("testStory module not found in MCPModules")
+	}
+
+	defs := mcpAdminReadToolDefs(storyMod)
+	if len(defs) == 0 {
+		t.Fatal("no admin read tool defs returned")
+	}
+	if defs[0].Name != "list_test_stories" {
+		t.Errorf("list tool name = %q, want %q", defs[0].Name, "list_test_stories")
+	}
+}
+
+// TestMCPConsonantYPlural_dispatch verifies that a list_test_stories call
+// dispatches correctly to the testStory module (reverse lookup works).
+func TestMCPConsonantYPlural_dispatch(t *testing.T) {
+	cfg := smeldr.Config{
+		BaseURL: "http://localhost",
+		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
+	}
+	app := smeldr.New(cfg)
+	repo := smeldr.NewMemoryRepo[*testStory]()
+	mod := smeldr.NewModule((*testStory)(nil),
+		smeldr.Repo(repo),
+		smeldr.At("/stories"),
+		smeldr.MCP(smeldr.MCPWrite),
+	)
+	app.Content(mod)
+	srv := New(app)
+
+	ctx := newEditorCtx()
+	params, _ := json.Marshal(map[string]any{
+		"name":      "list_test_stories",
+		"arguments": map[string]any{},
+	})
+	result, rpcErr := srv.handleToolsCall(ctx, params)
+	if rpcErr != nil {
+		t.Fatalf("list_test_stories dispatch failed: %+v", rpcErr)
+	}
+	fields := unwrapToolResult(t, result)
+	if _, ok := fields["items"]; !ok {
+		t.Error("result missing 'items' field")
+	}
+}
+
 // — tools/list ———————————————————————————————————————————————
 
 // TestMCPToolsList verifies that handleToolsList returns exactly 6 tools for

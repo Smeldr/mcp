@@ -36,13 +36,20 @@ func (s *Server) moduleForType(typeSnake string) (smeldr.MCPModule, bool) {
 }
 
 // moduleForAdminList returns the MCPWrite module for list_{type}s tool names.
-// The list tool appends "s" to the type's snake_case name (e.g. "list_posts"
-// targets the "post" type), so this helper tries typeSnake with a trailing
-// "s" stripped when a direct lookup fails.
+// The list tool uses [pluralSnake] to name list tools, so this helper reverses
+// both plural forms: "ies" suffix (stories → story) and plain "s" suffix
+// (posts → post).
 func (s *Server) moduleForAdminList(typeSnake string) (smeldr.MCPModule, bool) {
 	if m, ok := s.moduleForType(typeSnake); ok {
 		return m, true
 	}
+	// "ies" suffix: stories → story
+	if strings.HasSuffix(typeSnake, "ies") {
+		if m, ok := s.moduleForType(typeSnake[:len(typeSnake)-3] + "y"); ok {
+			return m, true
+		}
+	}
+	// plain "s" suffix: posts → post
 	if strings.HasSuffix(typeSnake, "s") {
 		return s.moduleForType(typeSnake[:len(typeSnake)-1])
 	}
