@@ -1332,6 +1332,54 @@ func TestMCPHandler_SSEOpen(t *testing.T) {
 	}
 }
 
+// — A143 streamable HTTP SSE ——————————————————————————————————————————————
+
+func TestMessageHandler_AcceptSSE_ReturnsEventStream(t *testing.T) {
+	app := smeldr.New(smeldr.Config{BaseURL: "http://localhost", Secret: []byte("test-secret-32-bytes-xxxxxxxxxxxx")})
+	srv := New(app, WithSecret([]byte{})) // empty secret → GuestUser path
+
+	payload := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","clientInfo":{"name":"test","version":"0"}}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(payload))
+	req.Header.Set("Accept", "text/event-stream")
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if ct := w.Header().Get("Content-Type"); ct != "text/event-stream" {
+		t.Errorf("Content-Type = %q, want text/event-stream", ct)
+	}
+	if cc := w.Header().Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("Cache-Control = %q, want no-cache", cc)
+	}
+	got := w.Body.String()
+	if !strings.HasPrefix(got, "data: ") {
+		t.Errorf("body %q does not start with 'data: '", got)
+	}
+	if !strings.HasSuffix(got, "\n\n") {
+		t.Errorf("body %q does not end with double newline", got)
+	}
+}
+
+func TestMessageHandler_NoAccept_ReturnsJSON(t *testing.T) {
+	app := smeldr.New(smeldr.Config{BaseURL: "http://localhost", Secret: []byte("test-secret-32-bytes-xxxxxxxxxxxx")})
+	srv := New(app, WithSecret([]byte{})) // empty secret → GuestUser path
+
+	payload := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","clientInfo":{"name":"test","version":"0"}}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(payload))
+	w := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(w, req)
+
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", ct)
+	}
+	if w.Code != http.StatusOK {
+		t.Errorf("status = %d, want 200", w.Code)
+	}
+	var resp map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+}
+
 // ExampleNew verifies that the README quick-start compiles correctly.
 func ExampleNew() {
 	secret := os.Getenv("SECRET")
