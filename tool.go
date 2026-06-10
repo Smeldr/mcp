@@ -134,6 +134,10 @@ func (s *Server) handleToolsList() any {
 	if s.blockRepo != nil {
 		tools = append(tools, nodeToolDefs()...)
 		tools = append(tools, compositionToolDefs()...)
+		if s.schemaStore != nil {
+			tools = append(tools, schemaToolDefs()...)
+			tools = append(tools, s.typedTools...)
+		}
 	}
 	if s.redirectEnabled {
 		tools = append(tools, redirectToolDefs()...)
@@ -240,6 +244,20 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 				return nil, rpcErr
 			}
 			return s.handleCompositionTool(ctx, p.Name, coalesceArgs(p.Arguments))
+		}
+		if s.schemaStore != nil {
+			if isSchemaTool(p.Name) {
+				if rpcErr := s.authorise(ctx); rpcErr != nil {
+					return nil, rpcErr
+				}
+				return s.handleSchemaTool(ctx, p.Name, coalesceArgs(p.Arguments))
+			}
+			if s.typedToolSet[p.Name] {
+				if rpcErr := s.authorise(ctx); rpcErr != nil {
+					return nil, rpcErr
+				}
+				return s.handleTypedTool(ctx, p.Name, coalesceArgs(p.Arguments))
+			}
 		}
 	}
 

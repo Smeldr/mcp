@@ -7,6 +7,51 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.20.0] — 2026-06-10
+
+### Added
+
+- `get_content_type_schema(type_name)` — returns the full field spec (name,
+  type, required, format, description) for a registered block type. Author role.
+- `list_content_type_schemas()` — returns all registered type names with labels.
+  Author role.
+- Type-specific create tools generated at startup from the schema table: one
+  `create_<type_name>` tool per registered schema (e.g. `create_content_block`,
+  `create_hero`, `create_faq_item`). Typed, named parameters replace the raw
+  `fields` bag. Typed tools supplement (never replace) `create_node`.
+- `create_node` and `update_node` now validate fields against the registered
+  schema when one exists. Unknown fields and missing required fields return
+  -32602. Unschematised types pass through unchanged (backwards compatible) (A146).
+
+---
+
+## [1.19.0] — 2026-06-10
+
+### Added
+
+- `add_section` and `add_item` now accept content-instance parents (T94/A145):
+  when the `parent_id` is not a `DynamicNode`, the MCP server iterates the
+  `ContentParentProvider` registry populated from `App.BlockParents()`. The
+  `parent_type` stored in the edge table is derived from the provider's
+  `BlockParentTypeName()`. `remove_section`, `remove_item`, `reorder_sections`,
+  and `reorder_items` already used the parent ID as an opaque key and need no
+  change. Requires core v1.37.0+.
+
+---
+
+## [1.18.0] — 2026-06-10
+
+### Added
+
+- `POST /mcp` now responds with `Content-Type: text/event-stream` when the
+  client sends `Accept: text/event-stream`, streaming the JSON-RPC response
+  as a single `data: <json>\n\n` SSE event. This completes MCP 2025-11-25
+  streamable HTTP spec compliance and is required for Claude.ai web OAuth
+  connections. Clients without `Accept: text/event-stream` continue to
+  receive `application/json` (no behaviour change) (A143).
+
+---
+
 ## [1.17.2] — 2026-06-08
 
 ### Fixed

@@ -106,6 +106,14 @@ func (s *Server) handleNodeTool(ctx smeldr.Context, name string, args map[string
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
+		if s.schemaStore != nil {
+			if schema, err := s.schemaStore.FindByTypeName(ctx, typeName); err == nil {
+				if valErr := smeldr.ValidateBlockFields(schema, fields); valErr != nil {
+					return nil, &jsonRPCError{Code: -32602, Message: valErr.Error()}
+				}
+			}
+			// ErrNotFound: no schema for this type — pass through (backwards compat).
+		}
 		node := &smeldr.DynamicNode{
 			Node:     smeldr.Node{ID: smeldr.NewID(), Status: smeldr.Draft},
 			TypeName: typeName,
@@ -128,6 +136,13 @@ func (s *Server) handleNodeTool(ctx smeldr.Context, name string, args map[string
 		merged, rpcErr := mergeFields(node.Fields, args["fields"])
 		if rpcErr != nil {
 			return nil, rpcErr
+		}
+		if s.schemaStore != nil {
+			if schema, err := s.schemaStore.FindByTypeName(ctx, node.TypeName); err == nil {
+				if valErr := smeldr.ValidateBlockFields(schema, merged); valErr != nil {
+					return nil, &jsonRPCError{Code: -32602, Message: valErr.Error()}
+				}
+			}
 		}
 		node.Fields = merged
 		if err := s.blockRepo.Save(ctx, node); err != nil {

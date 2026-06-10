@@ -6,6 +6,7 @@ package mcp
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log"
 
@@ -72,6 +73,16 @@ func WithBlocks() ServerOption {
 		if db := s.app.Config().DB; db != nil {
 			s.blockRepo = smeldr.NewDynamicContentRepo(db)
 			s.edgeStore = smeldr.NewContentEdgeStore(db)
+			s.blockParents = s.app.BlockParents()
+			s.schemaStore = smeldr.NewSchemaStore(db)
+			if schemas, err := s.schemaStore.All(context.Background()); err == nil {
+				s.typedTools = generateTypedTools(schemas)
+				s.typedToolSet = make(map[string]bool, len(s.typedTools))
+				for _, t := range s.typedTools {
+					s.typedToolSet[t.Name] = true
+				}
+			}
+			// err (e.g. schema table not yet created) → typedTools nil; graceful degradation.
 		}
 	}
 }
@@ -121,8 +132,15 @@ type Server struct {
 
 	// blockRepo and edgeStore are non-nil when WithBlocks is set; they back the
 	// block-system node and composition tools.
-	blockRepo *smeldr.SQLRepo[*smeldr.DynamicNode]
-	edgeStore *smeldr.ContentEdgeStore
+	blockRepo    *smeldr.SQLRepo[*smeldr.DynamicNode]
+	edgeStore    *smeldr.ContentEdgeStore
+	blockParents []smeldr.ContentParentProvider // content-instance parent providers; populated by WithBlocks
+
+	// schemaStore is non-nil when WithBlocks is set and the schema table exists.
+	// typedTools and typedToolSet are generated from the schema table at startup.
+	schemaStore  *smeldr.SchemaStore
+	typedTools   []mcpTool
+	typedToolSet map[string]bool
 
 	// redirectEnabled is true when the App has database-backed redirect
 	// management activated (App.Redirects was called). Set in New().

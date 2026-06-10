@@ -295,8 +295,15 @@ func (s *Server) messageHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := s.handle(smeldrCtx, req)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp) //nolint:errcheck
+	b, _ := json.Marshal(resp)
+	if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		fmt.Fprintf(w, "data: %s\n\n", b) //nolint:errcheck
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(b) //nolint:errcheck
+	}
 }
 
 // — OAuth helpers —————————————————————————————————————————————————————————

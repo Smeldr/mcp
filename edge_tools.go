@@ -29,7 +29,7 @@ func compositionToolDefs() []mcpTool {
 		return map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"parent_id": map[string]any{"type": "string", "description": "ID of the parent block (the page or collection)."},
+				"parent_id": map[string]any{"type": "string", "description": "ID of the parent block or content instance (page, collection, or content type with block hosting enabled)."},
 				"child_id":  map[string]any{"type": "string", "description": "ID of the child block to " + action + "."},
 			},
 			"required": []string{"parent_id", "child_id"},
@@ -75,9 +75,30 @@ func (s *Server) handleCompositionTool(ctx smeldr.Context, name string, args map
 	return nil, &jsonRPCError{Code: -32602, Message: "unknown composition tool: " + name}
 }
 
+// resolveParentType returns the parent_type string to store in the edge table.
+// It first checks the DynamicNode repository; if the ID is not found there, it
+// iterates the registered content-instance parent providers (T94). Returns a
+// -32602 error when no provider claims the ID.
+func (s *Server) resolveParentType(ctx smeldr.Context, id string) (string, *jsonRPCError) {
+	if node, err := s.blockRepo.FindByID(ctx, id); err == nil {
+		return node.TypeName, nil
+	}
+	for _, p := range s.blockParents {
+		ok, err := p.HasBlockParent(ctx, id)
+		if err != nil {
+			return "", &jsonRPCError{Code: -32603, Message: "parent lookup error: " + err.Error()}
+		}
+		if ok {
+			return p.BlockParentTypeName(), nil
+		}
+	}
+	return "", &jsonRPCError{Code: -32602, Message: "parent not found: " + id}
+}
+
 // addEdge appends child_id under parent_id with the given edge role. The
-// parent_type and child_type are derived from the stored blocks' type_name, so
-// the operator never has to pass them — and they can never be mismatched.
+// parent_type is resolved via resolveParentType (DynamicNode or registered
+// content-instance parent provider); child_type is derived from the stored
+// block's type_name.
 func (s *Server) addEdge(ctx smeldr.Context, args map[string]any, role string) (any, *jsonRPCError) {
 	parentID, ok := stringArg(args, "parent_id")
 	if !ok {
@@ -87,9 +108,9 @@ func (s *Server) addEdge(ctx smeldr.Context, args map[string]any, role string) (
 	if !ok {
 		return nil, &jsonRPCError{Code: -32602, Message: "invalid params: child_id required"}
 	}
-	parent, err := s.blockRepo.FindByID(ctx, parentID)
-	if err != nil {
-		return nil, errorFor(err)
+	parentType, rpcErr := s.resolveParentType(ctx, parentID)
+	if rpcErr != nil {
+		return nil, rpcErr
 	}
 	child, err := s.blockRepo.FindByID(ctx, childID)
 	if err != nil {
@@ -97,7 +118,7 @@ func (s *Server) addEdge(ctx smeldr.Context, args map[string]any, role string) (
 	}
 	edge, err := s.edgeStore.AddChild(ctx, smeldr.ContentEdge{
 		ParentID:   parentID,
-		ParentType: parent.TypeName,
+		ParentType: parentType,
 		ChildID:    childID,
 		ChildType:  child.TypeName,
 		EdgeRole:   role,
