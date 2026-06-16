@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.21.1] — 2026-06-16
+
+### Added
+
+- `define_content_type` tool now accepts optional `url_prefix` parameter (string,
+  must start with `"/"`). When provided, the defined type registers public URL routes
+  at that prefix. Omit or leave empty for admin-only types with no public routes.
+  Maps to `ContentTypeSchema.URLPrefix` introduced in core v1.41.1 (A154).
+
+---
+
 ## [1.20.0] — 2026-06-10
 
 ### Added

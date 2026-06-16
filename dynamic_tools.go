@@ -39,12 +39,13 @@ func dynamicContentToolDefs() []mcpTool {
 	return []mcpTool{
 		{
 			Name:        "define_content_type",
-			Description: "Define a new runtime content type by providing its schema. type_name must be unique and lower_snake_case. fields is a JSON array of {name, type, required, format, role} objects. Requires Admin role.",
+			Description: "Define a new runtime content type by providing its schema. type_name must be unique and lower_snake_case. fields is a JSON array of {name, type, required, format, role} objects. url_prefix sets the public URL prefix (e.g. \"/recipes\"); omit or leave empty for admin-only types. Requires Admin role.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"type_name": map[string]any{"type": "string", "description": "Unique snake_case type name, e.g. \"recipe\"."},
-					"label":     map[string]any{"type": "string", "description": "Human-readable label."},
+					"type_name":  map[string]any{"type": "string", "description": "Unique snake_case type name, e.g. \"recipe\"."},
+					"label":      map[string]any{"type": "string", "description": "Human-readable label."},
+					"url_prefix": map[string]any{"type": "string", "description": "Public URL prefix, e.g. \"/recipes\". Must start with \"/\". Omit for admin-only types."},
 					"fields": map[string]any{
 						"type":  "array",
 						"items": map[string]any{"type": "object"},
@@ -138,10 +139,12 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if err != nil || args["fields"] == nil {
 			fieldsRaw = []byte("[]")
 		}
+		urlPrefix, _ := args["url_prefix"].(string)
 		schema := &smeldr.ContentTypeSchema{
-			TypeName: typeName,
-			Label:    label,
-			Fields:   json.RawMessage(fieldsRaw),
+			TypeName:  typeName,
+			Label:     label,
+			Fields:    json.RawMessage(fieldsRaw),
+			URLPrefix: urlPrefix,
 		}
 		desc, err := s.app.DefineContentType(ctx, schema)
 		if err != nil {
