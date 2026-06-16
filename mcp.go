@@ -87,6 +87,18 @@ func WithBlocks() ServerOption {
 	}
 }
 
+// WithDynamicContent enables the 6 generic runtime content tools:
+// define_content_type, create_content, get_content, list_content,
+// update_content, and set_content_status. They call [smeldr.App.DefineContentType]
+// and [smeldr.App.DynamicContentRepo] in-process; the App's Config.DB must be
+// set and [smeldr.App.ServeDynamicContent] must have been called before New().
+//
+//	app.ServeDynamicContent()
+//	mcpSrv := mcp.New(app, mcp.WithDynamicContent())
+func WithDynamicContent() ServerOption {
+	return func(s *Server) { s.dynamicContent = true }
+}
+
 // WithOAuth enables OAuth 2.1 authentication for the MCP server.
 // The provided oauth [oauth.Server] handles authorization and token
 // issuance; all MCP requests (both GET /mcp SSE and POST /mcp/message) must
@@ -145,6 +157,10 @@ type Server struct {
 	// redirectEnabled is true when the App has database-backed redirect
 	// management activated (App.Redirects was called). Set in New().
 	redirectEnabled bool
+
+	// dynamicContent is true when WithDynamicContent() was passed to New().
+	// Enables the 6 generic content tools (define/create/get/list/update/set status).
+	dynamicContent bool
 }
 
 // New creates a Server for the given Smeldr App, collecting all content modules

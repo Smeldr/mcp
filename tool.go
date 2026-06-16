@@ -142,6 +142,9 @@ func (s *Server) handleToolsList() any {
 	if s.redirectEnabled {
 		tools = append(tools, redirectToolDefs()...)
 	}
+	if s.dynamicContent {
+		tools = append(tools, dynamicContentToolDefs()...)
+	}
 	return map[string]any{"tools": tools}
 }
 
@@ -226,6 +229,25 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return nil, rpcErr
 		}
 		return s.handleRedirectTool(ctx, p.Name, coalesceArgs(p.Arguments))
+	}
+
+	// Dynamic content tools (WithDynamicContent). Role is determined per-tool
+	// by roleFor. Dispatched before module-scoped tool authorisation.
+	if s.dynamicContent && isDynamicContentTool(p.Name) {
+		required := roleFor(p.Name)
+		var rpcErr *jsonRPCError
+		switch required {
+		case smeldr.Admin:
+			rpcErr = s.authoriseAdmin(ctx)
+		case smeldr.Editor:
+			rpcErr = s.authoriseEditor(ctx)
+		default:
+			rpcErr = s.authorise(ctx)
+		}
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		return s.handleDynamicContentTool(ctx, p.Name, coalesceArgs(p.Arguments))
 	}
 
 	// Block-system tools (WithBlocks). Generic node lifecycle tools require
