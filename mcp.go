@@ -87,6 +87,23 @@ func WithBlocks() ServerOption {
 	}
 }
 
+// WithPageMeta wires a [smeldr.PageMetaStore] into the MCP server and exposes
+// four Admin-role tools for managing per-path SEO overrides:
+//
+//   - set_page_meta   — upsert title/description/og:image for a URL path
+//   - get_page_meta   — retrieve current overrides for a path
+//   - delete_page_meta — remove overrides for a path
+//   - list_page_meta  — list all stored overrides
+//
+// Use [smeldr.CreatePageMetaTable] to create the backing table once at startup.
+// The db value should be the same database passed to the smeldr.App.
+//
+//	smeldr.CreatePageMetaTable(db)
+//	mcpSrv := mcp.New(app, mcp.WithPageMeta(db))
+func WithPageMeta(db smeldr.DB) ServerOption {
+	return func(s *Server) { s.pageMetaStore = smeldr.NewPageMetaStore(db) }
+}
+
 // WithDynamicContent enables the 6 generic runtime content tools:
 // define_content_type, create_content, get_content, list_content,
 // update_content, and set_content_status. They call [smeldr.App.DefineContentType]
@@ -140,7 +157,7 @@ type Server struct {
 	webhookPool   smeldr.WebhookJobQueue // non-nil when the app has Webhooks configured
 	subscriptions *subscriptionRegistry  // resource subscription fan-out registry
 	oauth         *oauth.Server          // non-nil when OAuth 2.1 is enabled via WithOAuth
-	fallback bool                   // accept smeldr bearer tokens as fallback when OAuth enabled
+	fallback      bool                   // accept smeldr bearer tokens as fallback when OAuth enabled
 
 	// blockRepo and edgeStore are non-nil when WithBlocks is set; they back the
 	// block-system node and composition tools.
@@ -161,6 +178,10 @@ type Server struct {
 	// dynamicContent is true when WithDynamicContent() was passed to New().
 	// Enables the 6 generic content tools (define/create/get/list/update/set status).
 	dynamicContent bool
+
+	// pageMetaStore is non-nil when WithPageMeta was passed to New().
+	// Backs the four Admin-role page-meta tools (set/get/delete/list_page_meta).
+	pageMetaStore *smeldr.PageMetaStore
 }
 
 // New creates a Server for the given Smeldr App, collecting all content modules

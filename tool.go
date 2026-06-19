@@ -145,6 +145,9 @@ func (s *Server) handleToolsList() any {
 	if s.dynamicContent {
 		tools = append(tools, dynamicContentToolDefs()...)
 	}
+	if s.pageMetaStore != nil {
+		tools = append(tools, pageMetaToolDefs()...)
+	}
 	return map[string]any{"tools": tools}
 }
 
@@ -229,6 +232,15 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return nil, rpcErr
 		}
 		return s.handleRedirectTool(ctx, p.Name, coalesceArgs(p.Arguments))
+	}
+
+	// Page meta tools (WithPageMeta) require Admin role and are dispatched
+	// before module-scoped tool authorisation.
+	if s.pageMetaStore != nil && isPageMetaTool(p.Name) {
+		if rpcErr := s.authoriseAdmin(ctx); rpcErr != nil {
+			return nil, rpcErr
+		}
+		return s.handlePageMetaTool(ctx, p.Name, coalesceArgs(p.Arguments))
 	}
 
 	// Dynamic content tools (WithDynamicContent). Role is determined per-tool

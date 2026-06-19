@@ -7,6 +7,25 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.22.0] — 2026-06-19
+
+### Added
+
+- `WithPageMeta(db smeldr.DB) ServerOption` — wires a `PageMetaStore` into the
+  MCP server and enables the four page-meta Admin tools below. (T72/A157)
+- `set_page_meta` (Admin) — upserts SEO overrides (`meta_title`, `meta_description`,
+  `og_image`) for a URL path. `path` is required. Changes apply to the next
+  request for that path. (T72/A157)
+- `get_page_meta` (Admin) — returns stored SEO overrides for a URL path. Returns
+  empty fields when no override is stored. (T72/A157)
+- `delete_page_meta` (Admin) — removes stored SEO overrides for a URL path. The
+  path falls back to the content type's own `Head()` and global `SiteConfig`
+  defaults. (T72/A157)
+- `list_page_meta` (Admin) — lists all stored SEO overrides, ordered by path.
+  Returns an empty array when none are configured. (T72/A157)
+
+---
+
 ## [1.21.1] — 2026-06-16
 
 ### Added
