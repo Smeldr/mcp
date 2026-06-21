@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.22.1] — 2026-06-21
+
+### Changed
+
+- Redirect tools (`create_redirect`, `list_redirects`, `delete_redirect`) now
+  persist to `smeldr_routes` via `smeldr.dev/core` v1.42.9. The legacy
+  `smeldr_redirects` table is migrated automatically on first boot. Tool names,
+  parameters, and behaviour are unchanged. (A167)
+
+---
+
 ## [1.22.0] — 2026-06-19
 
 ### Added
