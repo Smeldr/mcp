@@ -259,6 +259,29 @@ collections. The names are distinct for clarity; both share one implementation.
 
 ---
 
+## Relation graph tools
+
+When `app.Relations(store)` is wired, six relation management tools are automatically
+available — no additional server option is required.
+
+| Tool | Role | What it does |
+|------|------|--------------|
+| `assert_relation` | Author+ | Create an asserted edge between two content items. Each call inserts a new record with a unique ID — use `get_relations` first to check for duplicates. |
+| `propose_relation` | Author+ | Propose an inferred edge for human or agent review (`edge_class=inferred`). Promote it via `assert_relation`. |
+| `get_relations` | Author+ | Query edges by source, target, or both. Optional `kind` and `edge_class` filters. |
+| `preview_impact` | Editor+ | Return all source-side dependents of a target item without firing any signals. Use before archiving or deleting an item. |
+| `upsert_relation_kind` | Admin | Register or update a relation kind (idempotent on `type_name`). |
+| `list_relation_kinds` | Author+ | List all registered relation kinds. |
+
+```go
+smeldr.CreateRelationTables(db)
+store, _ := smeldr.NewRelationStore(db)
+app := smeldr.New(cfg).Relations(store)
+mcpSrv := mcp.New(app) // relation tools wired automatically
+```
+
+---
+
 ## Lifecycle enforcement
 
 **MCPRead exposes only `Published` items.** Draft, Scheduled, and Archived items

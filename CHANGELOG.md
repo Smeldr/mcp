@@ -7,6 +7,26 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.23.0] — 2026-06-25
+
+### Added
+
+- `assert_relation` (Author) — assert a typed edge between two content items. Each call inserts a new edge record with a unique ID; call `get_relations` first to avoid duplicates. (A171)
+- `propose_relation` (Author) — propose an inferred edge for human or agent review; `edge_class="inferred"` until promoted via `assert_relation`. (A171)
+- `get_relations` (Author) — query edges by source, target, or both; optional `kind` and `edge_class` filters. (A171)
+- `preview_impact` (Editor) — return all source-side dependents of a target item without firing signals; use before archiving or deleting. (A171)
+- `upsert_relation_kind` (Admin) — register or update a relation kind; idempotent on `type_name`. (A171)
+- `list_relation_kinds` (Author) — list all registered relation kinds sorted by `type_name`. (A171)
+
+All six tools are gated by `App.RelationStore() != nil`; no new `ServerOption` is required.
+Tool output fields use `snake_case` (id, source_type, source_id, target_type, target_id, relation_kind, edge_class, etc.).
+
+### Changed
+
+- `go.mod`: `smeldr.dev/core` v1.42.9 → v1.43.1. (A171)
+
+---
+
 ## [1.22.1] — 2026-06-21
 
 ### Changed

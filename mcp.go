@@ -182,6 +182,11 @@ type Server struct {
 	// pageMetaStore is non-nil when WithPageMeta was passed to New().
 	// Backs the four Admin-role page-meta tools (set/get/delete/list_page_meta).
 	pageMetaStore *smeldr.PageMetaStore
+
+	// relationStore is non-nil when app.Relations(...) was called. Backs the six
+	// relation graph tools (assert_relation, propose_relation, get_relations,
+	// preview_impact, upsert_relation_kind, list_relation_kinds).
+	relationStore *smeldr.RelationStore
 }
 
 // New creates a Server for the given Smeldr App, collecting all content modules
@@ -199,6 +204,7 @@ func New(app *smeldr.App, opts ...ServerOption) *Server {
 		webhookPool:     app.WebhookPool(),
 		subscriptions:   newSubscriptionRegistry(),
 		redirectEnabled: app.RedirectDB() != nil,
+		relationStore:   app.RelationStore(),
 	}
 	for _, o := range opts {
 		o(s)

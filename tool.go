@@ -148,6 +148,9 @@ func (s *Server) handleToolsList() any {
 	if s.pageMetaStore != nil {
 		tools = append(tools, pageMetaToolDefs()...)
 	}
+	if s.relationStore != nil {
+		tools = append(tools, relationToolDefs()...)
+	}
 	return map[string]any{"tools": tools}
 }
 
@@ -241,6 +244,25 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return nil, rpcErr
 		}
 		return s.handlePageMetaTool(ctx, p.Name, coalesceArgs(p.Arguments))
+	}
+
+	// Relation graph tools. Role varies by tool: Author (assert/propose/get/list_kinds),
+	// Editor (preview_impact), Admin (upsert_relation_kind). Dispatched before
+	// module-scoped tool authorisation.
+	if s.relationStore != nil && isRelationTool(p.Name) {
+		var rpcErr *jsonRPCError
+		switch {
+		case isAdminRelationTool(p.Name):
+			rpcErr = s.authoriseAdmin(ctx)
+		case isEditorRelationTool(p.Name):
+			rpcErr = s.authoriseEditor(ctx)
+		default:
+			rpcErr = s.authorise(ctx)
+		}
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		return s.handleRelationTool(ctx, p.Name, coalesceArgs(p.Arguments))
 	}
 
 	// Dynamic content tools (WithDynamicContent). Role is determined per-tool
