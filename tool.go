@@ -101,6 +101,9 @@ func errorFor(err error) *jsonRPCError {
 	if errors.Is(err, smeldr.ErrForbidden) {
 		return &jsonRPCError{Code: -32001, Message: "forbidden"}
 	}
+	if errors.Is(err, smeldr.ErrConflict) {
+		return &jsonRPCError{Code: -32001, Message: err.Error()}
+	}
 	return &jsonRPCError{Code: -32603, Message: "internal error: " + err.Error()}
 }
 
@@ -150,6 +153,9 @@ func (s *Server) handleToolsList() any {
 	}
 	if s.relationStore != nil {
 		tools = append(tools, relationToolDefs()...)
+	}
+	if s.app.Config().DB != nil {
+		tools = append(tools, stateToolDefs()...)
 	}
 	return map[string]any{"tools": tools}
 }
@@ -263,6 +269,22 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return nil, rpcErr
 		}
 		return s.handleRelationTool(ctx, p.Name, coalesceArgs(p.Arguments))
+	}
+
+	// State flow tools. Gated on DB presence (same guard as tool registration).
+	// Roles: transition_item requires Editor; get_valid_transitions and
+	// list_items_by_state require Author.
+	if s.app.Config().DB != nil && isStateTool(p.Name) {
+		var rpcErr *jsonRPCError
+		if p.Name == "transition_item" {
+			rpcErr = s.authoriseEditor(ctx)
+		} else {
+			rpcErr = s.authorise(ctx)
+		}
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		return s.handleStateTool(ctx, p.Name, coalesceArgs(p.Arguments))
 	}
 
 	// Dynamic content tools (WithDynamicContent). Role is determined per-tool

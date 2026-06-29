@@ -7,6 +7,23 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.24.0] — 2026-06-29
+
+### Added
+
+- `transition_item(type_name, slug, to_state)` (Editor) — move a dynamic content item to a new state. Validated via `DynamicTypeRepo.SetStatus` → `validateTransition` (core). Returns ErrConflict (-32001) when the transition is not in the registered flow. (A177)
+- `get_valid_transitions(type_name, slug)` (Author) — list all legal target states for the item's current state. Queries `smeldr_state_flows` + `smeldr_transitions` directly; falls back to default flow when no custom flow is registered for the type. Returns `{current_state, valid_transitions: []}`. (A177)
+- `list_items_by_state(type_name, state)` (Author) — list all items of a dynamic content type in the given state using `DynamicContentRepo.List` with status filter. Returns `{type_name, state, items, count}`. (A177)
+
+All three tools are gated on `App.Config().DB != nil`.
+
+### Changed
+
+- `errorFor` in `tool.go`: added ErrConflict → -32001 mapping (was falling through to -32603 "internal error"). This also fixes `set_content_status` conflict error reporting. (A177)
+- `go.mod`: `smeldr.dev/core` v1.43.1 → v1.44.1. (A177)
+
+---
+
 ## [1.23.0] — 2026-06-25
 
 ### Added
