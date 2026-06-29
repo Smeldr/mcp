@@ -7,6 +7,19 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.24.1] — 2026-06-29
+
+### Added
+
+- `define_state_flow(name, type_name, states, transitions)` (Admin) — register or update a state flow for a dynamic content type at runtime. Calls `App.RegisterFlow` internally; idempotent and safe to re-run on every restart. `type_name` is required (RegisterFlow validates it). Returns `{name, type_name, state_count, transition_count}`. Gated on `App.Config().DB != nil`. (A178)
+
+### Changed
+
+- `handleToolsCall` role dispatch for state tools: extended from two tiers (Editor/Author) to three tiers (Admin for `define_state_flow`, Editor for `transition_item`, Author for `get_valid_transitions` and `list_items_by_state`). (A178)
+- `state_tools.go`: added `parseStates`, `parseTransitions`, `boolField` unexported helpers to parse and validate state flow arguments. (A178)
+
+---
+
 ## [1.24.0] — 2026-06-29
 
 ### Added

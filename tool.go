@@ -272,13 +272,16 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	}
 
 	// State flow tools. Gated on DB presence (same guard as tool registration).
-	// Roles: transition_item requires Editor; get_valid_transitions and
-	// list_items_by_state require Author.
+	// Roles: define_state_flow requires Admin; transition_item requires Editor;
+	// get_valid_transitions and list_items_by_state require Author.
 	if s.app.Config().DB != nil && isStateTool(p.Name) {
 		var rpcErr *jsonRPCError
-		if p.Name == "transition_item" {
+		switch p.Name {
+		case "define_state_flow":
+			rpcErr = s.authoriseAdmin(ctx)
+		case "transition_item":
 			rpcErr = s.authoriseEditor(ctx)
-		} else {
+		default:
 			rpcErr = s.authorise(ctx)
 		}
 		if rpcErr != nil {

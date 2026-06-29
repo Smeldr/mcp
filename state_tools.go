@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 
 	"smeldr.dev/core"
 )
@@ -58,19 +59,69 @@ func stateToolDefs() []mcpTool {
 				"required": []string{"type_name", "state"},
 			},
 		},
+		{
+			Name: "define_state_flow",
+			Description: "Register or update a state flow for a dynamic content type. " +
+				"Calls App.RegisterFlow — idempotent, safe to re-run on every restart. " +
+				"Requires Admin role.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"name": map[string]any{
+						"type":        "string",
+						"description": "Unique flow name (e.g. \"review-flow\").",
+					},
+					"type_name": map[string]any{
+						"type":        "string",
+						"description": "Go type name this flow applies to. Omit for the default flow.",
+					},
+					"states": map[string]any{
+						"type":        "array",
+						"description": "States in the flow.",
+						"items": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"name":               map[string]any{"type": "string"},
+								"is_initial":         map[string]any{"type": "boolean"},
+								"is_terminal":        map[string]any{"type": "boolean"},
+								"suppresses_signals": map[string]any{"type": "boolean"},
+							},
+							"required": []string{"name"},
+						},
+					},
+					"transitions": map[string]any{
+						"type":        "array",
+						"description": "Permitted directed edges between states.",
+						"items": map[string]any{
+							"type": "object",
+							"properties": map[string]any{
+								"from": map[string]any{"type": "string"},
+								"to":   map[string]any{"type": "string"},
+								"required_role": map[string]any{
+									"type":        "string",
+									"description": "Stored for future enforcement (not yet enforced).",
+								},
+							},
+							"required": []string{"from", "to"},
+						},
+					},
+				},
+				"required": []string{"name", "states", "transitions"},
+			},
+		},
 	}
 }
 
-// isStateTool reports whether name is one of the three state flow management tools.
+// isStateTool reports whether name is one of the four state flow management tools.
 func isStateTool(name string) bool {
 	switch name {
-	case "transition_item", "get_valid_transitions", "list_items_by_state":
+	case "transition_item", "get_valid_transitions", "list_items_by_state", "define_state_flow":
 		return true
 	}
 	return false
 }
 
-// handleStateTool dispatches the three state flow tools. Called only when
+// handleStateTool dispatches the four state flow tools. Called only when
 // s.app.Config().DB is non-nil and the caller holds the appropriate role
 // (checked by the caller in handleToolsCall).
 func (s *Server) handleStateTool(ctx smeldr.Context, name string, args map[string]any) (any, *jsonRPCError) {
@@ -157,8 +208,87 @@ func (s *Server) handleStateTool(ctx smeldr.Context, name string, args map[strin
 			"items":     items,
 			"count":     len(items),
 		}), nil
+	case "define_state_flow":
+		name, ok := stringArg(args, "name")
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: name required"}
+		}
+		typeName, _ := stringArg(args, "type_name")
+		statesRaw, ok := args["states"].([]any)
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: states must be an array"}
+		}
+		transRaw, ok := args["transitions"].([]any)
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: transitions must be an array"}
+		}
+		states, rpcErr := parseStates(statesRaw)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		trans, rpcErr := parseTransitions(transRaw)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		if err := s.app.RegisterFlow(smeldr.StateFlow{
+			Name:        name,
+			TypeName:    typeName,
+			States:      states,
+			Transitions: trans,
+		}); err != nil {
+			return nil, errorFor(err)
+		}
+		return toolResult(map[string]any{
+			"name":             name,
+			"type_name":        typeName,
+			"state_count":      len(states),
+			"transition_count": len(trans),
+		}), nil
 	}
 	return nil, &jsonRPCError{Code: -32602, Message: "unknown state tool: " + name}
+}
+
+// parseStates converts the raw []any from JSON unmarshalling into []smeldr.State.
+func parseStates(raw []any) ([]smeldr.State, *jsonRPCError) {
+	out := make([]smeldr.State, 0, len(raw))
+	for i, item := range raw {
+		m, ok := item.(map[string]any)
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602,
+				Message: fmt.Sprintf("invalid params: states[%d] must be an object", i)}
+		}
+		n, _ := m["name"].(string)
+		out = append(out, smeldr.State{
+			Name:              n,
+			IsInitial:         boolField(m, "is_initial"),
+			IsTerminal:        boolField(m, "is_terminal"),
+			SuppressesSignals: boolField(m, "suppresses_signals"),
+		})
+	}
+	return out, nil
+}
+
+// parseTransitions converts the raw []any from JSON unmarshalling into []smeldr.Transition.
+func parseTransitions(raw []any) ([]smeldr.Transition, *jsonRPCError) {
+	out := make([]smeldr.Transition, 0, len(raw))
+	for i, item := range raw {
+		m, ok := item.(map[string]any)
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602,
+				Message: fmt.Sprintf("invalid params: transitions[%d] must be an object", i)}
+		}
+		from, _ := m["from"].(string)
+		to, _ := m["to"].(string)
+		role, _ := m["required_role"].(string)
+		out = append(out, smeldr.Transition{From: from, To: to, RequiredRole: role})
+	}
+	return out, nil
+}
+
+// boolField extracts an optional boolean field from a map, defaulting to false.
+func boolField(m map[string]any, key string) bool {
+	v, _ := m[key].(bool)
+	return v
 }
 
 // validTransitionsFor queries smeldr_state_flows and smeldr_transitions to find

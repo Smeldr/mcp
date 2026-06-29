@@ -61,14 +61,14 @@ func TestStateTool_ToolsList_DBNil(t *testing.T) {
 	}
 }
 
-// TestStateTool_ToolsList_DBSet verifies that all three state tools appear in
+// TestStateTool_ToolsList_DBSet verifies that all four state tools appear in
 // tools/list when the App is configured with a DB.
 func TestStateTool_ToolsList_DBSet(t *testing.T) {
 	srv := newStateServer(t)
 	result := srv.handleToolsList()
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
-	want := []string{"transition_item", "get_valid_transitions", "list_items_by_state"}
+	want := []string{"transition_item", "get_valid_transitions", "list_items_by_state", "define_state_flow"}
 	names := make(map[string]bool, len(tools))
 	for _, tool := range tools {
 		names[tool.Name] = true
@@ -506,15 +506,209 @@ func TestStateTool_ListItemsByState_TypeNotFound(t *testing.T) {
 	}
 }
 
-// TestIsStateTool verifies the predicate for all three tool names and one non-tool.
+// TestIsStateTool verifies the predicate for all four tool names and one non-tool.
 func TestIsStateTool(t *testing.T) {
-	for _, name := range []string{"transition_item", "get_valid_transitions", "list_items_by_state"} {
+	for _, name := range []string{"transition_item", "get_valid_transitions", "list_items_by_state", "define_state_flow"} {
 		if !isStateTool(name) {
 			t.Errorf("isStateTool(%q) = false, want true", name)
 		}
 	}
 	if isStateTool("create_content") {
 		t.Error("isStateTool(create_content) = true, want false")
+	}
+}
+
+// --- define_state_flow ---
+
+func minimalFlow() map[string]any {
+	return map[string]any{
+		"name":      "test-flow",
+		"type_name": "Widget",
+		"states": []any{
+			map[string]any{"name": "draft", "is_initial": true},
+			map[string]any{"name": "done", "is_terminal": true},
+		},
+		"transitions": []any{
+			map[string]any{"from": "draft", "to": "done"},
+		},
+	}
+}
+
+func TestDefineStateFlow_HappyPath(t *testing.T) {
+	srv := newStateServer(t)
+	res, rpcErr := callTool(t, srv, newAdminCtx(), "define_state_flow", minimalFlow())
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, res)
+	if fields["name"] != "test-flow" {
+		t.Errorf("name = %v, want test-flow", fields["name"])
+	}
+	if fields["type_name"] != "Widget" {
+		t.Errorf("type_name = %v, want Widget", fields["type_name"])
+	}
+	sc, _ := fields["state_count"].(float64)
+	if int(sc) != 2 {
+		t.Errorf("state_count = %v, want 2", sc)
+	}
+	tc, _ := fields["transition_count"].(float64)
+	if int(tc) != 1 {
+		t.Errorf("transition_count = %v, want 1", tc)
+	}
+}
+
+func TestDefineStateFlow_TypeNameRequired(t *testing.T) {
+	// RegisterFlow requires TypeName — calling define_state_flow without it propagates
+	// the validation error as -32603. The default flow (type_name IS NULL) can only be
+	// seeded at App startup via the embedded migration, not via this tool.
+	srv := newStateServer(t)
+	args := map[string]any{
+		"name": "global-default",
+		"states": []any{
+			map[string]any{"name": "open", "is_initial": true},
+			map[string]any{"name": "closed", "is_terminal": true},
+		},
+		"transitions": []any{
+			map[string]any{"from": "open", "to": "closed"},
+		},
+	}
+	_, rpcErr := callTool(t, srv, newAdminCtx(), "define_state_flow", args)
+	if rpcErr == nil {
+		t.Fatal("expected error when type_name omitted (RegisterFlow requires TypeName)")
+	}
+}
+
+func TestDefineStateFlow_Idempotent(t *testing.T) {
+	srv := newStateServer(t)
+	args := minimalFlow()
+	if _, rpcErr := callTool(t, srv, newAdminCtx(), "define_state_flow", args); rpcErr != nil {
+		t.Fatalf("first call: %v", rpcErr.Message)
+	}
+	if _, rpcErr := callTool(t, srv, newAdminCtx(), "define_state_flow", args); rpcErr != nil {
+		t.Fatalf("second call (idempotent): %v", rpcErr.Message)
+	}
+}
+
+func TestDefineStateFlow_Flags(t *testing.T) {
+	srv := newStateServer(t)
+	args := map[string]any{
+		"name":      "flags-flow",
+		"type_name": "FlagType",
+		"states": []any{
+			map[string]any{"name": "start", "is_initial": true},
+			map[string]any{"name": "silent", "suppresses_signals": true},
+			map[string]any{"name": "end", "is_terminal": true},
+		},
+		"transitions": []any{
+			map[string]any{"from": "start", "to": "silent"},
+			map[string]any{"from": "silent", "to": "end"},
+		},
+	}
+	res, rpcErr := callTool(t, srv, newAdminCtx(), "define_state_flow", args)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, res)
+	sc, _ := fields["state_count"].(float64)
+	if int(sc) != 3 {
+		t.Errorf("state_count = %v, want 3", sc)
+	}
+}
+
+func TestDefineStateFlow_RequiredRole(t *testing.T) {
+	srv := newStateServer(t)
+	args := map[string]any{
+		"name":      "gated-flow",
+		"type_name": "Gated",
+		"states": []any{
+			map[string]any{"name": "draft", "is_initial": true},
+			map[string]any{"name": "approved", "is_terminal": true},
+		},
+		"transitions": []any{
+			map[string]any{"from": "draft", "to": "approved", "required_role": "Editor"},
+		},
+	}
+	_, rpcErr := callTool(t, srv, newAdminCtx(), "define_state_flow", args)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %v", rpcErr.Message)
+	}
+}
+
+func TestDefineStateFlow_AdminRequired(t *testing.T) {
+	srv := newStateServer(t)
+	_, rpcErr := callTool(t, srv, newAuthorCtx(), "define_state_flow", minimalFlow())
+	if rpcErr == nil || rpcErr.Code != -32001 {
+		t.Errorf("expected -32001 forbidden, got %v", rpcErr)
+	}
+}
+
+func TestDefineStateFlow_MissingName(t *testing.T) {
+	srv := newStateServer(t)
+	args := map[string]any{
+		"states":      []any{map[string]any{"name": "draft"}},
+		"transitions": []any{},
+	}
+	_, rpcErr := callTool(t, srv, newAdminCtx(), "define_state_flow", args)
+	if rpcErr == nil || rpcErr.Code != -32602 {
+		t.Errorf("expected -32602, got %v", rpcErr)
+	}
+}
+
+func TestDefineStateFlow_StatesNotArray(t *testing.T) {
+	srv := newStateServer(t)
+	args := map[string]any{
+		"name":        "bad",
+		"states":      "not-an-array",
+		"transitions": []any{},
+	}
+	_, rpcErr := callTool(t, srv, newAdminCtx(), "define_state_flow", args)
+	if rpcErr == nil || rpcErr.Code != -32602 {
+		t.Errorf("expected -32602, got %v", rpcErr)
+	}
+}
+
+func TestDefineStateFlow_TransitionsNotArray(t *testing.T) {
+	srv := newStateServer(t)
+	args := map[string]any{
+		"name":        "bad",
+		"states":      []any{map[string]any{"name": "draft"}},
+		"transitions": "not-an-array",
+	}
+	_, rpcErr := callTool(t, srv, newAdminCtx(), "define_state_flow", args)
+	if rpcErr == nil || rpcErr.Code != -32602 {
+		t.Errorf("expected -32602, got %v", rpcErr)
+	}
+}
+
+func TestDefineStateFlow_StateItemNotObject(t *testing.T) {
+	srv := newStateServer(t)
+	args := map[string]any{
+		"name":        "bad",
+		"states":      []any{"not-a-map"},
+		"transitions": []any{},
+	}
+	_, rpcErr := callTool(t, srv, newAdminCtx(), "define_state_flow", args)
+	if rpcErr == nil || rpcErr.Code != -32602 {
+		t.Errorf("expected -32602, got %v", rpcErr)
+	}
+	if rpcErr != nil && rpcErr.Message != "invalid params: states[0] must be an object" {
+		t.Errorf("unexpected message: %q", rpcErr.Message)
+	}
+}
+
+func TestDefineStateFlow_TransitionItemNotObject(t *testing.T) {
+	srv := newStateServer(t)
+	args := map[string]any{
+		"name":        "bad",
+		"states":      []any{map[string]any{"name": "draft"}},
+		"transitions": []any{"not-a-map"},
+	}
+	_, rpcErr := callTool(t, srv, newAdminCtx(), "define_state_flow", args)
+	if rpcErr == nil || rpcErr.Code != -32602 {
+		t.Errorf("expected -32602, got %v", rpcErr)
+	}
+	if rpcErr != nil && rpcErr.Message != "invalid params: transitions[0] must be an object" {
+		t.Errorf("unexpected message: %q", rpcErr.Message)
 	}
 }
 
