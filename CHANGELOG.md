@@ -7,6 +7,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.25.0] — 2026-06-30
+
+### Added
+
+- `create_signal(sender, receiver, signal_type, task_ref, message, sequence)` (Author) — create a new signal in the smeldr_signals table with initial status "pending". Required fields: `sender`, `receiver`, `signal_type`. Optional fields: `task_ref`, `message`, `sequence`. Returns `{id, slug, status}`. Gated on `App.Config().DB != nil`. (A185)
+- `list_signals(receiver, state)` (Author) — list signals for a receiver in a given state. Queries smeldr_signals with default state "pending". Fail-open when smeldr_signals table doesn't exist (returns empty list). Returns signals ordered by created_at ascending. Gated on `App.Config().DB != nil`. (A185)
+
+### Changed
+
+- `tool.go`: added dispatch for signal tools with `isSignalTool()` and `handleSignalTool()` between state tools and dynamic content tools; both tools require Author role. (A185)
+- `smeldr.dev/core` dependency bumped from v1.45.0 to v1.45.1 (data race fix). (A184)
+
+---
+
 ## [1.24.2] — 2026-06-30
 
 ### Changed

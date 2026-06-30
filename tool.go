@@ -156,6 +156,7 @@ func (s *Server) handleToolsList() any {
 	}
 	if s.app.Config().DB != nil {
 		tools = append(tools, stateToolDefs()...)
+		tools = append(tools, signalToolDefs()...)
 	}
 	return map[string]any{"tools": tools}
 }
@@ -288,6 +289,15 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return nil, rpcErr
 		}
 		return s.handleStateTool(ctx, p.Name, coalesceArgs(p.Arguments))
+	}
+
+	// Signal protocol tools. Gated on DB presence (same guard as state tools).
+	// Both tools require Author role.
+	if s.app.Config().DB != nil && isSignalTool(p.Name) {
+		if rpcErr := s.authorise(ctx); rpcErr != nil {
+			return nil, rpcErr
+		}
+		return s.handleSignalTool(ctx, p.Name, coalesceArgs(p.Arguments))
 	}
 
 	// Dynamic content tools (WithDynamicContent). Role is determined per-tool
