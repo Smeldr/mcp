@@ -7,6 +7,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.24.2] — 2026-06-30
+
+### Changed
+- `smeldr.Signal` renamed to `smeldr.LifecycleEvent` in mcp.go to follow the core API rename. (A183)
+- `smeldr.dev/core` dependency bumped from v1.44.1 to v1.45.0 (LifecycleEvent rename +
+  orchestration types). (A183)
+
+---
+
 ## [1.24.1] — 2026-06-29
 
 ### Added

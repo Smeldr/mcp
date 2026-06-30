@@ -217,7 +217,7 @@ func New(app *smeldr.App, opts ...ServerOption) *Server {
 	// For each delivery signal, find the module that owns the content type
 	// and construct the resource URI from the prefix and item slug.
 	subs := s.subscriptions
-	app.AddSignalListener(func(sig smeldr.Signal, typeName string, item any) {
+	app.AddSignalListener(func(sig smeldr.LifecycleEvent, typeName string, item any) {
 		for _, m := range s.modules {
 			if m.MCPMeta().TypeName != typeName {
 				continue
