@@ -60,7 +60,6 @@ func TestHandle_UnknownMethod(t *testing.T) {
 
 // ─── handleToolsCall — invalid JSON / empty name ─────────────────────────────
 
-
 // ─── New — signal listener ────────────────────────────────────────────────────
 
 // TestNew_SignalListener_TwoModules verifies the signal-listener closure

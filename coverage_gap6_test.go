@@ -17,13 +17,13 @@ import (
 // ---------------------------------------------------------------------------
 
 type mockWebhookPool struct {
-	logs      []smeldr.DeliveryLog
-	jobs      []smeldr.OutboundJob
-	lastAt    *time.Time
-	retryErr  error
-	logsErr   error
-	jobsErr   error
-	statsErr  error
+	logs     []smeldr.DeliveryLog
+	jobs     []smeldr.OutboundJob
+	lastAt   *time.Time
+	retryErr error
+	logsErr  error
+	jobsErr  error
+	statsErr error
 }
 
 func (m *mockWebhookPool) Enqueue(_ context.Context, _ smeldr.OutboundJob) error { return nil }

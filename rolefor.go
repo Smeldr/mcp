@@ -3,8 +3,8 @@ package mcp
 import "smeldr.dev/core"
 
 // roleFor returns the minimum [smeldr.Role] required for the given dynamic
-// content tool name. T49 will replace this with a DB-driven lookup without
-// call-site changes.
+// content tool name. Provides the legacy role for [authoriseTool]'s
+// non-governance (RoleStore == nil) path.
 func roleFor(toolName string) smeldr.Role {
 	switch toolName {
 	case "define_content_type":

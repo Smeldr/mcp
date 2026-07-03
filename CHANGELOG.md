@@ -7,6 +7,31 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.26.0] — 2026-07-03
+
+### Added
+
+- `authoriseTool` — unified tool-level authorisation helper using the three-branch fail-closed
+  pattern (§5.5): when `RoleStore` is nil, falls back to `smeldr.HasRole` with the caller's
+  `legacyRole`; when wired, resolves the required operation via `RoleStore.ToolPolicy` then
+  checks `RoleStore.Authorized`; both fail closed on error; unrecognised tool names deny.
+  `RoleStore` is passed as a parameter so test code can inject a custom store. (A192)
+
+### Changed
+
+- All 22 `authorise` / `authoriseEditor` / `authoriseAdmin` call sites in `handleToolsCall`
+  replaced with `authoriseTool`; `s.app.RoleStore()` is now computed once at the top of the
+  function rather than per call site. (A192)
+- `smeldr.dev/core` dependency bumped from v1.45.1 to v1.51.0 (T49 Step 3: governance wiring
+  in module role gate + `RoleStore.ToolPolicy`). (A188–A191)
+- `rolefor.go` doc comment updated to describe the function's role in the legacy path. (A192)
+
+### Removed
+
+- `authorise`, `authoriseEditor`, `authoriseAdmin` — dead after full call-site replacement. (A192)
+
+---
+
 ## [1.25.0] — 2026-06-30
 
 ### Added

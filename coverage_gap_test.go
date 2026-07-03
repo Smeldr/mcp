@@ -9,7 +9,6 @@ import (
 	smeldr "smeldr.dev/core"
 )
 
-
 // ── errorFor ──────────────────────────────────────────────────────────────────
 
 // TestErrorFor_ValidationError verifies a ValidationError maps to -32602.
@@ -50,9 +49,9 @@ func TestErrorFor_Other(t *testing.T) {
 // TestIntArgOr covers float64, int, missing, and non-numeric branches.
 func TestIntArgOr(t *testing.T) {
 	args := map[string]any{
-		"f":   float64(7),
-		"i":   int(3),
-		"s":   "hello",
+		"f": float64(7),
+		"i": int(3),
+		"s": "hello",
 	}
 	if v := intArgOr(args, "f", 0); v != 7 {
 		t.Errorf("float64 branch: got %d, want 7", v)
@@ -429,8 +428,8 @@ func TestWithPageMeta_SetsStore(t *testing.T) {
 // TestObjectArgJSON covers present, missing, and non-map inputs.
 func TestObjectArgJSON(t *testing.T) {
 	args := map[string]any{
-		"obj":  map[string]any{"x": 1},
-		"str":  "notamap",
+		"obj": map[string]any{"x": 1},
+		"str": "notamap",
 	}
 
 	// Valid object.

@@ -161,8 +161,8 @@ func TestCreateNode_ValidatesSchema_RejectsUnknownField(t *testing.T) {
 	_, rpcErr := callTool(t, srv, ctx, "create_node", map[string]any{
 		"type_name": "content_block",
 		"fields": map[string]any{
-			"Title":          "Hello",
-			"UnknownField":   "oops",
+			"Title":        "Hello",
+			"UnknownField": "oops",
 		},
 	})
 	if rpcErr == nil {

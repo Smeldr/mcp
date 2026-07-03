@@ -489,7 +489,7 @@ func TestPluralSnake(t *testing.T) {
 	tests := []struct {
 		in, want string
 	}{
-		{"story", "stories"},      // consonant before y → ies
+		{"story", "stories"},       // consonant before y → ies
 		{"category", "categories"}, // consonant before y → ies
 		{"post", "posts"},          // no y → plain s
 		{"key", "keys"},            // vowel (e) before y → plain s
