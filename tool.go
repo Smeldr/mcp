@@ -69,7 +69,7 @@ func (s *Server) moduleForAdminList(typeSnake string) (smeldr.MCPModule, bool) {
 // rs is passed in rather than fetched inside the function so test code can
 // inject a custom [smeldr.RoleStore] backed by a failing DB without modifying
 // App internals.
-func (s *Server) authoriseTool(ctx smeldr.Context, toolName string, legacyRole smeldr.Role, rs *smeldr.RoleStore) *jsonRPCError {
+func (s *Server) authoriseTool(ctx smeldr.Context, toolName string, legacyRole smeldr.Role, rs *smeldr.RoleStore, target smeldr.AuthTarget) *jsonRPCError {
 	if rs == nil {
 		if smeldr.HasRole(ctx.User().Roles, legacyRole) {
 			return nil
@@ -83,7 +83,10 @@ func (s *Server) authoriseTool(ctx smeldr.Context, toolName string, legacyRole s
 	if err != nil || !found {
 		return &jsonRPCError{Code: -32001, Message: "forbidden"}
 	}
-	ok, err := rs.Authorized(ctx, ctx.User().ID, requiredOp, smeldr.AuthTarget{})
+	// TODO(T49-scope): AuthTarget has no item ID here — the tool gate applies at the
+	// content-type level. Static/dynamic scope grants that reference a specific item ID
+	// won't apply until slug→ID resolution is added (same limitation as the HTTP gate).
+	ok, err := rs.Authorized(ctx, ctx.User().ID, requiredOp, target)
 	if err != nil || !ok {
 		return &jsonRPCError{Code: -32001, Message: "forbidden"}
 	}
@@ -196,7 +199,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	if s.tokenStore != nil {
 		switch p.Name {
 		case "create_token", "list_tokens", "revoke_token":
-			if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Admin, rs); rpcErr != nil {
+			if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Admin, rs, smeldr.AuthTarget{}); rpcErr != nil {
 				return nil, rpcErr
 			}
 			return s.handleTokenTool(ctx, p.Name, coalesceArgs(p.Arguments))
@@ -208,7 +211,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	if s.navTree != nil {
 		switch p.Name {
 		case "list_nav_items", "create_nav_item", "update_nav_item", "delete_nav_item":
-			if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Editor, rs); rpcErr != nil {
+			if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Editor, rs, smeldr.AuthTarget{}); rpcErr != nil {
 				return nil, rpcErr
 			}
 			return s.handleNavTool(ctx, p.Name, coalesceArgs(p.Arguments))
@@ -218,7 +221,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// Webhook admin tools require Admin role and are dispatched before
 	// module-scoped tool authorisation.
 	if s.webhookStore != nil && isWebhookTool(p.Name) {
-		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Admin, rs); rpcErr != nil {
+		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Admin, rs, smeldr.AuthTarget{}); rpcErr != nil {
 			return nil, rpcErr
 		}
 		return s.handleWebhookTool(ctx, p.Name, coalesceArgs(p.Arguments))
@@ -227,7 +230,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// Preview URL tool requires Editor role and is dispatched before
 	// module-scoped tool authorisation.
 	if isPreviewTool(p.Name) {
-		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Editor, rs); rpcErr != nil {
+		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Editor, rs, smeldr.AuthTarget{}); rpcErr != nil {
 			return nil, rpcErr
 		}
 		return s.handlePreviewTool(s.app, p.Name, coalesceArgs(p.Arguments))
@@ -236,7 +239,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// Upload token tool requires Author role and is dispatched before
 	// module-scoped tool authorisation.
 	if isUploadTool(p.Name) {
-		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Author, rs); rpcErr != nil {
+		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Author, rs, smeldr.AuthTarget{}); rpcErr != nil {
 			return nil, rpcErr
 		}
 		return s.handleUploadTool(s.app, p.Name)
@@ -245,7 +248,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// Redirect management tools require Editor role and are dispatched before
 	// module-scoped tool authorisation.
 	if s.redirectEnabled && isRedirectTool(p.Name) {
-		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Editor, rs); rpcErr != nil {
+		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Editor, rs, smeldr.AuthTarget{}); rpcErr != nil {
 			return nil, rpcErr
 		}
 		return s.handleRedirectTool(ctx, p.Name, coalesceArgs(p.Arguments))
@@ -254,7 +257,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// Page meta tools (WithPageMeta) require Admin role and are dispatched
 	// before module-scoped tool authorisation.
 	if s.pageMetaStore != nil && isPageMetaTool(p.Name) {
-		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Admin, rs); rpcErr != nil {
+		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Admin, rs, smeldr.AuthTarget{}); rpcErr != nil {
 			return nil, rpcErr
 		}
 		return s.handlePageMetaTool(ctx, p.Name, coalesceArgs(p.Arguments))
@@ -267,11 +270,11 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		var rpcErr *jsonRPCError
 		switch {
 		case isAdminRelationTool(p.Name):
-			rpcErr = s.authoriseTool(ctx, p.Name, smeldr.Admin, rs)
+			rpcErr = s.authoriseTool(ctx, p.Name, smeldr.Admin, rs, smeldr.AuthTarget{})
 		case isEditorRelationTool(p.Name):
-			rpcErr = s.authoriseTool(ctx, p.Name, smeldr.Editor, rs)
+			rpcErr = s.authoriseTool(ctx, p.Name, smeldr.Editor, rs, smeldr.AuthTarget{})
 		default:
-			rpcErr = s.authoriseTool(ctx, p.Name, smeldr.Author, rs)
+			rpcErr = s.authoriseTool(ctx, p.Name, smeldr.Author, rs, smeldr.AuthTarget{})
 		}
 		if rpcErr != nil {
 			return nil, rpcErr
@@ -286,11 +289,11 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		var rpcErr *jsonRPCError
 		switch p.Name {
 		case "define_state_flow":
-			rpcErr = s.authoriseTool(ctx, p.Name, smeldr.Admin, rs)
+			rpcErr = s.authoriseTool(ctx, p.Name, smeldr.Admin, rs, smeldr.AuthTarget{})
 		case "transition_item":
-			rpcErr = s.authoriseTool(ctx, p.Name, smeldr.Editor, rs)
+			rpcErr = s.authoriseTool(ctx, p.Name, smeldr.Editor, rs, smeldr.AuthTarget{})
 		default:
-			rpcErr = s.authoriseTool(ctx, p.Name, smeldr.Author, rs)
+			rpcErr = s.authoriseTool(ctx, p.Name, smeldr.Author, rs, smeldr.AuthTarget{})
 		}
 		if rpcErr != nil {
 			return nil, rpcErr
@@ -301,7 +304,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// Signal protocol tools. Gated on DB presence (same guard as state tools).
 	// Both tools require Author role.
 	if s.app.Config().DB != nil && isSignalTool(p.Name) {
-		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Author, rs); rpcErr != nil {
+		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Author, rs, smeldr.AuthTarget{}); rpcErr != nil {
 			return nil, rpcErr
 		}
 		return s.handleSignalTool(ctx, p.Name, coalesceArgs(p.Arguments))
@@ -310,7 +313,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// Dynamic content tools (WithDynamicContent). Role is determined per-tool
 	// by roleFor. Dispatched before module-scoped tool authorisation.
 	if s.dynamicContent && isDynamicContentTool(p.Name) {
-		if rpcErr := s.authoriseTool(ctx, p.Name, roleFor(p.Name), rs); rpcErr != nil {
+		if rpcErr := s.authoriseTool(ctx, p.Name, roleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
 			return nil, rpcErr
 		}
 		return s.handleDynamicContentTool(ctx, p.Name, coalesceArgs(p.Arguments))
@@ -322,35 +325,31 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// type whose name collides with "node".
 	if s.blockRepo != nil {
 		if isNodeTool(p.Name) {
-			if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Author, rs); rpcErr != nil {
+			if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Author, rs, smeldr.AuthTarget{}); rpcErr != nil {
 				return nil, rpcErr
 			}
 			return s.handleNodeTool(ctx, p.Name, coalesceArgs(p.Arguments))
 		}
 		if isCompositionTool(p.Name) {
-			if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Editor, rs); rpcErr != nil {
+			if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Editor, rs, smeldr.AuthTarget{}); rpcErr != nil {
 				return nil, rpcErr
 			}
 			return s.handleCompositionTool(ctx, p.Name, coalesceArgs(p.Arguments))
 		}
 		if s.schemaStore != nil {
 			if isSchemaTool(p.Name) {
-				if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Author, rs); rpcErr != nil {
+				if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Author, rs, smeldr.AuthTarget{}); rpcErr != nil {
 					return nil, rpcErr
 				}
 				return s.handleSchemaTool(ctx, p.Name, coalesceArgs(p.Arguments))
 			}
 			if s.typedToolSet[p.Name] {
-				if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Author, rs); rpcErr != nil {
+				if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Author, rs, smeldr.AuthTarget{}); rpcErr != nil {
 					return nil, rpcErr
 				}
 				return s.handleTypedTool(ctx, p.Name, coalesceArgs(p.Arguments))
 			}
 		}
-	}
-
-	if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Author, rs); rpcErr != nil {
-		return nil, rpcErr
 	}
 
 	op, typeSnake, ok := parseToolName(p.Name)
@@ -361,6 +360,14 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	m, ok := s.moduleForType(typeSnake)
 	if !ok && op != "list" {
 		return nil, &jsonRPCError{Code: -32602, Message: "unknown tool: " + p.Name}
+	}
+
+	var typeName string
+	if m != nil {
+		typeName = m.MCPMeta().TypeName
+	}
+	if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Author, rs, smeldr.AuthTarget{TypeName: typeName}); rpcErr != nil {
+		return nil, rpcErr
 	}
 
 	args := p.Arguments
@@ -436,7 +443,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		return toolResult(map[string]any{"slug": slug, "status": "archived"}), nil
 
 	case "delete":
-		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Editor, rs); rpcErr != nil {
+		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Editor, rs, smeldr.AuthTarget{TypeName: typeName}); rpcErr != nil {
 			return nil, rpcErr
 		}
 		slug, ok := stringArg(args, "slug")
@@ -453,7 +460,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		if !ok {
 			return nil, &jsonRPCError{Code: -32602, Message: "unknown tool: " + p.Name}
 		}
-		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Editor, rs); rpcErr != nil {
+		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Editor, rs, smeldr.AuthTarget{TypeName: lm.MCPMeta().TypeName}); rpcErr != nil {
 			return nil, rpcErr
 		}
 		var statuses []smeldr.Status
@@ -474,7 +481,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		if !ok {
 			return nil, &jsonRPCError{Code: -32602, Message: "unknown tool: " + p.Name}
 		}
-		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Editor, rs); rpcErr != nil {
+		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Editor, rs, smeldr.AuthTarget{TypeName: gm.MCPMeta().TypeName}); rpcErr != nil {
 			return nil, rpcErr
 		}
 		slug, ok := stringArg(args, "slug")

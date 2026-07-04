@@ -7,6 +7,29 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.26.1] — 2026-07-04
+
+### Changed
+
+- `authoriseTool` gains a `target smeldr.AuthTarget` parameter (last arg). Module-scoped tools
+  (create, update, publish, schedule, archive, delete, list, get on registered `Module[T]` types)
+  now pass `AuthTarget{TypeName: typeName}` — matching the HTTP gate (`canReadDrafts` /
+  `checkWriteOp`). Infrastructure tools pass `AuthTarget{}`. Fixes a parity bug where
+  `ScopeStatic` grants scoped to a content type (e.g. `"Post:*"`) were honoured by the HTTP gate
+  but silently denied by the MCP gate for the same token and operation. (A196, T113)
+- `case "list"` baseline now uses `lm.MCPMeta().TypeName` (from `moduleForAdminList`) rather than
+  the outer `typeName` variable (which is empty for plural snake-case tool names). (A196)
+- 23 `authoriseTool` call sites updated: 4 module-scoped with `AuthTarget{TypeName: …}`,
+  19 infrastructure with `AuthTarget{}`. (A196)
+
+### Added
+
+- `TestAuthoriseTool_TypeScoped_ParityWithHTTP` — two sub-cases (create/delete) using custom
+  `ScopeMode: ScopeStatic` role definitions to verify that the MCP gate honours type-scoped grants
+  identically to the HTTP gate, and correctly denies when `AuthTarget{}` is passed. (A196)
+
+---
+
 ## [1.26.0] — 2026-07-03
 
 ### Added
