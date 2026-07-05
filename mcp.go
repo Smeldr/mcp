@@ -75,7 +75,7 @@ func WithBlocks() ServerOption {
 			s.edgeStore = smeldr.NewContentEdgeStore(db)
 			s.blockParents = s.app.BlockParents()
 			s.schemaStore = smeldr.NewSchemaStore(db)
-			if schemas, err := s.schemaStore.All(context.Background()); err == nil {
+			if schemas, err := s.schemaStore.AllByKind(context.Background(), "block"); err == nil {
 				s.typedTools = generateTypedTools(schemas)
 				s.typedToolSet = make(map[string]bool, len(s.typedTools))
 				for _, t := range s.typedTools {

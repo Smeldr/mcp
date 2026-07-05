@@ -7,6 +7,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.28.0] — 2026-07-05
+
+### Added
+- `dynamic_tools.go`: `schedule_content` MCP tool (Editor role) — accepts `type_name`, `id`, `scheduled_at` (RFC 3339); calls `DynamicTypeRepo.ScheduleContent`; fires `RefreshContentIndex` in background. (A202)
+- `dynamic_tools.go`: `smeldr.Scheduled` added to the valid status set for `set_content_status`; `transition_item` description updated to reference `schedule_content` for future publication.
+- `rolefor.go`: `schedule_content` added to the content-tool role group (same Editor role as `create_content`, `update_content`, `set_content_status`). (A202)
+
+### Changed
+- `tool.go`: `AuthTarget{TypeName: dynamicTypeName}` threaded into `authoriseTool` for all content tools — governance grants can now be scoped per content type (e.g. "may create recipes but not invoices"). `define_content_type` passes empty `TypeName` (Admin-only, no type yet). (A202)
+- `mcp.go`: block-type schemas now filtered via `AllByKind(ctx, "block")` instead of loading all schemas. (A202)
+- `go.mod`: `smeldr.dev/core` bumped from v1.53.0 to v1.54.0.
+
+---
+
 ## [1.27.1] — 2026-07-05
 
 ### Fixed

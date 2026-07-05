@@ -1,8 +1,10 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	smeldr "smeldr.dev/core"
 )
@@ -17,6 +19,7 @@ var dynamicToolSet = map[string]bool{
 	"list_content":        true,
 	"update_content":      true,
 	"set_content_status":  true,
+	"schedule_content":    true,
 }
 
 // isDynamicContentTool reports whether name is one of the 6 generic dynamic
@@ -33,7 +36,7 @@ func dynamicContentToolDefs() []mcpTool {
 	}
 	statusEnum := map[string]any{
 		"type": "string",
-		"enum": []string{"draft", "published", "archived"},
+		"enum": []string{"draft", "published", "archived", "scheduled"},
 	}
 
 	return []mcpTool{
@@ -110,8 +113,21 @@ func dynamicContentToolDefs() []mcpTool {
 			},
 		},
 		{
+			Name:        "schedule_content",
+			Description: "Schedule a content item for future publication. Sets status to scheduled and records the scheduled_at time. Requires Editor role.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"type_name":    map[string]any{"type": "string", "description": "Registered content type name."},
+					"id":           map[string]any{"type": "string", "description": "Node ID."},
+					"scheduled_at": map[string]any{"type": "string", "format": "date-time", "description": "RFC 3339 datetime for publication."},
+				},
+				"required": []string{"type_name", "id", "scheduled_at"},
+			},
+		},
+		{
 			Name:        "set_content_status",
-			Description: "Transition a content item to draft, published, or archived. Published items get PublishedAt stamped on first transition. Requires Editor role.",
+			Description: "Transition a content item to draft, published, archived, or scheduled. Published items get PublishedAt stamped on first transition. Use schedule_content to set a future publication time. Requires Editor role.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -262,7 +278,7 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		}
 		st := smeldr.Status(statusStr)
 		switch st {
-		case smeldr.Draft, smeldr.Published, smeldr.Archived:
+		case smeldr.Draft, smeldr.Published, smeldr.Archived, smeldr.Scheduled:
 		default:
 			return nil, &jsonRPCError{Code: -32602, Message: fmt.Sprintf("invalid status %q", statusStr)}
 		}
@@ -273,7 +289,34 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if err := repo.SetStatus(ctx, id, st); err != nil {
 			return nil, errorFor(err)
 		}
+		go s.app.RefreshContentIndex(context.Background(), typeName)
 		return toolResult(map[string]any{"id": id, "status": statusStr}), nil
+
+	case "schedule_content":
+		typeName, ok := stringArg(args, "type_name")
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: type_name required"}
+		}
+		id, ok := stringArg(args, "id")
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: id required"}
+		}
+		scheduledAtStr, ok := stringArg(args, "scheduled_at")
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: scheduled_at required"}
+		}
+		scheduledAt, err := time.Parse(time.RFC3339, scheduledAtStr)
+		if err != nil {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: scheduled_at must be RFC 3339 (e.g. 2026-07-10T09:00:00Z)"}
+		}
+		repo, err := s.app.DynamicContentRepo(typeName)
+		if err != nil {
+			return nil, &jsonRPCError{Code: -32602, Message: err.Error()}
+		}
+		if err := repo.ScheduleContent(ctx, id, scheduledAt); err != nil {
+			return nil, errorFor(err)
+		}
+		return toolResult(map[string]any{"id": id, "status": "scheduled", "scheduled_at": scheduledAtStr}), nil
 	}
 
 	return nil, &jsonRPCError{Code: -32602, Message: "unknown dynamic tool: " + name}

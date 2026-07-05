@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"testing"
@@ -77,14 +78,14 @@ func TestDynamicTools_AbsenceWithoutFlag(t *testing.T) {
 	}
 }
 
-// TestDynamicTools_PresenceWithFlag verifies that all 6 dynamic tools appear
+// TestDynamicTools_PresenceWithFlag verifies that all dynamic tools appear
 // in tools/list when WithDynamicContent is set.
 func TestDynamicTools_PresenceWithFlag(t *testing.T) {
 	srv, _ := newDynamicServer(t)
 	result := srv.handleToolsList()
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
-	want := []string{"define_content_type", "create_content", "get_content", "list_content", "update_content", "set_content_status"}
+	want := []string{"define_content_type", "create_content", "get_content", "list_content", "update_content", "set_content_status", "schedule_content"}
 	names := make(map[string]bool, len(tools))
 	for _, tool := range tools {
 		names[tool.Name] = true
@@ -96,9 +97,9 @@ func TestDynamicTools_PresenceWithFlag(t *testing.T) {
 	}
 }
 
-// TestIsDynamicContentTool verifies the predicate for all 6 tool names and one non-tool.
+// TestIsDynamicContentTool verifies the predicate for all dynamic tool names and one non-tool.
 func TestIsDynamicContentTool(t *testing.T) {
-	for _, name := range []string{"define_content_type", "create_content", "get_content", "list_content", "update_content", "set_content_status"} {
+	for _, name := range []string{"define_content_type", "create_content", "get_content", "list_content", "update_content", "set_content_status", "schedule_content"} {
 		if !isDynamicContentTool(name) {
 			t.Errorf("isDynamicContentTool(%q) = false, want true", name)
 		}
@@ -449,6 +450,7 @@ func TestRoleFor(t *testing.T) {
 		{"create_content", smeldr.Editor},
 		{"update_content", smeldr.Editor},
 		{"set_content_status", smeldr.Editor},
+		{"schedule_content", smeldr.Editor},
 		{"get_content", smeldr.Author},
 		{"list_content", smeldr.Author},
 		{"unknown_tool", smeldr.Admin}, // default
@@ -458,5 +460,151 @@ func TestRoleFor(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("roleFor(%q) = %v, want %v", tc.tool, got, tc.want)
 		}
+	}
+}
+
+// TestDynamicTools_ScheduleContent_success schedules a draft content item for
+// future publication. Verifies the response carries status=scheduled and
+// the scheduled_at value echoed back.
+func TestDynamicTools_ScheduleContent_success(t *testing.T) {
+	srv, _ := newDynamicServer(t)
+	seedDynamicType(t, srv, "event")
+
+	createRes, createErr := callTool(t, srv, newEditorCtx(), "create_content", map[string]any{
+		"type_name": "event",
+		"fields":    map[string]any{"title": "Summer Gala"},
+	})
+	if createErr != nil {
+		t.Fatalf("create_content: %v", createErr.Message)
+	}
+	id, _ := unwrapToolResult(t, createRes)["ID"].(string)
+	if id == "" {
+		t.Fatal("create_content returned empty ID")
+	}
+
+	const scheduledAt = "2026-09-01T10:00:00Z"
+	res, rpcErr := callTool(t, srv, newEditorCtx(), "schedule_content", map[string]any{
+		"type_name":    "event",
+		"id":           id,
+		"scheduled_at": scheduledAt,
+	})
+	if rpcErr != nil {
+		t.Fatalf("schedule_content: %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, res)
+	if fields["status"] != "scheduled" {
+		t.Errorf("status = %v, want scheduled", fields["status"])
+	}
+	if fields["scheduled_at"] != scheduledAt {
+		t.Errorf("scheduled_at = %v, want %v", fields["scheduled_at"], scheduledAt)
+	}
+	if fields["id"] != id {
+		t.Errorf("id = %v, want %v", fields["id"], id)
+	}
+}
+
+// TestDynamicTools_ScheduleContent_missingArgs verifies that missing required
+// arguments return -32602.
+func TestDynamicTools_ScheduleContent_missingArgs(t *testing.T) {
+	srv, _ := newDynamicServer(t)
+	for _, tc := range []struct {
+		name string
+		args map[string]any
+	}{
+		{"missing type_name", map[string]any{"id": "x", "scheduled_at": "2026-09-01T10:00:00Z"}},
+		{"missing id", map[string]any{"type_name": "event", "scheduled_at": "2026-09-01T10:00:00Z"}},
+		{"missing scheduled_at", map[string]any{"type_name": "event", "id": "x"}},
+	} {
+		_, rpcErr := callTool(t, srv, newEditorCtx(), "schedule_content", tc.args)
+		if rpcErr == nil || rpcErr.Code != -32602 {
+			t.Errorf("%s: expected -32602, got %v", tc.name, rpcErr)
+		}
+	}
+}
+
+// TestDynamicTools_ScheduleContent_invalidDate verifies that a malformed
+// scheduled_at value (not RFC 3339) returns -32602.
+func TestDynamicTools_ScheduleContent_invalidDate(t *testing.T) {
+	srv, _ := newDynamicServer(t)
+	_, rpcErr := callTool(t, srv, newEditorCtx(), "schedule_content", map[string]any{
+		"type_name":    "event",
+		"id":           "some-id",
+		"scheduled_at": "not-a-date",
+	})
+	if rpcErr == nil || rpcErr.Code != -32602 {
+		t.Errorf("expected -32602 for invalid scheduled_at, got %v", rpcErr)
+	}
+}
+
+// TestDynamicTools_SetContentStatus_ScheduledAccepted verifies that "scheduled"
+// is a valid status value for set_content_status (not rejected at the enum check).
+// It will fail at DB level because the item doesn't exist, but the enum gate passes.
+func TestDynamicTools_SetContentStatus_ScheduledAccepted(t *testing.T) {
+	srv, _ := newDynamicServer(t)
+	seedDynamicType(t, srv, "bulletin")
+
+	createRes, createErr := callTool(t, srv, newEditorCtx(), "create_content", map[string]any{
+		"type_name": "bulletin",
+		"fields":    map[string]any{"title": "Notice"},
+	})
+	if createErr != nil {
+		t.Fatalf("create_content: %v", createErr.Message)
+	}
+	id, _ := unwrapToolResult(t, createRes)["ID"].(string)
+
+	_, rpcErr := callTool(t, srv, newEditorCtx(), "set_content_status", map[string]any{
+		"type_name": "bulletin",
+		"id":        id,
+		"status":    "scheduled",
+	})
+	// The call must NOT return -32602 (invalid params) — "scheduled" passes the enum check.
+	// It may return a different error (e.g. state-flow rejection), but not a params error.
+	if rpcErr != nil && rpcErr.Code == -32602 {
+		t.Errorf("set_content_status with status=scheduled returned -32602 (enum rejection); expected the value to pass the enum gate")
+	}
+}
+
+// TestGenerateTypedTools_ContentKindExcluded verifies that a content-kind schema
+// (registered via define_content_type) does not produce a typed tool in tools/list.
+// Prior to the AllByKind fix in mcp.go:78, content schemas were included and
+// generated spurious typed create tools.
+func TestGenerateTypedTools_ContentKindExcluded(t *testing.T) {
+	t.Helper()
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Skipf("sqlite unavailable: %v", err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { db.Close() })
+
+	if err := smeldr.CreateBlockTables(db); err != nil {
+		t.Fatalf("CreateBlockTables: %v", err)
+	}
+	if err := smeldr.CreateSchemaTable(db); err != nil {
+		t.Fatalf("CreateSchemaTable: %v", err)
+	}
+
+	// Insert a content-kind schema directly — same kind that define_content_type produces.
+	store := smeldr.NewSchemaStore(db)
+	contentSchema := &smeldr.ContentTypeSchema{
+		TypeName: "recipe",
+		Kind:     "content",
+		Fields:   json.RawMessage(`[{"name":"title","type":"string","required":true}]`),
+	}
+	if err := store.Save(context.Background(), contentSchema); err != nil {
+		t.Fatalf("SchemaStore.Save: %v", err)
+	}
+
+	// Server with WithBlocks — generates typed tools only from kind="block".
+	app := smeldr.New(smeldr.Config{
+		BaseURL: "http://localhost",
+		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
+		DB:      db,
+	})
+	srv := New(app, WithBlocks())
+
+	names := toolNames(srv.handleToolsList())
+	if names["create_recipe"] {
+		t.Error("create_recipe typed tool present for content-kind schema; AllByKind filter not applied")
 	}
 }

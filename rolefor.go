@@ -9,7 +9,7 @@ func roleFor(toolName string) smeldr.Role {
 	switch toolName {
 	case "define_content_type":
 		return smeldr.Admin
-	case "create_content", "update_content", "set_content_status":
+	case "create_content", "update_content", "set_content_status", "schedule_content":
 		return smeldr.Editor
 	case "get_content", "list_content":
 		return smeldr.Author

@@ -321,9 +321,13 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	}
 
 	// Dynamic content tools (WithDynamicContent). Role is determined per-tool
-	// by roleFor. Dispatched before module-scoped tool authorisation.
+	// by roleFor. The type_name argument is threaded into AuthTarget so that
+	// governance grants can be scoped per content type (e.g. "may create recipes
+	// but not invoices"). define_content_type has no existing type, so its
+	// AuthTarget carries an empty TypeName, which is fine for Admin-only access.
 	if s.dynamicContent && isDynamicContentTool(p.Name) {
-		if rpcErr := s.authoriseTool(ctx, p.Name, roleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
+		dynamicTypeName, _ := p.Arguments["type_name"].(string)
+		if rpcErr := s.authoriseTool(ctx, p.Name, roleFor(p.Name), rs, smeldr.AuthTarget{TypeName: dynamicTypeName}); rpcErr != nil {
 			return nil, rpcErr
 		}
 		return s.handleDynamicContentTool(ctx, p.Name, coalesceArgs(p.Arguments))
