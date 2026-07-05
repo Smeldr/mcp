@@ -296,7 +296,7 @@ func boolField(m map[string]any, key string) bool {
 // default flow (type_name IS NULL AND name = 'default') when no custom flow is
 // registered for typeName. Returns an empty slice when no flow is found.
 func validTransitionsFor(ctx context.Context, db smeldr.DB, typeName, fromState string) ([]string, error) {
-	var flowID int64
+	var flowID string
 	err := db.QueryRowContext(ctx,
 		`SELECT id FROM smeldr_state_flows WHERE type_name = ? LIMIT 1`, typeName,
 	).Scan(&flowID)

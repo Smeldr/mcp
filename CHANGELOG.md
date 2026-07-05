@@ -7,6 +7,24 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.27.1] — 2026-07-05
+
+### Fixed
+
+- `validTransitionsFor`: scan target for `smeldr_state_flows.id` changed from `int64` to
+  `string`. Since A195 (core v1.52.2), the primary key is `TEXT NOT NULL` (a UUID). Scanning
+  a UUID string into `int64` caused `sql.Scan` to fail, returning an empty transitions list for
+  both custom and default flows. Fixes `TestStateTool_GetValidTransitions_HappyPath` and
+  `TestStateTool_GetValidTransitions_CustomFlow`. (A201)
+
+### Added
+
+- `.github/workflows/ci.yml`: CI workflow for `smeldr.dev/mcp`. Runs on push/PR to `main`.
+  Steps: `go test ./...`, `go vet ./...`, UTF-8 BOM check, `go test -race ./...`,
+  `staticcheck`, `govulncheck`. No Postgres integration job (mcp has no own DDL). (A201)
+
+---
+
 ## [1.27.0] — 2026-07-05
 
 ### Added
