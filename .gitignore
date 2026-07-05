@@ -2,4 +2,5 @@ go.work
 go.work.sum
 cov.out
 cov_mcp
+coverage
 coverage/
