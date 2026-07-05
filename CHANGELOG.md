@@ -7,6 +7,19 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.27.0] — 2026-07-05
+
+### Added
+
+- New `get_goal_context` MCP tool. Accepts a `goal_id` parameter (Author role required) and returns structured context: the goal definition, linked decisions, linked tasks, and linked goals. Gated on database availability. Returns -32001 when goal does not exist. (A199)
+- New files: `orchestration_tools.go` and `orchestration_tools_test.go` with tool registration, dispatch, and 8-test coverage.
+
+### Changed
+
+- `smeldr.dev/core` dependency bumped from v1.51.0 to v1.53.0 to support goal context queries.
+
+---
+
 ## [1.26.1] — 2026-07-04
 
 ### Changed
