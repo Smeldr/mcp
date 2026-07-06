@@ -7,6 +7,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.29.1] — 2026-07-06
+
+### Fixed
+- `tool.go`: `list_type_tools` moved to the first position in the `tools/list` response, ahead of all module-contributed tools. Defensive against client-side tail truncation: OpenAI's MCP connector loaded 103 of 148 tools from smeldr.dev on 2026-07-06, dropping tools from the tail of the array; `list_type_tools` was among those never received despite being in the server's response. (T132, A209)
+- `relation_tools_test.go`, `redirect_tools_test.go`: resolved three staticcheck findings that had kept CI red since T120 — `unwrapEdges` unused function (U1000) deleted along with its orphaned `encoding/json` import; two SA5011 nil-pointer-dereference warnings fixed by replacing `t.Error`/`t.Errorf` with `t.Fatal`/`t.Fatalf` at the nil-guard sites. No consumer impact. (T130, A208)
+
+---
+
 ## [1.29.0] — 2026-07-06
 
 ### Added
