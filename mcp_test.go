@@ -597,8 +597,8 @@ func TestMCPToolsList(t *testing.T) {
 	if !ok {
 		t.Fatalf("tools field is %T, want []mcpTool", m["tools"])
 	}
-	if len(tools) != 10 {
-		t.Fatalf("got %d tools, want 10", len(tools))
+	if len(tools) != 11 {
+		t.Fatalf("got %d tools, want 11", len(tools))
 	}
 	names := make(map[string]bool, len(tools))
 	for _, tool := range tools {
@@ -615,6 +615,7 @@ func TestMCPToolsList(t *testing.T) {
 		"get_test_mcp_post",
 		"create_preview_url",
 		"create_upload_token",
+		"list_type_tools",
 	} {
 		if !names[want] {
 			t.Errorf("missing tool %q", want)
@@ -635,14 +636,14 @@ func TestMCPToolsList(t *testing.T) {
 	res2 := srv2.handleToolsList()
 	m2 := res2.(map[string]any)
 	tools2 := m2["tools"].([]mcpTool)
-	if len(tools2) != 2 {
-		t.Errorf("MCPRead-only module produced %d tools, want 2 (create_preview_url + create_upload_token)", len(tools2))
+	if len(tools2) != 3 {
+		t.Errorf("MCPRead-only module produced %d tools, want 3 (create_preview_url + create_upload_token + list_type_tools)", len(tools2))
 	}
 	names2 := make(map[string]bool, len(tools2))
 	for _, tool := range tools2 {
 		names2[tool.Name] = true
 	}
-	for _, want := range []string{"create_preview_url", "create_upload_token"} {
+	for _, want := range []string{"create_preview_url", "create_upload_token", "list_type_tools"} {
 		if !names2[want] {
 			t.Errorf("MCPRead-only: missing always-present tool %q", want)
 		}

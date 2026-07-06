@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.29.0] — 2026-07-06
+
+### Added
+- `discover.go`: `list_type_tools` MCP tool — takes `type_name` (snake_case) and returns all MCP tool names registered for that compiled content type. Requires Author role. Always present in `tools/list`. For `SingleInstance` modules, `list_X` is absent (matching `mcpAdminReadToolDefs`). Closes the discoverability gap where AI clients doing semantic tool-search find one verb for a type but cannot enumerate its siblings. (A207)
+
+---
+
 ## [1.28.0] — 2026-07-05
 
 ### Added

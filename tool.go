@@ -167,6 +167,7 @@ func (s *Server) handleToolsList() any {
 		tools = append(tools, signalToolDefs()...)
 		tools = append(tools, orchestrationToolDefs()...)
 	}
+	tools = append(tools, discoverToolDef())
 	return map[string]any{"tools": tools}
 }
 
@@ -318,6 +319,14 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return nil, rpcErr
 		}
 		return s.handleOrchestrationTool(ctx, p.Name, coalesceArgs(p.Arguments))
+	}
+
+	// Discoverability meta-tool. Requires Author role.
+	if isDiscoverTool(p.Name) {
+		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Author, rs, smeldr.AuthTarget{}); rpcErr != nil {
+			return nil, rpcErr
+		}
+		return s.handleDiscoverTool(coalesceArgs(p.Arguments))
 	}
 
 	// Dynamic content tools (WithDynamicContent). Role is determined per-tool
