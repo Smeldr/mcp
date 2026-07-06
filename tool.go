@@ -124,6 +124,7 @@ func errorFor(err error) *jsonRPCError {
 // list_nav_items; create/update/delete_nav_item only when the tree is DB-backed).
 func (s *Server) handleToolsList() any {
 	var tools []mcpTool
+	tools = append(tools, discoverToolDef())
 	for _, m := range s.modules {
 		if !hasMCPOp(m, smeldr.MCPWrite) {
 			continue
@@ -167,7 +168,6 @@ func (s *Server) handleToolsList() any {
 		tools = append(tools, signalToolDefs()...)
 		tools = append(tools, orchestrationToolDefs()...)
 	}
-	tools = append(tools, discoverToolDef())
 	return map[string]any{"tools": tools}
 }
 
