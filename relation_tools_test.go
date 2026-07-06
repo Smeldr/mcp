@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"database/sql"
-	"encoding/json"
 	"testing"
 
 	"smeldr.dev/core"
@@ -153,7 +152,7 @@ func TestRelationTools_AssertRelation_MissingArgs(t *testing.T) {
 	for _, tc := range cases {
 		_, rpcErr := callTool(t, srv, ctx, "assert_relation", tc.args)
 		if rpcErr == nil {
-			t.Errorf("expected error for missing %s", tc.missing)
+			t.Fatalf("expected error for missing %s", tc.missing)
 		}
 		if rpcErr.Code != -32602 {
 			t.Errorf("missing %s: expected -32602, got %d", tc.missing, rpcErr.Code)
@@ -459,18 +458,4 @@ func TestRelationTools_RelationToolDefs_AllPresent(t *testing.T) {
 			t.Errorf("tool def %q missing", expected)
 		}
 	}
-}
-
-// unwrapEdges extracts the "edges" array from a get_relations result.
-func unwrapEdges(t *testing.T, result any) []map[string]any {
-	t.Helper()
-	b, err := json.Marshal(unwrapToolResult(t, result)["edges"])
-	if err != nil {
-		t.Fatalf("marshal edges: %v", err)
-	}
-	var edges []map[string]any
-	if err := json.Unmarshal(b, &edges); err != nil {
-		t.Fatalf("unmarshal edges: %v", err)
-	}
-	return edges
 }

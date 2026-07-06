@@ -208,7 +208,7 @@ func TestRedirectTools_DeleteNotFound(t *testing.T) {
 		"from": "/nonexistent",
 	})
 	if rpcErr == nil {
-		t.Error("expected error for deleting nonexistent redirect")
+		t.Fatal("expected error for deleting nonexistent redirect")
 	}
 	if rpcErr.Code != -32001 {
 		t.Errorf("expected -32001 not-found, got %d", rpcErr.Code)
@@ -224,7 +224,7 @@ func TestRedirectTools_EditorGate(t *testing.T) {
 		"to":   "/new",
 	})
 	if rpcErr == nil {
-		t.Error("expected forbidden for Author-role caller")
+		t.Fatal("expected forbidden for Author-role caller")
 	}
 	if rpcErr.Code != -32001 {
 		t.Errorf("expected -32001 forbidden, got %d", rpcErr.Code)
