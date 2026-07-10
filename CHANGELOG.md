@@ -7,6 +7,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.29.2] — 2026-07-10
+
+### Fixed
+- `tool.go`: All six item-operation cases (`update`, `publish`, `schedule`, `archive`, `delete`, `get`) now accept `"id"` as an alias for `"slug"` when identifying a content item. A new `identArg` helper tries `"id"` first and falls back to `"slug"` for backwards compatibility. Error message updated from `"slug required"` to `"id (or slug) required"`. Resolves a real ChatGPT-as-operator incident where `ScheduledPost` (which has `json:"id"`, not `json:"slug"`) could not be addressed by its actual field name. (T140)
+- `mcp.go`: Tool descriptions and JSON Schema property descriptions updated to read "by id or slug" and "Item ID or slug — both accepted." for all item-addressing operations (`update`, `publish`, `schedule`, `archive`, `get`, `delete`). Helps AI clients discover that both identifiers are accepted without reading source.
+
+---
+
 ## [1.29.1] — 2026-07-06
 
 ### Fixed

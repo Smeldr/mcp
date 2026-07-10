@@ -278,11 +278,11 @@ func (s *Server) allResources(ctx smeldr.Context) []mcpResource {
 	return out
 }
 
-// slugOnlySchema is the JSON Schema for tools that require only a slug argument.
+// slugOnlySchema is the JSON Schema for tools that require only an item identifier.
 var slugOnlySchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
-		"slug": map[string]any{"type": "string"},
+		"slug": map[string]any{"type": "string", "description": "Item ID or slug — both accepted."},
 	},
 	"required": []string{"slug"},
 }
@@ -332,12 +332,12 @@ func mcpToolDefs(m smeldr.MCPModule) []mcpTool {
 		},
 		{
 			Name:        "update_" + typeSnake,
-			Description: "Partially update a " + meta.TypeName + " by slug.",
+			Description: "Partially update a " + meta.TypeName + " by id or slug.",
 			InputSchema: inputSchemaUpdate(schema),
 		},
 		{
 			Name:        "publish_" + typeSnake,
-			Description: "Publish a " + meta.TypeName + " by slug.",
+			Description: "Publish a " + meta.TypeName + " by id or slug.",
 			InputSchema: slugOnlySchema,
 		},
 		{
@@ -346,7 +346,7 @@ func mcpToolDefs(m smeldr.MCPModule) []mcpTool {
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"slug":         map[string]any{"type": "string"},
+					"slug":         map[string]any{"type": "string", "description": "Item ID or slug — both accepted."},
 					"scheduled_at": map[string]any{"type": "string", "format": "date-time"},
 				},
 				"required": []string{"slug", "scheduled_at"},
@@ -354,7 +354,7 @@ func mcpToolDefs(m smeldr.MCPModule) []mcpTool {
 		},
 		{
 			Name:        "archive_" + typeSnake,
-			Description: "Archive a " + meta.TypeName + " by slug.",
+			Description: "Archive a " + meta.TypeName + " by id or slug.",
 			InputSchema: slugOnlySchema,
 		},
 	}
@@ -379,11 +379,11 @@ func mcpAdminReadToolDefs(m smeldr.MCPModule) []mcpTool {
 	getAndDelete := []mcpTool{
 		{
 			Name:        "get_" + typeSnake,
-			Description: "Get a single " + meta.TypeName + " by slug. Requires Editor or Admin role. Returns the item at any lifecycle status.",
+			Description: "Get a single " + meta.TypeName + " by id or slug. Requires Editor or Admin role. Returns the item at any lifecycle status.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"slug": map[string]any{"type": "string"},
+					"slug": map[string]any{"type": "string", "description": "Item ID or slug — both accepted."},
 				},
 				"required": []string{"slug"},
 			},
@@ -450,7 +450,7 @@ func inputSchema(fields []smeldr.MCPField) map[string]any {
 // using the same priority rules as [inputSchema] (Decision 27).
 func inputSchemaUpdate(fields []smeldr.MCPField) map[string]any {
 	props := map[string]any{
-		"slug": map[string]any{"type": "string"},
+		"slug": map[string]any{"type": "string", "description": "Item ID or slug — both accepted."},
 	}
 	for _, f := range fields {
 		props[f.JSONName] = fieldToProp(f)

@@ -800,3 +800,37 @@ func TestNavTools_DBClose_Errors(t *testing.T) {
 		t.Error("want error from update_nav_item after DB close")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// identArg helper
+// ---------------------------------------------------------------------------
+
+// TestIdentArg verifies that identArg prefers "id", falls back to "slug",
+// and returns ok=false when neither key is present or both values are empty.
+func TestIdentArg(t *testing.T) {
+	cases := []struct {
+		name   string
+		args   map[string]any
+		wantID string
+		wantOK bool
+	}{
+		{"id present", map[string]any{"id": "abc"}, "abc", true},
+		{"slug present", map[string]any{"slug": "abc"}, "abc", true},
+		{"id wins over slug", map[string]any{"id": "i", "slug": "s"}, "i", true},
+		{"neither present", map[string]any{}, "", false},
+		{"id empty string", map[string]any{"id": ""}, "", false},
+		{"slug empty string", map[string]any{"slug": ""}, "", false},
+		{"both empty", map[string]any{"id": "", "slug": ""}, "", false},
+		{"non-string id", map[string]any{"id": 42}, "", false},
+		{"non-string id valid slug", map[string]any{"id": 42, "slug": "s"}, "s", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := identArg(tc.args)
+			if ok != tc.wantOK || got != tc.wantID {
+				t.Errorf("identArg(%v) = (%q, %v); want (%q, %v)",
+					tc.args, got, ok, tc.wantID, tc.wantOK)
+			}
+		})
+	}
+}
