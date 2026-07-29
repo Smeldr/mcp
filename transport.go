@@ -76,7 +76,10 @@ func (s *Server) ServeStdio(ctx context.Context, in io.Reader, out io.Writer) er
 // Routes registered on a fresh [http.ServeMux]:
 //
 //   - GET  /mcp                                    — SSE endpoint (MCP 2024-11-05 transport)
-//   - POST /mcp                                    — JSON-RPC endpoint (MCP 2025-11-25 streamable HTTP)
+//   - POST /mcp                                    — alias for /mcp/message (same handler;
+//     retained for clients that expect the JSON-RPC endpoint at /mcp — NOT a distinct
+//     2025-11-25/2026-07-28 stateless streamable-HTTP transport; this server still uses
+//     the 2024-11-05 SSE-based session model on both paths)
 //   - POST /mcp/message                            — JSON-RPC endpoint (MCP 2024-11-05 SSE transport)
 //   - GET  /.well-known/oauth-protected-resource   — RFC 9728 metadata (404 when OAuth not enabled)
 //
@@ -88,7 +91,7 @@ func (s *Server) ServeStdio(ctx context.Context, in io.Reader, out io.Writer) er
 //   - POST /oauth/token                            — code exchange and token refresh
 //
 // Authentication when OAuth is enabled ([WithOAuth]):
-//   - All HTTP requests (GET /mcp and POST /mcp/message) must carry a valid
+//   - All HTTP requests (GET /mcp and POST /mcp or /mcp/message) must carry a valid
 //     OAuth Bearer access token. Missing or invalid tokens return HTTP 401 with
 //     a WWW-Authenticate header pointing to the protected resource metadata.
 //   - When [WithForgeFallback] is also set, forge bearer tokens are accepted as
@@ -97,8 +100,9 @@ func (s *Server) ServeStdio(ctx context.Context, in io.Reader, out io.Writer) er
 //
 // Authentication without OAuth (forge bearer tokens):
 //   - If the server was constructed with a non-empty secret (auto-inherited from
-//     [smeldr.App] via [New], or set via [WithSecret]), POST /mcp/message requires
-//     a valid "Authorization: Bearer <token>" header. GET /mcp is unauthenticated.
+//     [smeldr.App] via [New], or set via [WithSecret]), POST /mcp and POST /mcp/message
+//     require a valid "Authorization: Bearer <token>" header (same handler, same check).
+//     GET /mcp is unauthenticated.
 //   - If no secret is configured, requests are treated as [smeldr.GuestUser].
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
@@ -120,7 +124,8 @@ func (s *Server) Handler() http.Handler {
 // Registered routes (always):
 //
 //	GET  /mcp                                  — SSE endpoint
-//	POST /mcp                                  — streamable HTTP endpoint
+//	POST /mcp                                  — alias for /mcp/message (same handler;
+//	                                              not a 2025-11-25/2026-07-28 streamable-HTTP endpoint)
 //	POST /mcp/message                          — SSE transport message endpoint
 //	GET  /.well-known/oauth-protected-resource — RFC 9728 metadata
 //
@@ -228,9 +233,11 @@ func (s *Server) sseHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// messageHandler handles POST /mcp/message. It enforces the authentication
-// boundary (HTTP 401) before any JSON-RPC decoding, applies a 1 MiB body
-// limit, and writes a JSON-RPC response for every outcome.
+// messageHandler handles POST /mcp and POST /mcp/message — both routes are
+// registered to this same function; POST /mcp is an alias, not a distinct
+// streamable-HTTP transport. It enforces the authentication boundary (HTTP 401)
+// before any JSON-RPC decoding, applies a 1 MiB body limit, and writes a
+// JSON-RPC response for every outcome.
 func (s *Server) messageHandler(w http.ResponseWriter, r *http.Request) {
 	// Authentication boundary: HTTP-level 401 before any JSON-RPC decoding.
 	var smeldrCtx smeldr.Context
