@@ -124,7 +124,7 @@ func TestStateTool_TransitionItem_HappyPath(t *testing.T) {
 }
 
 // TestStateTool_TransitionItem_InvalidTransition verifies that a disallowed
-// transition (published → draft is not in the default flow) returns -32001.
+// transition (published → scheduled is not in the default flow) returns -32001.
 func TestStateTool_TransitionItem_InvalidTransition(t *testing.T) {
 	srv := newStateServer(t)
 	slug := seedStateContent(t, srv, "post")
@@ -140,11 +140,18 @@ func TestStateTool_TransitionItem_InvalidTransition(t *testing.T) {
 		t.Fatalf("setup transition_item: %v", rpcErr.Message)
 	}
 
-	// published → draft is not in the default flow → ErrConflict → -32001.
+	// published → scheduled is not in the default flow → ErrConflict → -32001.
+	// NOTE: this is a "currently invalid" assumption, not a guaranteed-forever
+	// one (published → draft used to be the invalid pair this test exercised,
+	// until core's Amendment A217 deliberately added it as an "unpublish"
+	// feature — this test went stale for months before anyone noticed, since
+	// mcp's own go.mod pins an older core version that predates A217). If a
+	// future core amendment adds published → scheduled too, update this test
+	// deliberately rather than letting it go stale again.
 	_, rpcErr = callTool(t, srv, editorCtx, "transition_item", map[string]any{
 		"type_name": "post",
 		"slug":      slug,
-		"to_state":  "draft",
+		"to_state":  "scheduled",
 	})
 	if rpcErr == nil {
 		t.Fatal("expected error for disallowed transition, got nil")
