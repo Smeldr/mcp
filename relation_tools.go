@@ -6,11 +6,12 @@ import (
 	"smeldr.dev/core"
 )
 
-// relationToolDefs returns the six tool definitions for relation graph management.
-// All six are registered when App.RelationStore() is non-nil (app.Relations was called).
+// relationToolDefs returns the seven tool definitions for relation graph management.
+// All seven are registered when App.RelationStore() is non-nil (app.Relations was called).
 //
 // Role assignment:
-//   - assert_relation, propose_relation, get_relations, list_relation_kinds — Author
+//   - assert_relation, propose_relation, observe_relation, get_relations,
+//     list_relation_kinds — Author
 //   - preview_impact — Editor (used before archive/delete editorial decisions)
 //   - upsert_relation_kind — Admin (manages the kind registry schema)
 func relationToolDefs() []mcpTool {
@@ -54,6 +55,26 @@ func relationToolDefs() []mcpTool {
 			},
 		},
 		{
+			Name: "observe_relation",
+			Description: "Record an edge a system directly witnessed (edge_class=observed) — " +
+				"for example a webhook-reported fact, as opposed to a human's direct claim " +
+				"(assert_relation) or an agent's inference (propose_relation). Each call inserts " +
+				"a new edge record with a unique ID. Requires Author role.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"source_type":   map[string]any{"type": "string", "description": "Content type of the dependent item."},
+					"source_id":     map[string]any{"type": "string", "description": "ID of the dependent item."},
+					"target_type":   map[string]any{"type": "string", "description": "Content type of the referenced item."},
+					"target_id":     map[string]any{"type": "string", "description": "ID of the referenced item."},
+					"relation_kind": map[string]any{"type": "string", "description": "type_name of a registered relation kind."},
+					"confidence":    map[string]any{"type": "number", "description": "Confidence score (0.0–1.0) for how reliable the witnessing system/integration is. Omit for unweighted kinds."},
+					"attributes":    map[string]any{"type": "object", "description": "Arbitrary edge-level metadata."},
+				},
+				"required": []string{"source_type", "source_id", "target_type", "target_id", "relation_kind"},
+			},
+		},
+		{
 			Name: "get_relations",
 			Description: "Query the relation graph for a content item. Returns edges where the item " +
 				"is the source, the target, or both, with optional kind and edge_class filters. Requires Author role.",
@@ -70,8 +91,8 @@ func relationToolDefs() []mcpTool {
 					"kind": map[string]any{"type": "string", "description": "Filter by relation kind (type_name). Omit to return all kinds."},
 					"edge_class": map[string]any{
 						"type":        "string",
-						"enum":        []string{"asserted", "inferred"},
-						"description": "Filter by edge class. Omit to return both asserted and inferred edges.",
+						"enum":        []string{"asserted", "observed", "inferred"},
+						"description": "Filter by edge class. Omit to return all edge classes.",
 					},
 				},
 				"required": []string{"type_name", "id", "direction"},
@@ -120,10 +141,10 @@ func relationToolDefs() []mcpTool {
 	}
 }
 
-// isRelationTool reports whether name is one of the six relation management tools.
+// isRelationTool reports whether name is one of the seven relation management tools.
 func isRelationTool(name string) bool {
 	switch name {
-	case "assert_relation", "propose_relation", "get_relations",
+	case "assert_relation", "propose_relation", "observe_relation", "get_relations",
 		"preview_impact", "upsert_relation_kind", "list_relation_kinds":
 		return true
 	}
@@ -136,7 +157,7 @@ func isAdminRelationTool(name string) bool { return name == "upsert_relation_kin
 // isEditorRelationTool reports whether name requires Editor role.
 func isEditorRelationTool(name string) bool { return name == "preview_impact" }
 
-// handleRelationTool dispatches the six relation management tools. Called only
+// handleRelationTool dispatches the seven relation management tools. Called only
 // when s.relationStore is non-nil and the caller holds the appropriate role
 // (checked by the caller).
 func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[string]any) (any, *jsonRPCError) {
@@ -197,6 +218,38 @@ func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[st
 		confidence := floatPtrArg(args, "confidence")
 		attrs := objectArgJSON(args, "attributes")
 		edge, err := s.relationStore.MCPProposeRelation(ctx,
+			sourceType, sourceID, targetType, targetID, kind,
+			confidence, nil, nil, attrs,
+		)
+		if err != nil {
+			return nil, errorFor(err)
+		}
+		return toolResult(relationEdgeMap(edge)), nil
+
+	case "observe_relation":
+		sourceType, ok := stringArg(args, "source_type")
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: source_type required"}
+		}
+		sourceID, ok := stringArg(args, "source_id")
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: source_id required"}
+		}
+		targetType, ok := stringArg(args, "target_type")
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: target_type required"}
+		}
+		targetID, ok := stringArg(args, "target_id")
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: target_id required"}
+		}
+		kind, ok := stringArg(args, "relation_kind")
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: relation_kind required"}
+		}
+		confidence := floatPtrArg(args, "confidence")
+		attrs := objectArgJSON(args, "attributes")
+		edge, err := s.relationStore.MCPObserveRelation(ctx,
 			sourceType, sourceID, targetType, targetID, kind,
 			confidence, nil, nil, attrs,
 		)

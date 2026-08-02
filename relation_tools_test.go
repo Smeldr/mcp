@@ -85,7 +85,7 @@ func TestRelationTools_PresentWithStore(t *testing.T) {
 		}
 	}
 	expected := []string{
-		"assert_relation", "propose_relation", "get_relations",
+		"assert_relation", "propose_relation", "observe_relation", "get_relations",
 		"preview_impact", "upsert_relation_kind", "list_relation_kinds",
 	}
 	for _, name := range expected {
@@ -97,7 +97,7 @@ func TestRelationTools_PresentWithStore(t *testing.T) {
 
 func TestRelationTools_IsRelationTool(t *testing.T) {
 	for _, name := range []string{
-		"assert_relation", "propose_relation", "get_relations",
+		"assert_relation", "propose_relation", "observe_relation", "get_relations",
 		"preview_impact", "upsert_relation_kind", "list_relation_kinds",
 	} {
 		if !isRelationTool(name) {
@@ -202,6 +202,62 @@ func TestRelationTools_ProposeRelation(t *testing.T) {
 	}
 }
 
+func TestRelationTools_ObserveRelation(t *testing.T) {
+	srv, store := newRelationServer(t)
+	seedRelationKind(t, store, "tagged_with")
+	ctx := newAuthorCtx()
+
+	res, rpcErr := callTool(t, srv, ctx, "observe_relation", map[string]any{
+		"source_type":   "post",
+		"source_id":     "post-3",
+		"target_type":   "tag",
+		"target_id":     "tag-2",
+		"relation_kind": "tagged_with",
+		"confidence":    float64(0.95),
+	})
+	if rpcErr != nil {
+		t.Fatalf("observe_relation: %v", rpcErr.Message)
+	}
+	data := unwrapToolResult(t, res)
+	if data["edge_class"] != "observed" {
+		t.Errorf("expected edge_class=observed, got %v", data["edge_class"])
+	}
+}
+
+func TestRelationTools_ObserveRelation_MissingArgs(t *testing.T) {
+	srv, _ := newRelationServer(t)
+	ctx := newAuthorCtx()
+
+	_, rpcErr := callTool(t, srv, ctx, "observe_relation", map[string]any{
+		"source_id": "x", "target_type": "t", "target_id": "y", "relation_kind": "k",
+	})
+	if rpcErr == nil {
+		t.Fatal("expected error for missing source_type")
+	}
+	if rpcErr.Code != -32602 {
+		t.Errorf("expected -32602, got %d", rpcErr.Code)
+	}
+}
+
+func TestRelationTools_ObserveRelation_UnknownKind(t *testing.T) {
+	srv, _ := newRelationServer(t)
+	ctx := newAuthorCtx()
+
+	_, rpcErr := callTool(t, srv, ctx, "observe_relation", map[string]any{
+		"source_type":   "post",
+		"source_id":     "post-3",
+		"target_type":   "tag",
+		"target_id":     "tag-2",
+		"relation_kind": "nonexistent_kind",
+	})
+	if rpcErr == nil {
+		t.Fatal("expected error for unregistered kind")
+	}
+	if rpcErr.Code != -32001 {
+		t.Errorf("expected -32001 not-found, got %d", rpcErr.Code)
+	}
+}
+
 func TestRelationTools_GetRelations_DirectionSource(t *testing.T) {
 	srv, store := newRelationServer(t)
 	seedRelationKind(t, store, "cites")
@@ -253,7 +309,7 @@ func TestRelationTools_GetRelations_EdgeClassFilter(t *testing.T) {
 	seedRelationKind(t, store, "cites")
 	ctx := newAuthorCtx()
 
-	// Create one asserted and one inferred edge.
+	// Create one asserted, one inferred, and one observed edge.
 	callTool(t, srv, ctx, "assert_relation", map[string]any{
 		"source_type": "post", "source_id": "p1",
 		"target_type": "source", "target_id": "s1",
@@ -262,6 +318,11 @@ func TestRelationTools_GetRelations_EdgeClassFilter(t *testing.T) {
 	callTool(t, srv, ctx, "propose_relation", map[string]any{
 		"source_type": "post", "source_id": "p1",
 		"target_type": "source", "target_id": "s2",
+		"relation_kind": "cites",
+	})
+	callTool(t, srv, ctx, "observe_relation", map[string]any{
+		"source_type": "post", "source_id": "p1",
+		"target_type": "source", "target_id": "s3",
 		"relation_kind": "cites",
 	})
 
@@ -283,6 +344,26 @@ func TestRelationTools_GetRelations_EdgeClassFilter(t *testing.T) {
 	edgeMap := edges[0].(map[string]any)
 	if edgeMap["edge_class"] != "asserted" {
 		t.Errorf("expected edge_class=asserted, got %v", edgeMap["edge_class"])
+	}
+
+	// Filter to observed only.
+	res, rpcErr = callTool(t, srv, ctx, "get_relations", map[string]any{
+		"type_name":  "post",
+		"id":         "p1",
+		"direction":  "source",
+		"edge_class": "observed",
+	})
+	if rpcErr != nil {
+		t.Fatalf("get_relations observed: %v", rpcErr.Message)
+	}
+	data = unwrapToolResult(t, res)
+	edges, _ = data["edges"].([]any)
+	if len(edges) != 1 {
+		t.Errorf("expected 1 observed edge, got %d", len(edges))
+	}
+	edgeMap = edges[0].(map[string]any)
+	if edgeMap["edge_class"] != "observed" {
+		t.Errorf("expected edge_class=observed, got %v", edgeMap["edge_class"])
 	}
 }
 
@@ -434,8 +515,8 @@ func TestRelationTools_ListRelationKinds_EmptyIsNonNil(t *testing.T) {
 
 func TestRelationTools_RelationToolDefs_AllPresent(t *testing.T) {
 	defs := relationToolDefs()
-	if len(defs) != 6 {
-		t.Fatalf("expected 6 tool defs, got %d", len(defs))
+	if len(defs) != 7 {
+		t.Fatalf("expected 7 tool defs, got %d", len(defs))
 	}
 	names := map[string]bool{}
 	for _, d := range defs {
@@ -451,7 +532,7 @@ func TestRelationTools_RelationToolDefs_AllPresent(t *testing.T) {
 		names[d.Name] = true
 	}
 	for _, expected := range []string{
-		"assert_relation", "propose_relation", "get_relations",
+		"assert_relation", "propose_relation", "observe_relation", "get_relations",
 		"preview_impact", "upsert_relation_kind", "list_relation_kinds",
 	} {
 		if !names[expected] {
