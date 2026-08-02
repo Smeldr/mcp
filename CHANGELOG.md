@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.29.3] — 2026-08-02
+
+### Added
+- New `observe_relation` tool: records an edge a system directly witnessed (`edge_class=observed`), e.g. via a webhook/integration, alongside the existing `assert_relation` (human claim) and `propose_relation` (agent inference). `get_relations`' `edge_class` filter gains `"observed"`. Requires `smeldr.dev/core` v1.58.4+ (`RelationStore.MCPObserveRelation`).
+
+---
+
 ## [1.29.2] — 2026-07-10
 
 ### Fixed
