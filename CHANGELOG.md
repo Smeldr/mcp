@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.29.4] — 2026-08-08
+
+### Fixed
+- `errorFor` (`tool.go`) now maps `smeldr.ErrRevConflict` to its own JSON-RPC code, `-32002`, distinct from `smeldr.ErrConflict`'s `-32001`. Previously `ErrRevConflict` fell through to the generic `-32603` internal-error bucket, indistinguishable from a transient failure like `SQLITE_BUSY`. Required for D38's Run-coordination fencing protocol (M3): a listener needs to reliably tell "lost the lease race, re-read" apart from "transient, just retry" by code alone, not by parsing error text. (A238)
+
+---
+
 ## [1.29.3] — 2026-08-02
 
 ### Added

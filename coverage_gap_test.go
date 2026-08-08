@@ -36,6 +36,16 @@ func TestErrorFor_Forbidden(t *testing.T) {
 	}
 }
 
+// TestErrorFor_RevConflict verifies ErrRevConflict maps to its own -32002
+// code, distinct from ErrConflict's -32001, so a listener can branch on
+// code alone (D38's lease-fencing re-read protocol).
+func TestErrorFor_RevConflict(t *testing.T) {
+	got := errorFor(smeldr.ErrRevConflict)
+	if got.Code != -32002 {
+		t.Errorf("ErrRevConflict: code = %d, want -32002", got.Code)
+	}
+}
+
 // TestErrorFor_Other verifies any other error maps to -32603.
 func TestErrorFor_Other(t *testing.T) {
 	got := errorFor(errors.New("boom"))

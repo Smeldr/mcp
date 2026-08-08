@@ -97,6 +97,11 @@ func (s *Server) authoriseTool(ctx smeldr.Context, toolName string, legacyRole s
 //   - [smeldr.ValidationError] → -32602 (invalid params) with the validation message
 //   - [smeldr.ErrNotFound]      → -32001 (resource not found)
 //   - [smeldr.ErrForbidden]     → -32001 (permission denied)
+//   - [smeldr.ErrConflict]      → -32001 (state conflict, e.g. an invalid transition)
+//   - [smeldr.ErrRevConflict]   → -32002 (optimistic-concurrency conflict — reload and retry;
+//     a distinct code from -32001 so a caller can branch on code alone, not error text: this
+//     is what D38's lease-fencing re-read protocol requires — "lost the race" must be
+//     distinguishable from every other rejected-but-not-transient outcome)
 //   - all other errors         → -32603 (internal error)
 func errorFor(err error) *jsonRPCError {
 	var ve *smeldr.ValidationError
@@ -111,6 +116,9 @@ func errorFor(err error) *jsonRPCError {
 	}
 	if errors.Is(err, smeldr.ErrConflict) {
 		return &jsonRPCError{Code: -32001, Message: err.Error()}
+	}
+	if errors.Is(err, smeldr.ErrRevConflict) {
+		return &jsonRPCError{Code: -32002, Message: err.Error()}
 	}
 	return &jsonRPCError{Code: -32603, Message: "internal error: " + err.Error()}
 }
