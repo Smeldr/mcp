@@ -15,7 +15,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - `list_grants`: lists governance grants; optional `token_id` to filter, omit to list all grants on the instance.
   - `revoke_grant`: revokes a grant by its own `id` (from `grant_role` or `list_grants`), not by `token_id`.
 - Every grant and revoke is recorded in a mandatory audit trail — there is no way to opt out.
-- Requires `smeldr.dev/core` v1.62.0+ (`App.RoleStore()`, `App.GovernanceAuditStore()`, `RoleStore.Grant`/`ListGrants`/`Revoke`/`WithAudit`). (A243, D43, D44)
+- `create_token`'s response now also includes `token_id` — the same JWT User.ID `grant_role` expects — alongside the existing `token` and `message` fields, so it can be passed straight through without decoding the raw token by hand. (A244, D43)
+- Requires `smeldr.dev/core` v1.63.0+ (`App.RoleStore()`, `App.GovernanceAuditStore()`, `RoleStore.Grant`/`ListGrants`/`Revoke`/`WithAudit`, `TokenStore.CreateWithID`). (A243, A244, D43, D44)
 
 ---
 

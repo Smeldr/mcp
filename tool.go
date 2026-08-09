@@ -617,7 +617,7 @@ func tokenToolDefs() []mcpTool {
 	return []mcpTool{
 		{
 			Name:        "create_token",
-			Description: "Create a named, revocable bearer token. Requires Admin role. Returns the raw token — store it securely; it cannot be retrieved again.",
+			Description: "Create a named, revocable bearer token. Requires Admin role. Returns the raw token (store it securely; it cannot be retrieved again) and token_id — the identity to pass directly to grant_role, since creating a token grants no governance role by itself.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -682,13 +682,14 @@ func (s *Server) handleTokenTool(ctx smeldr.Context, name string, args map[strin
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: expires_in_days must be a positive number"}
 		}
 		ttl := time.Duration(float64(24*time.Hour) * days)
-		raw, err := s.tokenStore.Create(ctx, tokenName, role, ttl)
+		raw, tokenID, err := s.tokenStore.CreateWithID(ctx, tokenName, role, ttl)
 		if err != nil {
 			return nil, errorFor(err)
 		}
 		return toolResult(map[string]any{
-			"token":   raw,
-			"message": "Store this token securely — it cannot be retrieved again.",
+			"token":    raw,
+			"token_id": tokenID,
+			"message":  "Store this token securely — it cannot be retrieved again.",
 		}), nil
 
 	case "list_tokens":

@@ -411,20 +411,19 @@ func TestGrantTools_AuditRecordsWritten(t *testing.T) {
 // entry. It exercises the full path an operator actually walks:
 //
 //  1. An existing admin actor calls create_token (MCP) to mint a brand-new
-//     bearer token for a second party.
-//  2. The new token is decoded (smeldr.VerifyTokenString — the same exported
-//     function a real client would use to inspect its own credential) to
-//     recover its JWT User.ID. Per D43, creating a token grants no
-//     governance role by itself: the operator must look this ID up before
-//     they can grant it anything.
-//  3. The admin actor calls grant_role (MCP) to grant "admin" to that ID —
-//     a second, separate actor from the granter, not a self-grant.
-//  4. The freshly granted token's own raw bearer credential — not the
+//     bearer token for a second party. Per A244, the response carries
+//     token_id (the JWT User.ID) directly — no decode step. Per D43,
+//     creating a token still grants no governance role by itself: the
+//     operator must call grant_role separately.
+//  2. The admin actor calls grant_role (MCP) to grant "admin" to that
+//     token_id — a second, separate actor from the granter, not a
+//     self-grant.
+//  3. The freshly granted token's own raw bearer credential — not the
 //     granter's — is used to issue a real PUT /decisions/{slug} HTTP
 //     request against smeldr's own app.Handler(), attempting the
 //     proposed→ratified transition that orchDecisionFlow gates on
 //     RequiredRole: "admin", Strict: true.
-//  5. Asserts 200 and Status == "ratified".
+//  4. Asserts 200 and Status == "ratified".
 func TestGrantTools_EndToEnd_MintedGrantRatifiesDecision(t *testing.T) {
 	secret := []byte(grantTestSecret)
 	db, err := sql.Open("sqlite", ":memory:")
@@ -473,6 +472,7 @@ func TestGrantTools_EndToEnd_MintedGrantRatifiesDecision(t *testing.T) {
 	srv := New(app)
 
 	// Step 1: mint a brand-new bearer token via the real create_token tool.
+	// A244: the response carries token_id directly — no decode step.
 	createResult, rpcErr := callGrantTool(t, srv, granterCtx, "create_token", map[string]any{
 		"name":            "e2e-second-actor",
 		"role":            "author",
@@ -481,25 +481,19 @@ func TestGrantTools_EndToEnd_MintedGrantRatifiesDecision(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("create_token: %v", rpcErr.Message)
 	}
-	rawToken, _ := unwrapToolResult(t, createResult)["token"].(string)
+	createFields := unwrapToolResult(t, createResult)
+	rawToken, _ := createFields["token"].(string)
 	if rawToken == "" {
 		t.Fatal("create_token returned empty token")
 	}
-
-	// Step 2: decode the new token to recover its JWT User.ID — the only way
-	// to learn it, per D43's deliberate non-bridge between smeldr_tokens.id
-	// (fingerprint) and User.ID.
-	newUser, ok := smeldr.VerifyTokenString(rawToken, secret, nil)
-	if !ok {
-		t.Fatal("VerifyTokenString: could not decode freshly created token")
-	}
-	if newUser.ID == "" || newUser.ID == granterID {
-		t.Fatalf("newUser.ID = %q, want a distinct non-empty ID", newUser.ID)
+	newUserID, _ := createFields["token_id"].(string)
+	if newUserID == "" || newUserID == granterID {
+		t.Fatalf("token_id = %q, want a distinct non-empty ID", newUserID)
 	}
 
-	// Step 3: grant admin to the second actor — not a self-grant.
+	// Step 2: grant admin to the second actor — not a self-grant.
 	if _, rpcErr := callGrantTool(t, srv, granterCtx, "grant_role", map[string]any{
-		"token_id": newUser.ID,
+		"token_id": newUserID,
 		"role":     "admin",
 	}); rpcErr != nil {
 		t.Fatalf("grant_role to second actor: %v", rpcErr.Message)
@@ -516,7 +510,7 @@ func TestGrantTools_EndToEnd_MintedGrantRatifiesDecision(t *testing.T) {
 		t.Fatalf("seed Decision: %v", err)
 	}
 
-	// Step 4: ratify using the second actor's own bearer credential over the
+	// Step 3: ratify using the second actor's own bearer credential over the
 	// real HTTP handler — not a direct Go call into the RoleStore.
 	body, _ := json.Marshal(map[string]any{"Status": "ratified"})
 	req := httptest.NewRequest(http.MethodPut, "/decisions/"+d.Slug, bytes.NewReader(body))
@@ -533,5 +527,39 @@ func TestGrantTools_EndToEnd_MintedGrantRatifiesDecision(t *testing.T) {
 	}
 	if updated.Status != "ratified" {
 		t.Errorf("Status = %q, want %q", updated.Status, "ratified")
+	}
+}
+
+// TestHandleTokenTool_CreateWithID_TokenIDMatchesJWT is a narrower
+// consistency check, not the documented operator path: create_token's new
+// token_id field (A244) must equal the User.ID actually embedded in the raw
+// JWT it was minted alongside. VerifyTokenString appears here only to prove
+// the two agree — TestGrantTools_EndToEnd_MintedGrantRatifiesDecision reads
+// token_id directly, the way an operator or agent actually should.
+func TestHandleTokenTool_CreateWithID_TokenIDMatchesJWT(t *testing.T) {
+	app, _ := newTokenApp(t)
+	srv := New(app)
+
+	result, rpcErr := callGrantTool(t, srv, newAdminCtx(), "create_token", map[string]any{
+		"name":            "ci",
+		"role":            "author",
+		"expires_in_days": float64(30),
+	})
+	if rpcErr != nil {
+		t.Fatalf("create_token: %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, result)
+	rawToken, _ := fields["token"].(string)
+	tokenID, _ := fields["token_id"].(string)
+	if rawToken == "" || tokenID == "" {
+		t.Fatalf("token = %q, token_id = %q, want both non-empty", rawToken, tokenID)
+	}
+
+	decoded, ok := smeldr.VerifyTokenString(rawToken, []byte(grantTestSecret), nil)
+	if !ok {
+		t.Fatal("VerifyTokenString: could not decode freshly created token")
+	}
+	if decoded.ID != tokenID {
+		t.Errorf("decoded JWT User.ID = %q, want it to equal token_id %q", decoded.ID, tokenID)
 	}
 }
