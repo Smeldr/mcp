@@ -143,6 +143,9 @@ func (s *Server) handleToolsList() any {
 	if s.tokenStore != nil {
 		tools = append(tools, tokenToolDefs()...)
 	}
+	if s.app.RoleStore() != nil {
+		tools = append(tools, grantToolDefs()...)
+	}
 	if s.navTree != nil {
 		tools = append(tools, navToolDefs(s.navTree.HasDB())...)
 	}
@@ -213,6 +216,22 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 				return nil, rpcErr
 			}
 			return s.handleTokenTool(ctx, p.Name, coalesceArgs(p.Arguments))
+		}
+	}
+
+	// Governance grant tools (D43/D44, T216) require Admin role and are
+	// dispatched before module-scoped tool authorisation, the same as token
+	// management. Gated on governance being wired at all — RoleStore()
+	// non-nil — rather than a separate feature flag; RoleStore already
+	// lives on App, so this is not a second source of truth for the same
+	// value.
+	if rs != nil {
+		switch p.Name {
+		case "grant_role", "list_grants", "revoke_grant":
+			if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Admin, rs, smeldr.AuthTarget{}); rpcErr != nil {
+				return nil, rpcErr
+			}
+			return s.handleGrantTool(ctx, rs, p.Name, coalesceArgs(p.Arguments))
 		}
 	}
 

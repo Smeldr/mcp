@@ -7,6 +7,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.30.0] — 2026-08-09
+
+### Added
+- Three new MCP tools in `grant_tools.go`: `grant_role`, `list_grants`, `revoke_grant` — the only way to grant, list, or revoke a governance role now that token creation no longer implicitly grants one. All three require Admin role and only appear in `tools/list` when the app has a RoleStore configured (`App.Governance`).
+  - `grant_role`: grants a role to a token. Required args `token_id` (the token's JWT User.ID — NOT the SHA-256 fingerprint `list_tokens` returns) and `role`. Optional `scope_static` (array of strings) and `scope_anchor_id`.
+  - `list_grants`: lists governance grants; optional `token_id` to filter, omit to list all grants on the instance.
+  - `revoke_grant`: revokes a grant by its own `id` (from `grant_role` or `list_grants`), not by `token_id`.
+- Every grant and revoke is recorded in a mandatory audit trail — there is no way to opt out.
+- Requires `smeldr.dev/core` v1.62.0+ (`App.RoleStore()`, `App.GovernanceAuditStore()`, `RoleStore.Grant`/`ListGrants`/`Revoke`/`WithAudit`). (A243, D43, D44)
+
+---
+
 ## [1.29.4] — 2026-08-08
 
 ### Fixed
