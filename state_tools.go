@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"smeldr.dev/core"
@@ -19,13 +20,14 @@ func stateToolDefs() []mcpTool {
 	return []mcpTool{
 		{
 			Name: "transition_item",
-			Description: "Move a dynamic content item to a new state. The transition is " +
-				"validated against the registered state flow; returns an error if the " +
-				"transition is not permitted. Requires Editor role.",
+			Description: "Move an item — dynamic content or a compiled type (e.g. Signal, " +
+				"Task, Decision) — to a new state. The transition is validated against the " +
+				"registered state flow, including any role requirement; returns an error if " +
+				"the transition is not permitted. Requires Editor role.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"type_name": map[string]any{"type": "string", "description": "Registered dynamic content type name."},
+					"type_name": map[string]any{"type": "string", "description": "Registered content type name — dynamic (snake_case) or compiled (e.g. \"Signal\")."},
 					"slug":      map[string]any{"type": "string", "description": "Slug of the item to transition."},
 					"to_state":  map[string]any{"type": "string", "description": "Target state name (e.g. \"published\", \"archived\")."},
 				},
@@ -34,13 +36,13 @@ func stateToolDefs() []mcpTool {
 		},
 		{
 			Name: "get_valid_transitions",
-			Description: "List all legal target states for the item's current state. Uses " +
-				"the registered flow for the type, falling back to the default flow. " +
-				"Requires Author role.",
+			Description: "List all legal target states for the item's current state — dynamic " +
+				"content or a compiled type. Uses the registered flow for the type, falling " +
+				"back to the default flow. Requires Author role.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"type_name": map[string]any{"type": "string", "description": "Registered dynamic content type name."},
+					"type_name": map[string]any{"type": "string", "description": "Registered content type name — dynamic (snake_case) or compiled (e.g. \"Signal\")."},
 					"slug":      map[string]any{"type": "string", "description": "Slug of the item to inspect."},
 				},
 				"required": []string{"type_name", "slug"},
@@ -48,12 +50,12 @@ func stateToolDefs() []mcpTool {
 		},
 		{
 			Name: "list_items_by_state",
-			Description: "List all items of a dynamic content type that are in the given state. " +
-				"Returns item slugs, IDs, and status. Requires Author role.",
+			Description: "List all items of a content type — dynamic or compiled — that are " +
+				"in the given state. Returns item slugs, IDs, and status. Requires Author role.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"type_name": map[string]any{"type": "string", "description": "Registered dynamic content type name."},
+					"type_name": map[string]any{"type": "string", "description": "Registered content type name — dynamic (snake_case) or compiled (e.g. \"Signal\")."},
 					"state":     map[string]any{"type": "string", "description": "State name to filter by (e.g. \"draft\", \"published\")."},
 				},
 				"required": []string{"type_name", "state"},
@@ -139,18 +141,11 @@ func (s *Server) handleStateTool(ctx smeldr.Context, name string, args map[strin
 		if !ok {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: to_state required"}
 		}
-		repo, err := s.app.DynamicContentRepo(typeName)
-		if err != nil {
-			return nil, &jsonRPCError{Code: -32602, Message: err.Error()}
-		}
-		node, err := repo.GetBySlug(ctx, slug)
+		result, err := s.app.TransitionItem(ctx, typeName, slug, toState)
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		if err := repo.SetStatus(ctx, node.ID, smeldr.Status(toState)); err != nil {
-			return nil, errorFor(err)
-		}
-		return toolResult(map[string]any{"slug": slug, "status": toState}), nil
+		return toolResult(result), nil
 
 	case "get_valid_transitions":
 		typeName, ok := stringArg(args, "type_name")
@@ -161,15 +156,10 @@ func (s *Server) handleStateTool(ctx smeldr.Context, name string, args map[strin
 		if !ok {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: slug required"}
 		}
-		repo, err := s.app.DynamicContentRepo(typeName)
-		if err != nil {
-			return nil, &jsonRPCError{Code: -32602, Message: err.Error()}
+		currentStatus, rpcErr := s.itemCurrentStatus(ctx, typeName, slug)
+		if rpcErr != nil {
+			return nil, rpcErr
 		}
-		node, err := repo.GetBySlug(ctx, slug)
-		if err != nil {
-			return nil, errorFor(err)
-		}
-		currentStatus := string(node.Status)
 		db := s.app.Config().DB
 		transitions, err := validTransitionsFor(ctx, db, typeName, currentStatus)
 		if err != nil {
@@ -189,18 +179,9 @@ func (s *Server) handleStateTool(ctx smeldr.Context, name string, args map[strin
 		if !ok {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: state required"}
 		}
-		repo, err := s.app.DynamicContentRepo(typeName)
-		if err != nil {
-			return nil, &jsonRPCError{Code: -32602, Message: err.Error()}
-		}
-		items, err := repo.List(ctx, smeldr.ListOptions{
-			Status: []smeldr.Status{smeldr.Status(state)},
-		})
-		if err != nil {
-			return nil, errorFor(err)
-		}
-		if items == nil {
-			items = []map[string]any{}
+		items, rpcErr := s.itemsByState(ctx, typeName, state)
+		if rpcErr != nil {
+			return nil, rpcErr
 		}
 		return toolResult(map[string]any{
 			"type_name": typeName,
@@ -289,6 +270,95 @@ func parseTransitions(raw []any) ([]smeldr.Transition, *jsonRPCError) {
 func boolField(m map[string]any, key string) bool {
 	v, _ := m[key].(bool)
 	return v
+}
+
+// itemCurrentStatus returns the current status of typeName's item with the
+// given slug — via [smeldr.App.DynamicContentRepo] for a runtime-defined
+// type, via the resolved module's [smeldr.MCPModule.MCPGet] for a compiled
+// type. Mirrors [smeldr.App.TransitionItem]'s own Kind-based branch (D49)
+// without needing any new core API — MCPGet is already type-erased and
+// exported.
+func (s *Server) itemCurrentStatus(ctx smeldr.Context, typeName, slug string) (string, *jsonRPCError) {
+	desc := s.app.TypeRegistry().Lookup(typeName)
+	if desc == nil {
+		return "", &jsonRPCError{Code: -32602, Message: fmt.Sprintf("smeldr: content type %q not registered", typeName)}
+	}
+	if desc.Kind == "content" {
+		repo, err := s.app.DynamicContentRepo(typeName)
+		if err != nil {
+			return "", &jsonRPCError{Code: -32602, Message: err.Error()}
+		}
+		node, err := repo.GetBySlug(ctx, slug)
+		if err != nil {
+			return "", errorFor(err)
+		}
+		return string(node.Status), nil
+	}
+	m, ok := s.moduleForType(snakeCase(typeName))
+	if !ok {
+		return "", &jsonRPCError{Code: -32602, Message: fmt.Sprintf("smeldr: %q is registered as a compiled type but no module was found", typeName)}
+	}
+	item, err := m.MCPGet(ctx, slug)
+	if err != nil {
+		return "", errorFor(err)
+	}
+	status, err := compiledItemStatus(item)
+	if err != nil {
+		return "", &jsonRPCError{Code: -32603, Message: "internal error: " + err.Error()}
+	}
+	return status, nil
+}
+
+// itemsByState lists typeName's items in the given state — via
+// [smeldr.DynamicTypeRepo.List] for a runtime-defined type, via the
+// resolved module's [smeldr.MCPModule.MCPList] for a compiled type.
+func (s *Server) itemsByState(ctx smeldr.Context, typeName, state string) ([]any, *jsonRPCError) {
+	desc := s.app.TypeRegistry().Lookup(typeName)
+	if desc == nil {
+		return nil, &jsonRPCError{Code: -32602, Message: fmt.Sprintf("smeldr: content type %q not registered", typeName)}
+	}
+	if desc.Kind == "content" {
+		repo, err := s.app.DynamicContentRepo(typeName)
+		if err != nil {
+			return nil, &jsonRPCError{Code: -32602, Message: err.Error()}
+		}
+		items, err := repo.List(ctx, smeldr.ListOptions{Status: []smeldr.Status{smeldr.Status(state)}})
+		if err != nil {
+			return nil, errorFor(err)
+		}
+		out := make([]any, len(items))
+		for i, it := range items {
+			out[i] = it
+		}
+		return out, nil
+	}
+	m, ok := s.moduleForType(snakeCase(typeName))
+	if !ok {
+		return nil, &jsonRPCError{Code: -32602, Message: fmt.Sprintf("smeldr: %q is registered as a compiled type but no module was found", typeName)}
+	}
+	items, err := m.MCPList(ctx, smeldr.Status(state))
+	if err != nil {
+		return nil, errorFor(err)
+	}
+	if items == nil {
+		items = []any{}
+	}
+	return items, nil
+}
+
+// compiledItemStatus extracts the "Status" field from a compiled item
+// returned by MCPGet. [smeldr.Node.Status] has no json tag, so it always
+// marshals under its exported field name — no reflection needed here.
+func compiledItemStatus(item any) (string, error) {
+	b, err := json.Marshal(item)
+	if err != nil {
+		return "", err
+	}
+	var s struct{ Status string }
+	if err := json.Unmarshal(b, &s); err != nil {
+		return "", err
+	}
+	return s.Status, nil
 }
 
 // validTransitionsFor queries smeldr_state_flows and smeldr_transitions to find

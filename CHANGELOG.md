@@ -7,6 +7,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.30.2] — 2026-08-11
+
+### Changed
+- `transition_item`, `get_valid_transitions`, and `list_items_by_state` now work on compiled types (e.g. `Signal`, `Task`, `Decision`), not only runtime-defined dynamic content — `transition_item` calls the new `smeldr.dev/core` `App.TransitionItem`; the other two resolve a compiled type's current status/listing via its own module's `MCPGet`/`MCPList`, no new core API needed. Role-gated transitions (D34/D40) behave identically to the REST path. Requires `smeldr.dev/core` v1.64.0+ (`App.TransitionItem`). (A252, D49)
+- `errorFor` now maps `smeldr.ErrBadRequest` to `-32602` (invalid params), the same code `ValidationError` already uses — closes a pre-existing gap where `validateTransition`'s own `RequiredReason` case had no JSON-RPC mapping and fell through to a generic `-32603`.
+
+---
+
 ## [1.30.1] — 2026-08-10
 
 ### Fixed

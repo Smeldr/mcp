@@ -145,6 +145,10 @@ func (s *Server) authoriseTool(ctx smeldr.Context, toolName string, legacyRole s
 
 // errorFor maps a smeldr error to a JSON-RPC error:
 //   - [smeldr.ValidationError] → -32602 (invalid params) with the validation message
+//   - [smeldr.ErrBadRequest]    → -32602 (invalid params) — same code as ValidationError:
+//     both mean the caller's request itself was malformed, not that the requested
+//     operation failed against valid input (e.g. [smeldr.App.TransitionItem]'s
+//     "content type not registered", or a transition requiring a reason the caller omitted)
 //   - [smeldr.ErrNotFound]      → -32001 (resource not found)
 //   - [smeldr.ErrForbidden]     → -32001 (permission denied)
 //   - [smeldr.ErrConflict]      → -32001 (state conflict, e.g. an invalid transition)
@@ -157,6 +161,9 @@ func errorFor(err error) *jsonRPCError {
 	var ve *smeldr.ValidationError
 	if errors.As(err, &ve) {
 		return &jsonRPCError{Code: -32602, Message: ve.Error()}
+	}
+	if errors.Is(err, smeldr.ErrBadRequest) {
+		return &jsonRPCError{Code: -32602, Message: err.Error()}
 	}
 	if errors.Is(err, smeldr.ErrNotFound) {
 		return &jsonRPCError{Code: -32001, Message: "not found"}
