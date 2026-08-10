@@ -56,15 +56,59 @@ func (s *Server) moduleForAdminList(typeSnake string) (smeldr.MCPModule, bool) {
 	return nil, false
 }
 
+// toolOpFallback maps a generated tool's verb prefix to the operation word
+// that governs it, per D48. Mirrors smeldr_tool_policies' own seeded
+// mapping (governance.go's seedToolPolicies) for every verb a generated
+// per-type tool can carry. Verbs with no generated-tool form — manage,
+// administer, define-type, define-flow, define-relation-kind — are
+// deliberately absent: a tool requiring one of those always needs an
+// explicit smeldr_tool_policies row, never derived.
+var toolOpFallback = map[string]string{
+	"create":   "create",
+	"get":      "read",
+	"list":     "read",
+	"update":   "update",
+	"publish":  "publish",
+	"schedule": "publish",
+	"archive":  "archive",
+	"delete":   "delete",
+}
+
+// deriveToolPolicy derives the required operation for a tool name with no
+// smeldr_tool_policies row, per D48. Derivation applies only when a real
+// registered module backs the parsed type name — moduleForAdminList for a
+// list_* name (plural type name), moduleForType for every other verb — so
+// an unknown or misspelled tool name still fails closed: nothing derives a
+// requirement for a type name that confirms no module.
+func (s *Server) deriveToolPolicy(toolName string) (requiredOp string, ok bool) {
+	op, typeSnake, splitOK := parseToolName(toolName)
+	if !splitOK {
+		return "", false
+	}
+	requiredOp, opOK := toolOpFallback[op]
+	if !opOK {
+		return "", false
+	}
+	if op == "list" {
+		if _, moduleOK := s.moduleForAdminList(typeSnake); !moduleOK {
+			return "", false
+		}
+	} else if _, moduleOK := s.moduleForType(typeSnake); !moduleOK {
+		return "", false
+	}
+	return requiredOp, true
+}
+
 // authoriseTool enforces tool-level access control using the three-branch
 // fail-closed pattern (§5.5).
 //
 //   - rs == nil: legacy path — [smeldr.HasRole] check with legacyRole.
 //     Preserves exact current behaviour for deployments without governance.
 //   - rs wired, caller has no token ID: deny (unauthenticated request).
-//   - rs wired, token ID present: [smeldr.RoleStore.ToolPolicy] lookup then
-//     [smeldr.RoleStore.Authorized] check. Both fail closed on error.
-//     ToolPolicy not-found also denies (unrecognised tool = no known requirement).
+//   - rs wired, token ID present: [smeldr.RoleStore.ToolPolicy] lookup, then
+//     [deriveToolPolicy] when no row exists (D48), then
+//     [smeldr.RoleStore.Authorized]. All three fail closed on error or
+//     when no explicit row and no module-backed derivation apply.
 //
 // rs is passed in rather than fetched inside the function so test code can
 // inject a custom [smeldr.RoleStore] backed by a failing DB without modifying
@@ -80,8 +124,14 @@ func (s *Server) authoriseTool(ctx smeldr.Context, toolName string, legacyRole s
 		return &jsonRPCError{Code: -32001, Message: "forbidden"}
 	}
 	requiredOp, found, err := rs.ToolPolicy(ctx, toolName)
-	if err != nil || !found {
+	if err != nil {
 		return &jsonRPCError{Code: -32001, Message: "forbidden"}
+	}
+	if !found {
+		requiredOp, found = s.deriveToolPolicy(toolName)
+		if !found {
+			return &jsonRPCError{Code: -32001, Message: "forbidden"}
+		}
 	}
 	// TODO(T49-scope): AuthTarget has no item ID here — the tool gate applies at the
 	// content-type level. Static/dynamic scope grants that reference a specific item ID

@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.30.1] — 2026-08-10
+
+### Fixed
+- Every module-generated tool for a content type with no `smeldr_tool_policies` row (e.g. `get_signal`, `archive_signal`, `get_decision`, `list_decisions`, `get_task`, `list_tasks` — the six orchestration types' own generated tools beyond `create_signal`/`list_signals`) returned `-32001 forbidden` for every caller, including a token holding a real admin grant — `authoriseTool`'s fail-closed not-found branch had no way to distinguish an unrecognised tool name from a real, module-backed one nobody had gotten around to seeding a row for. `authoriseTool` now derives the required operation from the tool's own verb prefix (`get`/`list` → `read`, `create` → `create`, `update` → `update`, `publish`/`schedule` → `publish`, `archive` → `archive`, `delete` → `delete`) whenever no explicit row exists — but only when a real registered module backs the parsed type name, so an unknown or misspelled tool name still fails closed exactly as before. An explicit `smeldr_tool_policies` row always wins over derivation. `get_goal_context` and `list_type_tools` are framework tools, not generated ones, and are not derived — they need (and now have, as of `smeldr.dev/core` v1.63.3) an explicit row like any other framework tool. Requires `smeldr.dev/core` v1.63.2+ (`TypeDescriptor.Kind` correctly distinguishes compiled types). (A250, D48)
+
+---
+
 ## [1.30.0] — 2026-08-09
 
 ### Added
