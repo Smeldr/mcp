@@ -10,7 +10,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [1.31.0] — 2026-08-13
 
 ### Added
-- `transition_item` and `set_content_status` gain an optional `reason` string parameter, threaded to `smeldr.dev/core`'s new `App.TransitionItemWithReason`/`DynamicTypeRepo.SetStatusWithReason` respectively — satisfying a `Transition.RequiredReason` gate, which neither tool could reach before (both always passed an empty reason). Omitting `reason` behaves exactly as before. Requires `smeldr.dev/core` v1.65.0+.
+- `transition_item` and `set_content_status` gain an optional `reason` string parameter, threaded to `smeldr.dev/core`'s new `App.TransitionItemWithReason`/`DynamicTypeRepo.SetStatusWithReason` respectively — satisfying a `Transition.RequiredReason` gate, which neither tool could reach before (both always passed an empty reason). Omitting `reason` behaves exactly as before. Requires `smeldr.dev/core` v1.65.0+. (A257)
 
 ---
 
