@@ -30,6 +30,7 @@ func stateToolDefs() []mcpTool {
 					"type_name": map[string]any{"type": "string", "description": "Registered content type name — dynamic (snake_case) or compiled (e.g. \"Signal\")."},
 					"slug":      map[string]any{"type": "string", "description": "Slug of the item to transition."},
 					"to_state":  map[string]any{"type": "string", "description": "Target state name (e.g. \"published\", \"archived\")."},
+					"reason":    map[string]any{"type": "string", "description": "Optional one-line reason for the transition. Required if the target transition has RequiredReason set — omitting it then returns an error."},
 				},
 				"required": []string{"type_name", "slug", "to_state"},
 			},
@@ -141,7 +142,8 @@ func (s *Server) handleStateTool(ctx smeldr.Context, name string, args map[strin
 		if !ok {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: to_state required"}
 		}
-		result, err := s.app.TransitionItem(ctx, typeName, slug, toState)
+		reason := stringArgOr(args, "reason", "")
+		result, err := s.app.TransitionItemWithReason(ctx, typeName, slug, toState, reason)
 		if err != nil {
 			return nil, errorFor(err)
 		}

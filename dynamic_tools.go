@@ -134,6 +134,7 @@ func dynamicContentToolDefs() []mcpTool {
 					"type_name": map[string]any{"type": "string"},
 					"id":        map[string]any{"type": "string", "description": "Node ID."},
 					"status":    statusEnum,
+					"reason":    map[string]any{"type": "string", "description": "Optional one-line reason for the transition. Required if the target transition has RequiredReason set — omitting it then returns an error."},
 				},
 				"required": []string{"type_name", "id", "status"},
 			},
@@ -286,7 +287,8 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if err != nil {
 			return nil, &jsonRPCError{Code: -32602, Message: err.Error()}
 		}
-		if err := repo.SetStatus(ctx, id, st); err != nil {
+		reason := stringArgOr(args, "reason", "")
+		if err := repo.SetStatusWithReason(ctx, id, st, reason); err != nil {
 			return nil, errorFor(err)
 		}
 		go s.app.RefreshContentIndex(context.Background(), typeName)

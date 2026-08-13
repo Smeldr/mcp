@@ -123,6 +123,50 @@ func TestStateTool_TransitionItem_HappyPath(t *testing.T) {
 	}
 }
 
+// TestStateTool_TransitionItem_ReasonThreaded (T235) proves the optional
+// reason argument reaches App.TransitionItemWithReason: a RequiredReason-
+// gated transition fails without it and succeeds with it.
+func TestStateTool_TransitionItem_ReasonThreaded(t *testing.T) {
+	srv := newStateServer(t)
+	if err := srv.app.RegisterFlow(smeldr.StateFlow{
+		Name:     "reason-gated-flow",
+		TypeName: "reasongated",
+		States: []smeldr.State{
+			{Name: "draft", IsInitial: true},
+			{Name: "published"},
+		},
+		Transitions: []smeldr.Transition{
+			{From: "draft", To: "published", RequiredReason: true},
+		},
+	}); err != nil {
+		t.Fatalf("RegisterFlow: %v", err)
+	}
+	slug := seedStateContent(t, srv, "reasongated")
+	editorCtx := newEditorCtx()
+
+	if _, rpcErr := callTool(t, srv, editorCtx, "transition_item", map[string]any{
+		"type_name": "reasongated",
+		"slug":      slug,
+		"to_state":  "published",
+	}); rpcErr == nil {
+		t.Fatal("expected error omitting reason on a RequiredReason-gated transition")
+	}
+
+	res, rpcErr := callTool(t, srv, editorCtx, "transition_item", map[string]any{
+		"type_name": "reasongated",
+		"slug":      slug,
+		"to_state":  "published",
+		"reason":    "because the plan says so",
+	})
+	if rpcErr != nil {
+		t.Fatalf("transition_item with reason: %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, res)
+	if fields["status"] != "published" {
+		t.Errorf("status = %v, want published", fields["status"])
+	}
+}
+
 // TestStateTool_TransitionItem_InvalidTransition verifies that a disallowed
 // transition (published → scheduled is not in the default flow) returns -32001.
 func TestStateTool_TransitionItem_InvalidTransition(t *testing.T) {

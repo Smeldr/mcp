@@ -368,6 +368,61 @@ func TestDynamicTools_SetContentStatus_success(t *testing.T) {
 	}
 }
 
+// TestDynamicTools_SetContentStatus_ReasonThreaded (T235) proves the
+// optional reason argument reaches DynamicTypeRepo.SetStatusWithReason: a
+// RequiredReason-gated transition fails without it and succeeds with it.
+func TestDynamicTools_SetContentStatus_ReasonThreaded(t *testing.T) {
+	srv, _ := newDynamicServer(t)
+	seedDynamicType(t, srv, "reasongated")
+	if err := srv.app.RegisterFlow(smeldr.StateFlow{
+		Name:     "dynamic-reason-gated-flow",
+		TypeName: "reasongated",
+		States: []smeldr.State{
+			{Name: "draft", IsInitial: true},
+			{Name: "published"},
+		},
+		Transitions: []smeldr.Transition{
+			{From: "draft", To: "published", RequiredReason: true},
+		},
+	}); err != nil {
+		t.Fatalf("RegisterFlow: %v", err)
+	}
+
+	createRes, createErr := callTool(t, srv, newEditorCtx(), "create_content", map[string]any{
+		"type_name": "reasongated",
+		"fields":    map[string]any{"title": "Hello"},
+	})
+	if createErr != nil {
+		t.Fatalf("create_content: %v", createErr.Message)
+	}
+	id, _ := unwrapToolResult(t, createRes)["ID"].(string)
+	if id == "" {
+		t.Fatal("create_content returned empty ID")
+	}
+
+	if _, rpcErr := callTool(t, srv, newEditorCtx(), "set_content_status", map[string]any{
+		"type_name": "reasongated",
+		"id":        id,
+		"status":    "published",
+	}); rpcErr == nil {
+		t.Fatal("expected error omitting reason on a RequiredReason-gated transition")
+	}
+
+	res, rpcErr := callTool(t, srv, newEditorCtx(), "set_content_status", map[string]any{
+		"type_name": "reasongated",
+		"id":        id,
+		"status":    "published",
+		"reason":    "because the plan says so",
+	})
+	if rpcErr != nil {
+		t.Fatalf("set_content_status with reason: %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, res)
+	if fields["status"] != "published" {
+		t.Errorf("status = %v, want published", fields["status"])
+	}
+}
+
 // TestDynamicTools_SetContentStatus_invalidStatus verifies bad status returns -32602.
 func TestDynamicTools_SetContentStatus_invalidStatus(t *testing.T) {
 	srv, _ := newDynamicServer(t)
