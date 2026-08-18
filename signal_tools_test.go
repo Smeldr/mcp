@@ -1,8 +1,13 @@
 package mcp
 
 import (
+	"bufio"
 	"database/sql"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	smeldr "smeldr.dev/core"
 
@@ -382,6 +387,103 @@ func TestSignalSlug_ShortID(t *testing.T) {
 	slug := signalSlug("site", "committed", "ab12")
 	if slug != "site-committed-ab12" {
 		t.Errorf("slug = %q, want site-committed-ab12", slug)
+	}
+}
+
+// --- App.NotifySignalCreated wiring (A278) ---
+
+const notifySignalTestSecret = "test-secret-notify-signal-32b!!"
+
+// newNotifySignalServer builds a real App (DB + orchestration tables +
+// App.EventStream()) and returns both the mcp Server and the App itself —
+// unlike newSignalServer, the caller needs the App to open a real
+// GET /_events/stream connection, since core's own broadcaster internals
+// are unexported and unreachable from this module.
+func newNotifySignalServer(t *testing.T) (*Server, *smeldr.App) {
+	t.Helper()
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Skipf("sqlite unavailable: %v", err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { db.Close() })
+	if err := smeldr.CreateOrchestrationTables(db); err != nil {
+		t.Fatalf("CreateOrchestrationTables: %v", err)
+	}
+	app := smeldr.New(smeldr.Config{
+		BaseURL: "http://localhost",
+		Secret:  []byte(notifySignalTestSecret),
+		DB:      db,
+	})
+	app.EventStream()
+	return New(app), app
+}
+
+// TestHandleSignalTool_CreateSignal_NotifiesApp proves create_signal's raw
+// SQL INSERT is followed by a real App.NotifySignalCreated call — not just
+// that the new line is present in source, but that a real GET
+// /_events/stream subscriber actually receives the "signal.created"
+// broadcast end to end.
+func TestHandleSignalTool_CreateSignal_NotifiesApp(t *testing.T) {
+	srv, app := newNotifySignalServer(t)
+
+	httpSrv := httptest.NewServer(app.Handler())
+	defer httpSrv.Close()
+
+	tok, err := smeldr.SignToken(smeldr.User{ID: "u1", Roles: []smeldr.Role{smeldr.Author}}, notifySignalTestSecret, 0)
+	if err != nil {
+		t.Fatalf("SignToken: %v", err)
+	}
+	req, err := http.NewRequest(http.MethodGet, httpSrv.URL+"/_events/stream", nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("connect to event stream: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("event stream status = %d, want 200", resp.StatusCode)
+	}
+
+	_, rpcErr := callTool(t, srv, newAuthorCtx(), "create_signal", map[string]any{
+		"sender":      "core",
+		"receiver":    "architect",
+		"signal_type": "plan-ready",
+	})
+	if rpcErr != nil {
+		t.Fatalf("create_signal: %v", rpcErr.Message)
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	lineCh := make(chan string, 1)
+	go func() {
+		if scanner.Scan() {
+			lineCh <- scanner.Text()
+		}
+	}()
+
+	select {
+	case line := <-lineCh:
+		var payload struct {
+			Event string `json:"event"`
+			Data  struct {
+				Type string `json:"type"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(line), &payload); err != nil {
+			t.Fatalf("unmarshal stream line %q: %v", line, err)
+		}
+		if payload.Event != "signal.created" {
+			t.Errorf("Event = %q, want %q", payload.Event, "signal.created")
+		}
+		if payload.Data.Type != "signal" {
+			t.Errorf("Data.Type = %q, want %q", payload.Data.Type, "signal")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for signal.created broadcast — create_signal did not notify the App")
 	}
 }
 

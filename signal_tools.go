@@ -105,6 +105,11 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 			slog.ErrorContext(ctx, "mcp: create_signal: db exec failed", "error", err)
 			return nil, &jsonRPCError{Code: -32603, Message: "internal error: " + err.Error()}
 		}
+		// This raw INSERT bypasses Module[Signal].MCPCreate entirely, so no
+		// lifecycle hook fires on its own — App.NotifySignalCreated (core
+		// v1.74.0+) restores the webhook/event-stream notification a
+		// generic Module[T] create would have produced automatically.
+		s.app.NotifySignalCreated(ctx, id, slug)
 		return toolResult(map[string]any{
 			"id":     id,
 			"slug":   slug,

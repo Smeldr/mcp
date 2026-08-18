@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.31.1] — 2026-08-18
+
+### Fixed
+- `create_signal` performs a raw `db.ExecContext` INSERT directly into `smeldr_signals` — it never called `Module[Signal].MCPCreate`, so no lifecycle hook fired for it: creating a Signal produced zero webhook delivery and zero `GET /_events/stream` broadcast, confirmed empirically against a working `Task` broadcast the same day. Now calls `smeldr.dev/core`'s new `App.NotifySignalCreated(ctx, id, slug)` (v1.74.0+) immediately after the INSERT succeeds, restoring the notification a generic `Module[T]` create path would have produced automatically. `create_signal`'s own request/response shape is unchanged — this adds a side effect, not a new parameter or field. Requires `smeldr.dev/core` v1.74.0+ (bumped from v1.65.0 — verified clean via `go mod tidy`/`go build`/`go test ./...`/`go test -race ./...`, no breaking change crossed in that span). (A278)
+
+---
+
 ## [1.31.0] — 2026-08-13
 
 ### Added
