@@ -287,18 +287,6 @@ var slugOnlySchema = map[string]any{
 	"required": []string{"slug"},
 }
 
-// slugWithReasonSchema is the JSON Schema for lifecycle tools that also
-// accept an optional audit reason (smeldr.dev/core v1.76.0+, T237 — the
-// widened MCPModule.MCPPublish/MCPSchedule/MCPArchive interface).
-var slugWithReasonSchema = map[string]any{
-	"type": "object",
-	"properties": map[string]any{
-		"slug":   map[string]any{"type": "string", "description": "Item ID or slug — both accepted."},
-		"reason": map[string]any{"type": "string", "description": "Optional one-line reason for the transition. Required if the target transition has RequiredReason set — omitting it then returns an error."},
-	},
-	"required": []string{"slug"},
-}
-
 // fieldToProp converts a single MCPField to its JSON Schema property object.
 func fieldToProp(f smeldr.MCPField) map[string]any {
 	var prop map[string]any
@@ -350,7 +338,7 @@ func mcpToolDefs(m smeldr.MCPModule) []mcpTool {
 		{
 			Name:        "publish_" + typeSnake,
 			Description: "Publish a " + meta.TypeName + " by id or slug.",
-			InputSchema: slugWithReasonSchema,
+			InputSchema: slugOnlySchema,
 		},
 		{
 			Name:        "schedule_" + typeSnake,
@@ -360,7 +348,6 @@ func mcpToolDefs(m smeldr.MCPModule) []mcpTool {
 				"properties": map[string]any{
 					"slug":         map[string]any{"type": "string", "description": "Item ID or slug — both accepted."},
 					"scheduled_at": map[string]any{"type": "string", "format": "date-time"},
-					"reason":       map[string]any{"type": "string", "description": "Optional one-line reason for the transition. Required if the target transition has RequiredReason set — omitting it then returns an error."},
 				},
 				"required": []string{"slug", "scheduled_at"},
 			},
@@ -368,7 +355,7 @@ func mcpToolDefs(m smeldr.MCPModule) []mcpTool {
 		{
 			Name:        "archive_" + typeSnake,
 			Description: "Archive a " + meta.TypeName + " by id or slug.",
-			InputSchema: slugWithReasonSchema,
+			InputSchema: slugOnlySchema,
 		},
 	}
 }

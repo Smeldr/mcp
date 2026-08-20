@@ -516,8 +516,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		if st, isStatuser := existing.(statuser); isStatuser && st.GetStatus() == smeldr.Published {
 			return toolResult(map[string]any{"slug": slug, "status": "published"}), nil
 		}
-		reason := stringArgOr(args, "reason", "")
-		if err := m.MCPPublish(ctx, slug, reason); err != nil {
+		if err := m.MCPPublish(ctx, slug); err != nil {
 			return nil, errorFor(err)
 		}
 		return toolResult(map[string]any{"slug": slug, "status": "published"}), nil
@@ -535,8 +534,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		if err != nil {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: scheduled_at must be RFC3339"}
 		}
-		reason := stringArgOr(args, "reason", "")
-		if err := m.MCPSchedule(ctx, slug, t, reason); err != nil {
+		if err := m.MCPSchedule(ctx, slug, t); err != nil {
 			return nil, errorFor(err)
 		}
 		return toolResult(map[string]any{"slug": slug, "status": "scheduled", "scheduled_at": atStr}), nil
@@ -546,8 +544,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		if !ok {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: id (or slug) required"}
 		}
-		reason := stringArgOr(args, "reason", "")
-		if err := m.MCPArchive(ctx, slug, reason); err != nil {
+		if err := m.MCPArchive(ctx, slug); err != nil {
 			return nil, errorFor(err)
 		}
 		return toolResult(map[string]any{"slug": slug, "status": "archived"}), nil
