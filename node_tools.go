@@ -221,7 +221,6 @@ func (s *Server) listNodes(ctx smeldr.Context, args map[string]any) ([]*smeldr.D
 	if st, ok := stringArg(args, "status"); ok {
 		conds = append(conds, fmt.Sprintf("status = $%d", n))
 		qargs = append(qargs, st)
-		n++
 	}
 	if len(conds) > 0 {
 		query += " WHERE " + strings.Join(conds, " AND ")
