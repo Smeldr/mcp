@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.32.0] — 2026-08-20
+
+### Added
+- `publish_{type}`, `schedule_{type}`, and `archive_{type}` gain an optional `reason` string parameter, threaded to `smeldr.dev/core`'s widened `MCPModule.MCPPublish`/`MCPSchedule`/`MCPArchive` (v1.76.0+) — satisfying a `Transition.RequiredReason` gate on these three tools, matching what `transition_item`/`set_content_status` already gained in v1.31.0. Omitting `reason` behaves exactly as before. Requires `smeldr.dev/core` v1.76.0+ (breaking change to `MCPModule`, taken under core's own D53 — this repo is one of the interface's implementers, updated to match core's own A284; see smeldr/core's `DECISIONS.md`).
+
+---
+
 ## [1.31.1] — 2026-08-18
 
 ### Fixed
