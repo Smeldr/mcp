@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.32.1] — 2026-08-20
+
+### Removed
+- `parseResourceURI` no longer accepts the legacy `forge://` URI scheme — `smeldr://` only. Extends D53's reasoning (no compatibility twin for a caller that does not exist, `smeldr.dev/core`) from core's exported Go API to this repo's own wire-protocol compatibility, per Peter's own explicit 2026-08-15 go-ahead (T87). A client still sending `forge://` URIs now gets the same "resource not found" result as any other unrecognized scheme.
+
+---
+
 ## [1.32.0] — 2026-08-20
 
 ### Added

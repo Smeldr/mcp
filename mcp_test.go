@@ -258,56 +258,6 @@ func TestMCPResourcesRead_published(t *testing.T) {
 	srv := New(app)
 	ctx := newTestCtx()
 
-	params, _ := json.Marshal(map[string]string{"uri": "forge://posts/hello-world"})
-	result, rpcErr := srv.handleResourcesRead(ctx, params)
-	if rpcErr != nil {
-		t.Fatalf("unexpected error: %+v", rpcErr)
-	}
-	m, ok := result.(map[string]any)
-	if !ok {
-		t.Fatal("result is not map[string]any")
-	}
-	contents, ok := m["contents"].([]resourceContent)
-	if !ok || len(contents) != 1 {
-		t.Fatalf("contents = %T len=%d, want []resourceContent len=1", m["contents"], len(contents))
-	}
-	if contents[0].URI != "forge://posts/hello-world" {
-		t.Errorf("contents[0].URI = %q, want %q", contents[0].URI, "forge://posts/hello-world")
-	}
-	if contents[0].MimeType != "application/json" {
-		t.Errorf("MimeType = %q, want application/json", contents[0].MimeType)
-	}
-	// Flag D: JSON round-trip to inspect field values without importing testMCPPost directly.
-	var fields map[string]any
-	if err := json.Unmarshal([]byte(contents[0].Text), &fields); err != nil {
-		t.Fatalf("text is not valid JSON: %v", err)
-	}
-	if fields["Title"] != "Hello World" {
-		t.Errorf("Title = %v, want Hello World", fields["Title"])
-	}
-}
-
-// TestMCPResourcesRead_smeldrScheme verifies that resources/read accepts the new
-// smeldr:// scheme (T86) and echoes it back in the response URI.
-func TestMCPResourcesRead_smeldrScheme(t *testing.T) {
-	cfg := smeldr.Config{
-		BaseURL: "http://localhost",
-		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
-	}
-	app := smeldr.New(cfg)
-	repo := smeldr.NewMemoryRepo[*testMCPPost]()
-	mod := smeldr.NewModule(
-		(*testMCPPost)(nil),
-		smeldr.Repo(repo),
-		smeldr.At("/posts"),
-		smeldr.MCP(smeldr.MCPRead),
-	)
-	app.Content(mod)
-	seedPost(t, repo, "hello-world", smeldr.Published, "Hello World", "body content here")
-
-	srv := New(app)
-	ctx := newTestCtx()
-
 	params, _ := json.Marshal(map[string]string{"uri": "smeldr://posts/hello-world"})
 	result, rpcErr := srv.handleResourcesRead(ctx, params)
 	if rpcErr != nil {
@@ -321,9 +271,19 @@ func TestMCPResourcesRead_smeldrScheme(t *testing.T) {
 	if !ok || len(contents) != 1 {
 		t.Fatalf("contents = %T len=%d, want []resourceContent len=1", m["contents"], len(contents))
 	}
-	// handleResourcesRead echoes the caller's URI — smeldr:// in, smeldr:// out.
 	if contents[0].URI != "smeldr://posts/hello-world" {
-		t.Errorf("contents[0].URI = %q, want smeldr://posts/hello-world", contents[0].URI)
+		t.Errorf("contents[0].URI = %q, want %q", contents[0].URI, "smeldr://posts/hello-world")
+	}
+	if contents[0].MimeType != "application/json" {
+		t.Errorf("MimeType = %q, want application/json", contents[0].MimeType)
+	}
+	// Flag D: JSON round-trip to inspect field values without importing testMCPPost directly.
+	var fields map[string]any
+	if err := json.Unmarshal([]byte(contents[0].Text), &fields); err != nil {
+		t.Fatalf("text is not valid JSON: %v", err)
+	}
+	if fields["Title"] != "Hello World" {
+		t.Errorf("Title = %v, want Hello World", fields["Title"])
 	}
 }
 
@@ -349,7 +309,7 @@ func TestMCPResourcesRead_draft(t *testing.T) {
 	srv := New(app)
 	ctx := newTestCtx()
 
-	params, _ := json.Marshal(map[string]string{"uri": "forge://posts/draft-item"})
+	params, _ := json.Marshal(map[string]string{"uri": "smeldr://posts/draft-item"})
 	_, rpcErr := srv.handleResourcesRead(ctx, params)
 	if rpcErr == nil {
 		t.Fatal("expected error for Draft item, got nil")
