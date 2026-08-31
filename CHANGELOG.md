@@ -7,7 +7,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [1.32.2] — Unreleased
+## [1.32.2] — 2026-08-31
 
 ### Changed
 - `get_valid_transitions`'s own `valid_transitions` array elements change from bare `to_state` strings to objects (`{"to_state": ..., "required_role"?: ...}`), exposing `Transition.RequiredRole` via `smeldr.dev/core`'s new `App.ValidTransitions` (A296, core v1.78.0+) — the tool's own hand-rolled `validTransitionsFor` query duplicated core's logic and never had role data to expose. Breaking change to an actively-returned field, taken directly under D53's own reasoning ("no compatibility twin for a caller that does not exist") — `process.smeldr.dev` is this tool's only real, controlled caller today. Requires `smeldr.dev/core` v1.78.1+.
