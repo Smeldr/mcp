@@ -199,7 +199,14 @@ func signalSlug(sender, signalType, id string) string {
 	base := smeldr.GenerateSlug(fmt.Sprintf("%s-%s", sender, signalType))
 	suffix := id
 	if len(suffix) > 8 {
-		suffix = suffix[:8]
+		// The tail, not the head: smeldr.NewID() is a UUIDv7
+		// ("%08x-%04x-%04x-%04x-%012x", b[0:4], b[4:6], b[6:8], b[8:10],
+		// b[10:16]) — id's first 8 characters (b[0:4]) are the top 32 bits
+		// of a 48-bit millisecond clock, zero random bits, identical for
+		// any two calls within the same ~65.5s window. The last 8
+		// characters fall entirely within b[10:16], filled by
+		// crypto/rand — genuinely random, no time-correlation.
+		suffix = suffix[len(suffix)-8:]
 	}
 	return base + "-" + suffix
 }

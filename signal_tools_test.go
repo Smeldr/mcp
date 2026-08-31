@@ -446,13 +446,15 @@ func TestIsSignalTool(t *testing.T) {
 
 // --- signalSlug unit tests ---
 
-// TestSignalSlug_LongID verifies that a UUID-length id is truncated to 8 chars
-// and the slug is combined with the sender+signal_type base.
+// TestSignalSlug_LongID verifies that a UUID-length id is truncated to its
+// last 8 chars (the crypto/rand-filled tail of a UUIDv7, not the clock-
+// derived head — 01a0513a) and the slug is combined with the
+// sender+signal_type base.
 func TestSignalSlug_LongID(t *testing.T) {
 	slug := signalSlug("core", "plan-ready", "01936b4f-dead-beef-cafe-123456789012")
-	// Should look like "core-plan-ready-01936b4f".
-	if slug != "core-plan-ready-01936b4f" {
-		t.Errorf("slug = %q, want core-plan-ready-01936b4f", slug)
+	// Should look like "core-plan-ready-56789012" — the last 8 characters.
+	if slug != "core-plan-ready-56789012" {
+		t.Errorf("slug = %q, want core-plan-ready-56789012", slug)
 	}
 }
 
@@ -461,6 +463,28 @@ func TestSignalSlug_ShortID(t *testing.T) {
 	slug := signalSlug("site", "committed", "ab12")
 	if slug != "site-committed-ab12" {
 		t.Errorf("slug = %q, want site-committed-ab12", slug)
+	}
+}
+
+// TestSignalSlug_SuffixIsRandomTail proves the fix (01a0513a): two IDs
+// sharing the same first 8 characters (simulating two UUIDv7s minted in
+// the same ~65.5s clock window, the exact collision reproduced live this
+// session) but different last 8 characters must produce different slugs —
+// the old first-8 truncation would have collided both to
+// "core-status-01936b4f".
+func TestSignalSlug_SuffixIsRandomTail(t *testing.T) {
+	id1 := "01936b4f-dead-beef-cafe-1111aaaa2222"
+	id2 := "01936b4f-dead-beef-cafe-3333bbbb4444"
+	slug1 := signalSlug("core", "status", id1)
+	slug2 := signalSlug("core", "status", id2)
+	if slug1 == slug2 {
+		t.Fatalf("slug1 == slug2 == %q, want distinct slugs for distinct ID tails", slug1)
+	}
+	if slug1 != "core-status-aaaa2222" {
+		t.Errorf("slug1 = %q, want core-status-aaaa2222", slug1)
+	}
+	if slug2 != "core-status-bbbb4444" {
+		t.Errorf("slug2 = %q, want core-status-bbbb4444", slug2)
 	}
 }
 

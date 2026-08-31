@@ -13,6 +13,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `get_valid_transitions`'s own `valid_transitions` array elements change from bare `to_state` strings to objects (`{"to_state": ..., "required_role"?: ...}`), exposing `Transition.RequiredRole` via `smeldr.dev/core`'s new `App.ValidTransitions` (A296, core v1.78.0+) — the tool's own hand-rolled `validTransitionsFor` query duplicated core's logic and never had role data to expose. Breaking change to an actively-returned field, taken directly under D53's own reasoning ("no compatibility twin for a caller that does not exist") — `process.smeldr.dev` is this tool's only real, controlled caller today. Requires `smeldr.dev/core` v1.78.1+.
 - `list_signals` now returns `subject_type`/`subject_id`/`from_state`/`to_state`/`required_role` for a Signal that carries them (A296) — previously the handler's own hand-rolled SELECT never picked up these five columns after core added them. Additive only: present as a group on a system-generated Signal (e.g. one `recordAuthorizationRequiredSignal` wrote), omitted as a group on an ordinary human-authored one. Not breaking — no existing field changed shape.
 
+### Fixed
+- `create_signal`'s auto-generated slug no longer collides when the same sender fires two signals of the same `signal_type` within the same UUIDv7 clock window (~65.5s). `signalSlug` was truncating the ID to its first 8 characters — the clock-derived, zero-entropy prefix of a `smeldr.NewID()` UUIDv7 — guaranteeing an identical suffix for any two calls in that window, not just a "coarse" collision risk. Now takes the last 8 characters, which fall entirely within the `crypto/rand`-filled tail of the ID.
+
 ---
 
 ## [1.32.1] — 2026-08-20
