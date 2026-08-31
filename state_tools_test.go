@@ -313,8 +313,12 @@ func TestStateTool_GetValidTransitions_HappyPath(t *testing.T) {
 	// Default flow has draft → archived, draft → published, draft → scheduled.
 	want := map[string]bool{"archived": true, "published": true, "scheduled": true}
 	for _, v := range transitions {
-		s, _ := v.(string)
+		m, _ := v.(map[string]any)
+		s, _ := m["to_state"].(string)
 		delete(want, s)
+		if _, hasRole := m["required_role"]; hasRole {
+			t.Errorf("to_state %q: unexpected required_role, default flow has no role gates", s)
+		}
 	}
 	if len(want) > 0 {
 		t.Errorf("missing expected transitions: %v", want)
@@ -383,9 +387,71 @@ func TestStateTool_GetValidTransitions_CustomFlow(t *testing.T) {
 	fields := unwrapToolResult(t, res)
 	transitions, _ := fields["valid_transitions"].([]any)
 	if len(transitions) != 1 {
-		t.Errorf("len(valid_transitions) = %d, want 1", len(transitions))
-	} else if transitions[0] != "active" {
-		t.Errorf("valid_transitions[0] = %v, want active", transitions[0])
+		t.Fatalf("len(valid_transitions) = %d, want 1", len(transitions))
+	}
+	m, _ := transitions[0].(map[string]any)
+	if m["to_state"] != "active" {
+		t.Errorf("valid_transitions[0].to_state = %v, want active", m["to_state"])
+	}
+	if _, hasRole := m["required_role"]; hasRole {
+		t.Errorf("valid_transitions[0]: unexpected required_role, this transition has no role gate")
+	}
+}
+
+// TestStateTool_GetValidTransitions_RequiredRole verifies that a role-gated
+// transition includes required_role in its response, and an ungated
+// transition in the same flow omits the field entirely (A296/D53 — mirrors
+// core's own App.ValidTransitions, MINOR-ancestor: mcp-get-valid-
+// transitions-required-role).
+func TestStateTool_GetValidTransitions_RequiredRole(t *testing.T) {
+	srv := newStateServer(t)
+	if err := srv.app.RegisterFlow(smeldr.StateFlow{
+		Name:     "gated-flow",
+		TypeName: "gated",
+		States: []smeldr.State{
+			{Name: "draft", IsInitial: true},
+			{Name: "approved"},
+			{Name: "archived", IsTerminal: true},
+		},
+		Transitions: []smeldr.Transition{
+			{From: "draft", To: "approved", RequiredRole: "admin"},
+			{From: "draft", To: "archived"},
+		},
+	}); err != nil {
+		t.Fatalf("RegisterFlow: %v", err)
+	}
+	slug := seedStateContent(t, srv, "gated")
+	res, rpcErr := callTool(t, srv, newAuthorCtx(), "get_valid_transitions", map[string]any{
+		"type_name": "gated",
+		"slug":      slug,
+	})
+	if rpcErr != nil {
+		t.Fatalf("get_valid_transitions: %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, res)
+	transitions, _ := fields["valid_transitions"].([]any)
+	if len(transitions) != 2 {
+		t.Fatalf("len(valid_transitions) = %d, want 2", len(transitions))
+	}
+	byState := map[string]map[string]any{}
+	for _, v := range transitions {
+		m, _ := v.(map[string]any)
+		s, _ := m["to_state"].(string)
+		byState[s] = m
+	}
+	approved, ok := byState["approved"]
+	if !ok {
+		t.Fatal("missing \"approved\" transition")
+	}
+	if approved["required_role"] != "admin" {
+		t.Errorf("approved.required_role = %v, want admin", approved["required_role"])
+	}
+	archived, ok := byState["archived"]
+	if !ok {
+		t.Fatal("missing \"archived\" transition")
+	}
+	if _, hasRole := archived["required_role"]; hasRole {
+		t.Errorf("archived: unexpected required_role %v, this transition has no role gate", archived["required_role"])
 	}
 }
 

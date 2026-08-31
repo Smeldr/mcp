@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"bufio"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -192,6 +193,79 @@ func TestCreateSignal_TableMissing(t *testing.T) {
 }
 
 // --- list_signals ---
+
+// TestListSignals_StructuredFields verifies that list_signals returns
+// A296's five structured columns (subject_type/subject_id/from_state/
+// to_state/required_role) for a system-generated Signal row, and omits
+// all five for an ordinary human-authored one in the same result set.
+func TestListSignals_StructuredFields(t *testing.T) {
+	srv := newSignalServer(t)
+	ctx := newAuthorCtx()
+	db := srv.app.Config().DB
+
+	// A structured row, matching recordAuthorizationRequiredSignal's own
+	// shape (core, state.go) — inserted directly since create_signal never
+	// sets these five fields.
+	if _, err := db.ExecContext(context.Background(),
+		`INSERT INTO smeldr_signals
+			(id, slug, status, created_at, updated_at, sender, receiver, signal_type, message, task_ref, sequence,
+			 subject_type, subject_id, from_state, to_state, required_role)
+		VALUES
+			('sig-structured', 'sig-structured', 'pending', '2026-08-31T00:00:00Z', '2026-08-31T00:00:00Z',
+			 'system', 'reviewer', 'authorization-required', 'GateItem item-1: reviewing→approved requires role "reviewer"', '', 0,
+			 'GateItem', 'item-1', 'reviewing', 'approved', 'reviewer')`,
+	); err != nil {
+		t.Fatalf("seed structured signal: %v", err)
+	}
+
+	// An ordinary human-authored signal, same receiver.
+	if _, rpcErr := callTool(t, srv, ctx, "create_signal", map[string]any{
+		"sender":      "core",
+		"receiver":    "reviewer",
+		"signal_type": "status",
+	}); rpcErr != nil {
+		t.Fatalf("create_signal: %v", rpcErr.Message)
+	}
+
+	res, rpcErr := callTool(t, srv, ctx, "list_signals", map[string]any{
+		"receiver": "reviewer",
+	})
+	if rpcErr != nil {
+		t.Fatalf("list_signals: %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, res)
+	signals, _ := fields["signals"].([]any)
+	if len(signals) != 2 {
+		t.Fatalf("len(signals) = %d, want 2", len(signals))
+	}
+
+	var structured, ordinary map[string]any
+	for _, v := range signals {
+		m, _ := v.(map[string]any)
+		if m["slug"] == "sig-structured" {
+			structured = m
+		} else {
+			ordinary = m
+		}
+	}
+	if structured == nil {
+		t.Fatal("missing structured signal in results")
+	}
+	if structured["subject_type"] != "GateItem" || structured["subject_id"] != "item-1" ||
+		structured["from_state"] != "reviewing" || structured["to_state"] != "approved" ||
+		structured["required_role"] != "reviewer" {
+		t.Errorf("structured signal missing/wrong fields: %+v", structured)
+	}
+
+	if ordinary == nil {
+		t.Fatal("missing ordinary signal in results")
+	}
+	for _, key := range []string{"subject_type", "subject_id", "from_state", "to_state", "required_role"} {
+		if _, present := ordinary[key]; present {
+			t.Errorf("ordinary signal: unexpected key %q present, want omitted", key)
+		}
+	}
+}
 
 // TestListSignals_HappyPath verifies that a created signal is returned by
 // list_signals for the correct receiver.

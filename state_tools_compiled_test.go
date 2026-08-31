@@ -106,12 +106,13 @@ func TestStateTool_GetValidTransitions_Compiled(t *testing.T) {
 	valid, _ := fields["valid_transitions"].([]any)
 	found := false
 	for _, v := range valid {
-		if v == "read" {
+		m, _ := v.(map[string]any)
+		if m["to_state"] == "read" {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("valid_transitions = %v, want to include \"read\"", valid)
+		t.Errorf("valid_transitions = %v, want to include to_state \"read\"", valid)
 	}
 }
 

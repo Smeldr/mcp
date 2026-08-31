@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
@@ -162,10 +161,17 @@ func (s *Server) handleStateTool(ctx smeldr.Context, name string, args map[strin
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
-		db := s.app.Config().DB
-		transitions, err := validTransitionsFor(ctx, db, typeName, currentStatus)
+		options, err := s.app.ValidTransitions(ctx, typeName, currentStatus)
 		if err != nil {
 			return nil, &jsonRPCError{Code: -32603, Message: "internal error: " + err.Error()}
+		}
+		transitions := make([]map[string]any, len(options))
+		for i, o := range options {
+			m := map[string]any{"to_state": o.ToState}
+			if o.RequiredRole != "" {
+				m["required_role"] = o.RequiredRole
+			}
+			transitions[i] = m
 		}
 		return toolResult(map[string]any{
 			"current_state":     currentStatus,
@@ -361,46 +367,4 @@ func compiledItemStatus(item any) (string, error) {
 		return "", err
 	}
 	return s.Status, nil
-}
-
-// validTransitionsFor queries smeldr_state_flows and smeldr_transitions to find
-// all permitted target states from fromState for the given type. Falls back to the
-// default flow (type_name IS NULL AND name = 'default') when no custom flow is
-// registered for typeName. Returns an empty slice when no flow is found.
-func validTransitionsFor(ctx context.Context, db smeldr.DB, typeName, fromState string) ([]string, error) {
-	var flowID string
-	err := db.QueryRowContext(ctx,
-		`SELECT id FROM smeldr_state_flows WHERE type_name = ? LIMIT 1`, typeName,
-	).Scan(&flowID)
-	if err != nil {
-		err = db.QueryRowContext(ctx,
-			`SELECT id FROM smeldr_state_flows WHERE type_name IS NULL AND name = 'default' LIMIT 1`,
-		).Scan(&flowID)
-		if err != nil {
-			return []string{}, nil
-		}
-	}
-	rows, err := db.QueryContext(ctx,
-		`SELECT to_state FROM smeldr_transitions WHERE flow_id = ? AND from_state = ? ORDER BY to_state`,
-		flowID, fromState,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []string
-	for rows.Next() {
-		var s string
-		if err := rows.Scan(&s); err != nil {
-			return nil, err
-		}
-		out = append(out, s)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	if out == nil {
-		out = []string{}
-	}
-	return out, nil
 }

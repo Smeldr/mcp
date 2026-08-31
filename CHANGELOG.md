@@ -7,6 +7,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.32.2] — Unreleased
+
+### Changed
+- `get_valid_transitions`'s own `valid_transitions` array elements change from bare `to_state` strings to objects (`{"to_state": ..., "required_role"?: ...}`), exposing `Transition.RequiredRole` via `smeldr.dev/core`'s new `App.ValidTransitions` (A296, core v1.78.0+) — the tool's own hand-rolled `validTransitionsFor` query duplicated core's logic and never had role data to expose. Breaking change to an actively-returned field, taken directly under D53's own reasoning ("no compatibility twin for a caller that does not exist") — `process.smeldr.dev` is this tool's only real, controlled caller today. Requires `smeldr.dev/core` v1.78.1+.
+- `list_signals` now returns `subject_type`/`subject_id`/`from_state`/`to_state`/`required_role` for a Signal that carries them (A296) — previously the handler's own hand-rolled SELECT never picked up these five columns after core added them. Additive only: present as a group on a system-generated Signal (e.g. one `recordAuthorizationRequiredSignal` wrote), omitted as a group on an ordinary human-authored one. Not breaking — no existing field changed shape.
+
+---
+
 ## [1.32.1] — 2026-08-20
 
 ### Removed

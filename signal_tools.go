@@ -125,7 +125,8 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 
 		rows, err := db.QueryContext(ctx,
 			`SELECT id, slug, status, created_at, updated_at, sender, receiver,
-			        signal_type, message, task_ref, sequence
+			        signal_type, message, task_ref, sequence,
+			        subject_type, subject_id, from_state, to_state, required_role
 			FROM smeldr_signals
 			WHERE receiver = ? AND status = ?
 			ORDER BY created_at ASC`,
@@ -146,12 +147,14 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 				id, slug, status, sender, recv, sigType, message, taskRef string
 				createdAt, updatedAt                                      string
 				sequence                                                  int
+				subjectType, subjectID, fromState, toState, requiredRole  string
 			)
 			if err := rows.Scan(&id, &slug, &status, &createdAt, &updatedAt,
-				&sender, &recv, &sigType, &message, &taskRef, &sequence); err != nil {
+				&sender, &recv, &sigType, &message, &taskRef, &sequence,
+				&subjectType, &subjectID, &fromState, &toState, &requiredRole); err != nil {
 				return nil, &jsonRPCError{Code: -32603, Message: "internal error: " + err.Error()}
 			}
-			signals = append(signals, map[string]any{
+			m := map[string]any{
 				"id":          id,
 				"slug":        slug,
 				"status":      status,
@@ -163,7 +166,20 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 				"message":     message,
 				"task_ref":    taskRef,
 				"sequence":    sequence,
-			})
+			}
+			// subject_type/subject_id/from_state/to_state/required_role (A296)
+			// are always written together by recordAuthorizationRequiredSignal
+			// (core, state.go) for a system-generated Signal, and always empty
+			// together for an ordinary human-authored one — gated as one group
+			// on subject_type, not five independent checks.
+			if subjectType != "" {
+				m["subject_type"] = subjectType
+				m["subject_id"] = subjectID
+				m["from_state"] = fromState
+				m["to_state"] = toState
+				m["required_role"] = requiredRole
+			}
+			signals = append(signals, m)
 		}
 		if err := rows.Err(); err != nil {
 			return nil, &jsonRPCError{Code: -32603, Message: "internal error: " + err.Error()}
