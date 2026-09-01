@@ -235,6 +235,7 @@ func (s *Server) handleToolsList() any {
 		tools = append(tools, stateToolDefs()...)
 		tools = append(tools, signalToolDefs()...)
 		tools = append(tools, orchestrationToolDefs()...)
+		tools = append(tools, sweepRunToolDefs()...)
 	}
 	return map[string]any{"tools": tools}
 }
@@ -394,6 +395,15 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return nil, rpcErr
 		}
 		return s.handleSignalTool(ctx, p.Name, coalesceArgs(p.Arguments))
+	}
+
+	// Sweep run status tool. Gated on DB presence (same guard as state and
+	// signal tools). Requires Author role.
+	if s.app.Config().DB != nil && isSweepRunTool(p.Name) {
+		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Author, rs, smeldr.AuthTarget{}); rpcErr != nil {
+			return nil, rpcErr
+		}
+		return s.handleSweepRunTool(ctx, p.Name, coalesceArgs(p.Arguments))
 	}
 
 	// Orchestration tools (get_goal_context). Gated on DB presence (same guard

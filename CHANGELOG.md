@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.33.0] — 2026-09-01
+
+### Added
+- New `get_sweep_run` MCP tool (Author role) — reads the most recent structural sweep run recorded for a detector via `smeldr.SweepRunStore.Last`. Input: `{"detector": "<string>"}`. Output when no run has been recorded: `{"detector": "...", "wired": false}`. Output when a run exists: `{"detector": "...", "wired": true, "ran_at": "<RFC3339 UTC>", "walked": <int>, "flagged": <int>}`. Unblocks `smeldr/cloud`'s `remoteAnchorFetcher.ListSweepRuns`, previously a permanent stub because no Smeldr instance exposed this data remotely. Requires `smeldr.dev/core` v1.78.2+ (A298 — `get_sweep_run` needs a seeded `smeldr_tool_policies` row to be callable in a governance-enabled deployment).
+
+---
+
 ## [1.32.2] — 2026-08-31
 
 ### Changed
