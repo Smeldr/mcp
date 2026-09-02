@@ -379,6 +379,9 @@ func relationEdgeMap(e smeldr.RelationEdge) map[string]any {
 	if len(e.Attributes) > 0 {
 		m["attributes"] = e.Attributes
 	}
+	if e.LastConfirmedAt != nil {
+		m["last_confirmed_at"] = *e.LastConfirmedAt
+	}
 	return m
 }
 

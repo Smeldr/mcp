@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.33.1] — 2026-09-02
+
+### Changed
+- `get_relations`'s response now includes a `last_confirmed_at` field (RFC3339 timestamp) for any edge that has one, via the `relationEdgeMap` helper — omitted entirely for an edge that has never been confirmed by a structural sweep yet, matching the existing optional-field treatment already used for `valid_at` and `invalid_at`. This exposes `smeldr.dev/core`'s new `RelationEdge.LastConfirmedAt` field (v1.79.0+). Additive only — no existing field changes shape, so this is a PATCH bump, not MINOR. Requires `smeldr.dev/core` v1.79.0+.
+
+---
+
 ## [1.33.0] — 2026-09-01
 
 ### Added

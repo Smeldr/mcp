@@ -491,25 +491,28 @@ func TestFloatPtrArg(t *testing.T) {
 // ── relationEdgeMap optional fields ──────────────────────────────────────────
 
 // TestRelationEdgeMap_OptionalFields verifies that Confidence, ValidAt,
-// InvalidAt, CreatedByJob, and Attributes are included when set.
+// InvalidAt, CreatedByJob, Attributes, and LastConfirmedAt are included
+// when set.
 func TestRelationEdgeMap_OptionalFields(t *testing.T) {
 	conf := 0.9
 	validAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	invalidAt := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
+	lastConfirmedAt := time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC)
 	job := "job-abc"
 	e := smeldr.RelationEdge{
-		ID:           "e1",
-		SourceType:   "post",
-		SourceID:     "p1",
-		TargetType:   "source",
-		TargetID:     "s1",
-		RelationKind: "cites",
-		EdgeClass:    "asserted",
-		Confidence:   &conf,
-		ValidAt:      &validAt,
-		InvalidAt:    &invalidAt,
-		CreatedByJob: &job,
-		Attributes:   json.RawMessage(`{"note":"test"}`),
+		ID:              "e1",
+		SourceType:      "post",
+		SourceID:        "p1",
+		TargetType:      "source",
+		TargetID:        "s1",
+		RelationKind:    "cites",
+		EdgeClass:       "asserted",
+		Confidence:      &conf,
+		ValidAt:         &validAt,
+		InvalidAt:       &invalidAt,
+		CreatedByJob:    &job,
+		Attributes:      json.RawMessage(`{"note":"test"}`),
+		LastConfirmedAt: &lastConfirmedAt,
 	}
 	m := relationEdgeMap(e)
 	if m["confidence"] != 0.9 {
@@ -527,6 +530,9 @@ func TestRelationEdgeMap_OptionalFields(t *testing.T) {
 	if m["attributes"] == nil {
 		t.Error("attributes = nil, want non-nil")
 	}
+	if m["last_confirmed_at"] != lastConfirmedAt {
+		t.Errorf("last_confirmed_at = %v, want %v", m["last_confirmed_at"], lastConfirmedAt)
+	}
 }
 
 // TestRelationEdgeMap_NilOptionals verifies that nil optionals are omitted.
@@ -541,7 +547,7 @@ func TestRelationEdgeMap_NilOptionals(t *testing.T) {
 		EdgeClass:    "asserted",
 	}
 	m := relationEdgeMap(e)
-	for _, key := range []string{"confidence", "valid_at", "invalid_at", "created_by_job", "attributes"} {
+	for _, key := range []string{"confidence", "valid_at", "invalid_at", "created_by_job", "attributes", "last_confirmed_at"} {
 		if _, ok := m[key]; ok {
 			t.Errorf("key %q present for nil optional, want absent", key)
 		}
