@@ -3,6 +3,7 @@ package mcp
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -625,19 +626,40 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 func (s *Server) handleToolMethod(ctx smeldr.Context, req jsonRPCRequest) (jsonRPCResponse, bool) {
 	switch req.Method {
 	case "tools/list":
+		result := s.handleToolsList()
+		slog.DebugContext(ctx, "mcp: tools/list", "actor", ctx.User().ID)
 		return jsonRPCResponse{
 			JSONRPC: "2.0",
 			ID:      req.ID,
-			Result:  s.handleToolsList(),
+			Result:  result,
 		}, true
 	case "tools/call":
+		toolCall := toolCallName(req.Params)
 		result, rpcErr := s.handleToolsCall(ctx, req.Params)
+		actor := ctx.User().ID
 		if rpcErr != nil {
+			slog.WarnContext(ctx, "mcp: tools/call failed",
+				"tool", toolCall, "actor", actor, "code", rpcErr.Code, "error", rpcErr.Message)
 			return jsonRPCResponse{JSONRPC: "2.0", ID: req.ID, Error: rpcErr}, true
 		}
+		slog.InfoContext(ctx, "mcp: tools/call", "tool", toolCall, "actor", actor)
 		return jsonRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}, true
 	}
 	return jsonRPCResponse{}, false
+}
+
+// toolCallName extracts the "name" field from tools/call params for
+// logging, without depending on handleToolsCall's own full parse. Returns
+// "" if params can't be parsed — logging degrades gracefully, never fatal
+// to the request itself. Deliberately does not extract "arguments": tool
+// call arguments can carry secrets (token TTLs/roles, webhook URLs,
+// credential fields), and this log line is not the place for them.
+func toolCallName(params json.RawMessage) string {
+	var p struct {
+		Name string `json:"name"`
+	}
+	_ = json.Unmarshal(params, &p)
+	return p.Name
 }
 
 // toolResult wraps v in the MCP CallToolResult envelope that MCP clients

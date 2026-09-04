@@ -7,6 +7,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.34.0] — 2026-09-04
+
+### Added
+- `tools/list` and `tools/call` JSON-RPC methods now emit structured logs via the standard library's `log/slog`: `tools/list` logs at Debug level (routine discovery call), and `tools/call` logs at Info level on success and Warn level on failure. Both include the tool name and the calling actor's ID; arguments are deliberately omitted to avoid logging secrets (token TTLs, webhook URLs, credential fields). Closes the observability gap in the generic dispatch path (`handleToolMethod` in `tool.go`).
+
+---
+
 ## [1.33.1] — 2026-09-02
 
 ### Changed
