@@ -414,7 +414,7 @@ func TestStateTool_GetValidTransitions_RequiredRole(t *testing.T) {
 			{Name: "archived", IsTerminal: true},
 		},
 		Transitions: []smeldr.Transition{
-			{From: "draft", To: "approved", RequiredRole: "admin"},
+			{From: "draft", To: "approved", RequiredOperation: "admin"},
 			{From: "draft", To: "archived"},
 		},
 	}); err != nil {

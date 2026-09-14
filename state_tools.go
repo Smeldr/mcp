@@ -101,7 +101,7 @@ func stateToolDefs() []mcpTool {
 								"to":   map[string]any{"type": "string"},
 								"required_role": map[string]any{
 									"type":        "string",
-									"description": "Stored for future enforcement (not yet enforced).",
+									"description": "The operation (e.g. \"approve\", \"manage\") an actor must hold to perform this transition — matched against a role's Operations via RoleStore.Authorized (D63/D64). Field name kept as required_role for wire stability; the value itself is an operation word, not a role name.",
 								},
 							},
 							"required": []string{"from", "to"},
@@ -168,8 +168,8 @@ func (s *Server) handleStateTool(ctx smeldr.Context, name string, args map[strin
 		transitions := make([]map[string]any, len(options))
 		for i, o := range options {
 			m := map[string]any{"to_state": o.ToState}
-			if o.RequiredRole != "" {
-				m["required_role"] = o.RequiredRole
+			if o.RequiredOperation != "" {
+				m["required_role"] = o.RequiredOperation
 			}
 			transitions[i] = m
 		}
@@ -269,7 +269,7 @@ func parseTransitions(raw []any) ([]smeldr.Transition, *jsonRPCError) {
 		from, _ := m["from"].(string)
 		to, _ := m["to"].(string)
 		role, _ := m["required_role"].(string)
-		out = append(out, smeldr.Transition{From: from, To: to, RequiredRole: role})
+		out = append(out, smeldr.Transition{From: from, To: to, RequiredOperation: role})
 	}
 	return out, nil
 }

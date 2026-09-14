@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.35.0] — 2026-09-14
+
+### Added
+
+- New MCP tool `get_stewardship_inbox` (Author role, parameterless) exposing `smeldr.dev/core`'s `RoleStore.StewardshipInbox` interface (introduced in core v1.88.0). Returns the calling token's stewardship context: `{rule_types, decisions, rules, stubs}` populated with every RuleType domain the token holds standing authority over via role grants, plus all Decision/Rule/AuthorityStub items matching those domain RuleTypes; all fields empty (not an error) when the token holds no stewardship grants. Gated on `App.Config().DB != nil`, follows the framework-tool pattern of `get_goal_context` and `get_sweep_run`, and requires a companion `smeldr_tool_policies` row (`get_stewardship_inbox` → `read`) since it has no backing `MCPModule` and cannot use verb-derived policy fallback.
+- State tools `define_state_flow` and `get_valid_transitions` updated for `smeldr.dev/core`'s `Transition.RequiredRole` → `RequiredOperation` struct field rename (internal reference only; wire shape and `required_role` JSON parameter name unchanged).
+
+Requires smeldr.dev/core v1.88.1+.
+
+---
+
 ## [1.34.0] — 2026-09-04
 
 ### Added

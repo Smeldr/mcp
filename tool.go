@@ -237,6 +237,7 @@ func (s *Server) handleToolsList() any {
 		tools = append(tools, signalToolDefs()...)
 		tools = append(tools, orchestrationToolDefs()...)
 		tools = append(tools, sweepRunToolDefs()...)
+		tools = append(tools, stewardshipToolDefs()...)
 	}
 	return map[string]any{"tools": tools}
 }
@@ -414,6 +415,15 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return nil, rpcErr
 		}
 		return s.handleOrchestrationTool(ctx, p.Name, coalesceArgs(p.Arguments))
+	}
+
+	// Stewardship inbox tool. Gated on DB presence (same guard as state,
+	// signal, sweep-run and orchestration tools). Requires Author role.
+	if s.app.Config().DB != nil && isStewardshipTool(p.Name) {
+		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Author, rs, smeldr.AuthTarget{}); rpcErr != nil {
+			return nil, rpcErr
+		}
+		return s.handleStewardshipTool(ctx, p.Name)
 	}
 
 	// Discoverability meta-tool. Requires Author role.
