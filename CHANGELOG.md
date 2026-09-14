@@ -7,6 +7,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.36.0] — 2026-09-14
+
+### Added
+
+- New MCP tool `get_check_status` (Author role, params `subject_type`/`subject_id`, both required) exposing `smeldr.dev/core`'s `CheckStore.Last` (introduced in core v1.89.0, Amendment A312, decision-governance-model.md §4). Returns `{found: false, subject_type, subject_id}` when Check has never run for the subject, or `{found: true, subject_type, subject_id, rule_type, ran_at, match_type, match_id, match_name, sentence}` when it has — the same not-found-is-not-an-error convention `get_sweep_run` already uses. Gated on `App.Config().DB != nil`, follows the framework-tool pattern of `get_sweep_run`/`get_stewardship_inbox`, and requires the companion `smeldr_tool_policies` row (`get_check_status` → `read`) core shipped in v1.89.1 (A313) — without it, every governance-enabled caller is silently forbidden regardless of role, the same gap A298/A311 already closed twice before.
+
+Requires smeldr.dev/core v1.89.1+.
+
+---
+
 ## [1.35.0] — 2026-09-14
 
 ### Added
