@@ -7,21 +7,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [1.37.1] — 2026-09-19
+## [1.36.4] — 2026-09-19
 
 ### Added
 
 `codecov.yml` (target 96%, matching `smeldr.dev/core`'s own gate — this module is already there) and a coverage-upload step in `ci.yml` (`go test -coverprofile=coverage.out ./...` + `codecov/codecov-action@v5`). Neither existed before, despite core's own gate existing since early in the project.
-
----
-
-## [1.37.0] — 2026-09-19
-
-### Added
-
-New MCP tool `list_findings` (Author role, params: optional `detector`) exposing `smeldr.dev/core`'s `FindingStore.List` — a thin, detector-owned record of a structural or governance condition (D51). Returns `{items: [...]}`, empty when no `FindingStore` is configured or no findings match. No `create_finding`/`update_finding` tools exist by design — findings are written only by detectors, never by a human-driven flow. Gated on `App.Config().DB != nil`, follows the framework-tool pattern of `get_sweep_run`/`get_stewardship_inbox`/`get_check_status`, and requires the companion `smeldr_tool_policies` row (`list_findings` → `read`) core ships alongside — without it, every governance-enabled caller is silently forbidden regardless of role, the same gap A298/A311/A313 already closed for the other framework tools.
-
-Requires smeldr.dev/core v1.90.0+.
 
 ---
 
