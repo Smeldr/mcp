@@ -149,6 +149,80 @@ func TestNodeTools_PublishArchive(t *testing.T) {
 	}
 }
 
+// TestNodeTools_PublishNode_RespectsCustomFlow is the actual bug fix proof:
+// before this fix, publish_node mutated status directly via blockRepo.Save,
+// bypassing validateTransition entirely — a custom flow forbidding the
+// current→published transition had no effect. Now it does.
+func TestNodeTools_PublishNode_RespectsCustomFlow(t *testing.T) {
+	srv, _ := newBlocksServer(t)
+	if err := srv.app.RegisterFlow(smeldr.StateFlow{
+		Name:     "hero-locked",
+		TypeName: "hero",
+		States: []smeldr.State{
+			{Name: "draft", IsInitial: true},
+			{Name: "published"},
+			{Name: "archived", IsTerminal: true},
+		},
+		// Deliberately no draft->published transition registered — publish
+		// must now be rejected instead of silently succeeding.
+		Transitions: []smeldr.Transition{
+			{From: "published", To: "archived"},
+		},
+	}); err != nil {
+		t.Fatalf("RegisterFlow: %v", err)
+	}
+
+	id := createNode(t, srv, "hero", map[string]any{"headline": "x"})
+	_, rpcErr := callTool(t, srv, newAuthorCtx(), "publish_node", map[string]any{"id": id})
+	if rpcErr == nil {
+		t.Fatal("publish_node: want error (transition not in custom flow), got nil")
+	}
+}
+
+// TestNodeTools_ArchiveNode_RespectsCustomFlow mirrors the publish case for
+// archive_node.
+func TestNodeTools_ArchiveNode_RespectsCustomFlow(t *testing.T) {
+	srv, _ := newBlocksServer(t)
+	if err := srv.app.RegisterFlow(smeldr.StateFlow{
+		Name:     "hero-locked-2",
+		TypeName: "hero",
+		States: []smeldr.State{
+			{Name: "draft", IsInitial: true},
+			{Name: "published"},
+			{Name: "archived", IsTerminal: true},
+		},
+		// No draft->archived transition — archiving straight from draft
+		// must now be rejected.
+		Transitions: []smeldr.Transition{
+			{From: "draft", To: "published"},
+			{From: "published", To: "archived"},
+		},
+	}); err != nil {
+		t.Fatalf("RegisterFlow: %v", err)
+	}
+
+	id := createNode(t, srv, "hero", map[string]any{"headline": "x"})
+	_, rpcErr := callTool(t, srv, newAuthorCtx(), "archive_node", map[string]any{"id": id})
+	if rpcErr == nil {
+		t.Fatal("archive_node: want error (draft->archived not in custom flow), got nil")
+	}
+}
+
+// TestNodeTools_PublishNode_NoCustomFlow_StillWorks is the regression guard:
+// the overwhelming common case (no custom flow registered for the block's
+// type_name) must still succeed exactly as before this fix.
+func TestNodeTools_PublishNode_NoCustomFlow_StillWorks(t *testing.T) {
+	srv, _ := newBlocksServer(t)
+	id := createNode(t, srv, "hero", map[string]any{"headline": "x"})
+	res, rpcErr := callTool(t, srv, newAuthorCtx(), "publish_node", map[string]any{"id": id})
+	if rpcErr != nil {
+		t.Fatalf("publish_node: %v", rpcErr.Message)
+	}
+	if unwrapToolResult(t, res)["status"] != "published" {
+		t.Error("publish_node did not report published")
+	}
+}
+
 func TestNodeTools_List(t *testing.T) {
 	srv, _ := newBlocksServer(t)
 	createNode(t, srv, "content_block", map[string]any{"title": "a"})

@@ -7,6 +7,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.36.2] — 2026-09-19
+
+### Fixed
+
+`publish_node`/`archive_node` mutated a block's status directly (`blockRepo.Save`), bypassing `validateTransition` entirely — unlike `set_content_status`, which already runs the validated `DynamicTypeRepo.SetStatusWithReason` path for runtime-defined content types. A block type's own registered state flow (`define_state_flow`) had no effect on `publish_node`/`archive_node` — any transition silently succeeded regardless of the flow. Both tools now go through `DynamicTypeRepo.SetStatusWithReason`, constructed directly against the same underlying `smeldr_dynamic_content` table `blockRepo` already reads (blocks are never registered in core's own `typeRegistry`, since block schemas use `Kind: "block"`, not `Kind: "content"`, so `App.DynamicContentRepo` can't be used directly). A block type with no custom flow keeps the default Draft→Published→Archived behaviour unchanged; `publish_node`'s own idempotency (publishing an already-published block is a no-op, not an error) is preserved via `validateTransition`'s identity-transition rule, not a manual check.
+
+No `smeldr.dev/core` version bump needed — `DynamicTypeRepo.SetStatusWithReason`, `NewDynamicTypeRepo`, and `App.RoleStore()`/`App.RelationStore()` are all already-shipped exported symbols at the current pin (v1.89.1).
+
+---
+
 ## [1.36.1] — 2026-09-19
 
 ### Changed

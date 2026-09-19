@@ -257,6 +257,13 @@ Blocks are addressed by **ID** (they have no slug) and are not exposed as
 Sections (`edge_role` `"section"`) compose pages; items (`"item"`) compose
 collections. The names are distinct for clarity; both share one implementation.
 
+`publish_node`/`archive_node` validate the transition against the block
+type's own registered state flow (`define_state_flow`), same as
+`set_content_status` does for runtime-defined content types — a flow that
+forbids the current→published/archived transition now returns an error
+instead of silently succeeding. A block type with no custom flow keeps
+the default Draft→Published→Archived behaviour unchanged.
+
 ---
 
 ## Relation graph tools

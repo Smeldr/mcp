@@ -3,8 +3,8 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
-	"time"
 
 	"smeldr.dev/core"
 )
@@ -177,13 +177,7 @@ func (s *Server) handleNodeTool(ctx smeldr.Context, name string, args map[string
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		// Idempotent: do not re-stamp PublishedAt if already published.
-		if node.Status == smeldr.Published {
-			return toolResult(map[string]any{"id": id, "status": "published"}), nil
-		}
-		node.Status = smeldr.Published
-		node.PublishedAt = time.Now().UTC()
-		if err := s.blockRepo.Save(ctx, node); err != nil {
+		if err := s.setNodeStatus(ctx, node, smeldr.Published); err != nil {
 			return nil, errorFor(err)
 		}
 		return toolResult(map[string]any{"id": id, "status": "published"}), nil
@@ -197,13 +191,38 @@ func (s *Server) handleNodeTool(ctx smeldr.Context, name string, args map[string
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		node.Status = smeldr.Archived
-		if err := s.blockRepo.Save(ctx, node); err != nil {
+		if err := s.setNodeStatus(ctx, node, smeldr.Archived); err != nil {
 			return nil, errorFor(err)
 		}
 		return toolResult(map[string]any{"id": id, "status": "archived"}), nil
 	}
 	return nil, &jsonRPCError{Code: -32602, Message: "unknown node tool: " + name}
+}
+
+// setNodeStatus transitions a block (DynamicNode) to newStatus through
+// the same validated path set_content_status already uses for
+// runtime-defined content types — DynamicTypeRepo.SetStatusWithReason,
+// which runs validateTransition + applyConflictPolicy internally. Blocks
+// are never registered in App's own typeRegistry (schemas use Kind:
+// "block", not "content"), so App.DynamicContentRepo can't be used
+// directly; DynamicTypeRepo is constructed by hand instead, against the
+// same underlying smeldr_dynamic_content table blockRepo already reads.
+// A schema lookup failure is logged and treated as schema == nil rather
+// than aborting the transition — DynamicTypeRepo only needs schema for
+// auto-slug generation on create, irrelevant to an existing node's own
+// status change, and failing an otherwise-valid publish/archive over an
+// unrelated schema-store hiccup would be a worse regression than the bug
+// this fix closes.
+func (s *Server) setNodeStatus(ctx smeldr.Context, node *smeldr.DynamicNode, newStatus smeldr.Status) error {
+	schema, err := s.schemaStore.FindByTypeName(ctx, node.TypeName)
+	if err != nil {
+		log.Printf("mcp: setNodeStatus: schema lookup failed for type %q: %v", node.TypeName, err)
+		schema = nil
+	}
+	repo := smeldr.NewDynamicTypeRepo(s.app.Config().DB, node.TypeName, schema).
+		WithGovernance(s.app.RoleStore()).
+		WithRelations(s.app.RelationStore())
+	return repo.SetStatusWithReason(ctx, node.ID, newStatus, "")
 }
 
 // listNodes runs a filtered SELECT over smeldr_dynamic_content using the core
