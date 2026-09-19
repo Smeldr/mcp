@@ -1,7 +1,3 @@
-// Package mcp implements an MCP (Model Context Protocol) server for Smeldr
-// applications. It exposes content modules registered with smeldr.MCP(...) as
-// MCP resources and tools, enabling AI assistants to query and manage content
-// through a structured protocol.
 package mcp
 
 import (
