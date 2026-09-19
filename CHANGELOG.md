@@ -7,6 +7,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.36.1] — 2026-09-19
+
+### Changed
+
+Added `doc.go` (moved out of `mcp.go`) with the full `ServerOption` surface (`WithSecret`/`WithModule`/`WithForgeFallback`/`WithBlocks`/`WithPageMeta`/`WithDynamicContent`/`WithOAuth`) that the prior 4-line package comment never mentioned. Docs-only, no behaviour change.
+
+---
+
 ## [1.36.0] — 2026-09-14
 
 ### Added
