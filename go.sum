@@ -51,5 +51,5 @@ modernc.org/token v1.1.0 h1:Xl7Ap9dKaEs5kLoOQeQmPWevfnk/DM5qcLcYlA8ys6Y=
 modernc.org/token v1.1.0/go.mod h1:UGzOrNV1mAFSEB63lOFHIpNRUVMvYTc6yu1SMY/XTDM=
 smeldr.dev/core v1.89.1 h1:dAoTqlrwiIeIQ/DcAHMndNjDxWCUY/B0Xaz5RZyEXGs=
 smeldr.dev/core v1.89.1/go.mod h1:8NiBls5h3XmziUi+olVfTyIMvR32RNEQzAm4qo+jD/s=
-smeldr.dev/oauth v0.2.0 h1:FUrYUBus2Smjtf+P8ksODG85JQKoyDRcl1h+VYuzHFQ=
-smeldr.dev/oauth v0.2.0/go.mod h1:UFgw9v8P9NrG3Jx8y8bNjMwf1LrWCqErtwDiIWh7bRI=
+smeldr.dev/oauth v0.4.1 h1:SuzMzwGkAVrdmyBNd/xKzAAWBFK6YU6BYNAxi82/e6k=
+smeldr.dev/oauth v0.4.1/go.mod h1:m971Ub0UNd3QGu3FyDulgNhSa3oq5KMaGXXDuZ6+57A=

@@ -7,6 +7,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.36.3] — 2026-09-19
+
+### Changed
+
+Bumped `smeldr.dev/oauth` pin from `v0.2.0` to `v0.4.1` — two majors behind, including a breaking `Config.Resource` change (v0.4.0, required, `oauth.New` now panics if empty). `go test ./...` failed after the pin bump alone: `mcp_test.go`'s own `newTestOAuthServer` helper constructed `oauth.Config` with no `Resource`, now fixed. No mcp API surface change — no production code references any oauth symbol newer than what was already used.
+
+---
+
 ## [1.36.2] — 2026-09-19
 
 ### Fixed

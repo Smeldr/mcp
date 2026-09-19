@@ -1939,6 +1939,7 @@ func newTestOAuthServer(t *testing.T) (*oauth.Server, *oauth.SQLiteStore) {
 	t.Cleanup(func() { store.Close() })
 	srv := oauth.New(oauth.Config{
 		Issuer:       "https://cms.example.com",
+		Resource:     "https://cms.example.com/mcp",
 		VerifyBearer: func(string) bool { return true },
 	}, store)
 	return srv, store
