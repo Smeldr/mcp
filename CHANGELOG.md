@@ -7,6 +7,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.37.0] — 2026-09-20
+
+### Added
+
+`list_signals` gains two optional filters: `sender` (filter by originating agent identifier, same treatment as `receiver`) and `limit` (cap the result count, returning the most recent N by `created_at` descending). At least one of `receiver`/`sender` is now required — `receiver` alone is no longer unconditionally required, since a caller can now ask "what have I sent lately" via `sender` alone. Omitting `limit` preserves today's exact default behavior (all matching signals, `created_at` ascending) unchanged — a caller that always supplied `receiver` and never `limit` sees an identical result set and order.
+
+Backward-compatible: no existing parameter removed, no existing call shape's observable behavior changed. MINOR bump.
+
+---
+
 ## [1.36.4] — 2026-09-19
 
 ### Added

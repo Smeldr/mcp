@@ -42,16 +42,20 @@ func signalToolDefs() []mcpTool {
 		{
 			Name: "list_signals",
 			Description: "List protocol signals from smeldr_signals filtered by receiver " +
-				"and status. Returns signals ordered by created_at ascending. " +
-				"Returns an empty list when the smeldr_signals table does not exist " +
-				"(fail-open). Requires Author role.",
+				"and/or sender, and status. At least one of receiver/sender is required. " +
+				"Returns signals ordered by created_at ascending (oldest first), or — " +
+				"when limit is supplied — the most recent limit signals, created_at " +
+				"descending. Returns an empty list when the smeldr_signals table does " +
+				"not exist (fail-open). Requires Author role.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"receiver": map[string]any{"type": "string", "description": "Filter by destination agent identifier."},
+					"receiver": map[string]any{"type": "string", "description": "Filter by destination agent identifier. At least one of receiver or sender is required."},
+					"sender":   map[string]any{"type": "string", "description": "Filter by originating agent identifier. At least one of receiver or sender is required."},
 					"state":    map[string]any{"type": "string", "description": "Filter by status (default \"pending\")."},
+					"limit":    map[string]any{"type": "integer", "description": "Cap the result count, returning the most recent N (created_at descending). Omitted: all matching signals, created_at ascending — today's default behavior, unchanged."},
 				},
-				"required": []string{"receiver"},
+				"required": []string{},
 			},
 		},
 	}
@@ -117,21 +121,36 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		}), nil
 
 	case "list_signals":
-		receiver, ok := stringArg(args, "receiver")
-		if !ok {
-			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: receiver required"}
+		receiver := stringArgOr(args, "receiver", "")
+		sender := stringArgOr(args, "sender", "")
+		if receiver == "" && sender == "" {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: at least one of receiver or sender is required"}
 		}
 		state := stringArgOr(args, "state", "pending")
+		limit := intArgOr(args, "limit", 0)
 
-		rows, err := db.QueryContext(ctx,
-			`SELECT id, slug, status, created_at, updated_at, sender, receiver,
+		query := `SELECT id, slug, status, created_at, updated_at, sender, receiver,
 			        signal_type, message, task_ref, sequence,
 			        subject_type, subject_id, from_state, to_state, required_role
 			FROM smeldr_signals
-			WHERE receiver = ? AND status = ?
-			ORDER BY created_at ASC`,
-			receiver, state,
-		)
+			WHERE status = ?`
+		queryArgs := []any{state}
+		if receiver != "" {
+			query += ` AND receiver = ?`
+			queryArgs = append(queryArgs, receiver)
+		}
+		if sender != "" {
+			query += ` AND sender = ?`
+			queryArgs = append(queryArgs, sender)
+		}
+		if limit > 0 {
+			query += ` ORDER BY created_at DESC LIMIT ?`
+			queryArgs = append(queryArgs, limit)
+		} else {
+			query += ` ORDER BY created_at ASC`
+		}
+
+		rows, err := db.QueryContext(ctx, query, queryArgs...)
 		if err != nil {
 			if strings.Contains(err.Error(), "no such table") {
 				slog.WarnContext(ctx, "mcp: list_signals: smeldr_signals table not found — returning empty list")

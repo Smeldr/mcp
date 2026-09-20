@@ -388,12 +388,160 @@ func TestListSignals_DefaultStatePending(t *testing.T) {
 	}
 }
 
-// TestListSignals_MissingReceiver verifies -32602 when receiver is absent.
-func TestListSignals_MissingReceiver(t *testing.T) {
+// TestListSignals_MissingReceiverAndSender verifies -32602 when both receiver
+// and sender are absent — the real constraint is "at least one of
+// receiver/sender," not "receiver unconditionally" (mcp-list-signals-sender-
+// and-limit-filters); receiver alone being absent is no longer an error as
+// long as sender is supplied, see TestListSignals_SenderOnly.
+func TestListSignals_MissingReceiverAndSender(t *testing.T) {
 	srv := newSignalServer(t)
 	_, rpcErr := callTool(t, srv, newAuthorCtx(), "list_signals", map[string]any{})
 	if rpcErr == nil || rpcErr.Code != -32602 {
 		t.Errorf("expected -32602, got %v", rpcErr)
+	}
+}
+
+// TestListSignals_SenderOnly verifies that filtering by sender alone (no
+// receiver) is a valid call — "what have I sent lately."
+func TestListSignals_SenderOnly(t *testing.T) {
+	srv := newSignalServer(t)
+	ctx := newAuthorCtx()
+
+	_, rpcErr := callTool(t, srv, ctx, "create_signal", map[string]any{
+		"sender":      "core",
+		"receiver":    "architect",
+		"signal_type": "plan-ready",
+	})
+	if rpcErr != nil {
+		t.Fatalf("create_signal: %v", rpcErr.Message)
+	}
+
+	res, rpcErr := callTool(t, srv, ctx, "list_signals", map[string]any{
+		"sender": "core",
+	})
+	if rpcErr != nil {
+		t.Fatalf("list_signals: %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, res)
+	count, _ := fields["count"].(float64)
+	if int(count) != 1 {
+		t.Errorf("count = %v, want 1", count)
+	}
+}
+
+// TestListSignals_ReceiverAndSenderCombined verifies that supplying both
+// receiver and sender narrows the result to the intersection.
+func TestListSignals_ReceiverAndSenderCombined(t *testing.T) {
+	srv := newSignalServer(t)
+	ctx := newAuthorCtx()
+
+	if _, rpcErr := callTool(t, srv, ctx, "create_signal", map[string]any{
+		"sender": "core", "receiver": "architect", "signal_type": "plan-ready",
+	}); rpcErr != nil {
+		t.Fatalf("create_signal (core): %v", rpcErr.Message)
+	}
+	if _, rpcErr := callTool(t, srv, ctx, "create_signal", map[string]any{
+		"sender": "cloud", "receiver": "architect", "signal_type": "plan-ready",
+	}); rpcErr != nil {
+		t.Fatalf("create_signal (cloud): %v", rpcErr.Message)
+	}
+
+	res, rpcErr := callTool(t, srv, ctx, "list_signals", map[string]any{
+		"receiver": "architect",
+		"sender":   "core",
+	})
+	if rpcErr != nil {
+		t.Fatalf("list_signals: %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, res)
+	signals, _ := fields["signals"].([]any)
+	if len(signals) != 1 {
+		t.Fatalf("len(signals) = %d, want 1", len(signals))
+	}
+	first, _ := signals[0].(map[string]any)
+	if first["sender"] != "core" {
+		t.Errorf("sender = %v, want core", first["sender"])
+	}
+}
+
+// seedSignalAt inserts a signal row directly with an explicit created_at,
+// bypassing create_signal's own wall-clock timestamp — needed for
+// deterministic ordering tests, since three create_signal calls in quick
+// succession can land on the same wall-clock instant and make ORDER BY
+// created_at ties arbitrary. Mirrors TestListSignals_StructuredFields's own
+// direct-INSERT pattern for the same reason.
+func seedSignalAt(t *testing.T, srv *Server, taskRef, createdAt string) {
+	t.Helper()
+	db := srv.app.Config().DB
+	if _, err := db.ExecContext(context.Background(),
+		`INSERT INTO smeldr_signals
+			(id, slug, status, created_at, updated_at, sender, receiver, signal_type, message, task_ref, sequence)
+		VALUES
+			(?, ?, 'pending', ?, ?, 'core', 'architect', 'status', '', ?, 0)`,
+		"sig-"+taskRef, "sig-"+taskRef, createdAt, createdAt, taskRef,
+	); err != nil {
+		t.Fatalf("seed signal %q: %v", taskRef, err)
+	}
+}
+
+// TestListSignals_LimitTruncatesNewestFirst verifies that a limit caps the
+// result count and returns the most recently created signals first.
+func TestListSignals_LimitTruncatesNewestFirst(t *testing.T) {
+	srv := newSignalServer(t)
+	ctx := newAuthorCtx()
+
+	seedSignalAt(t, srv, "first", "2026-09-20T10:00:00Z")
+	seedSignalAt(t, srv, "second", "2026-09-20T11:00:00Z")
+	seedSignalAt(t, srv, "third", "2026-09-20T12:00:00Z")
+
+	res, rpcErr := callTool(t, srv, ctx, "list_signals", map[string]any{
+		"receiver": "architect",
+		"limit":    2,
+	})
+	if rpcErr != nil {
+		t.Fatalf("list_signals: %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, res)
+	signals, _ := fields["signals"].([]any)
+	if len(signals) != 2 {
+		t.Fatalf("len(signals) = %d, want 2", len(signals))
+	}
+	first, _ := signals[0].(map[string]any)
+	second, _ := signals[1].(map[string]any)
+	if first["task_ref"] != "third" || second["task_ref"] != "second" {
+		t.Errorf("got task_refs %v, %v — want third, second (newest first)", first["task_ref"], second["task_ref"])
+	}
+}
+
+// TestListSignals_LimitAbsentUnchangedBehavior verifies that omitting limit
+// still returns every matching signal in created_at ascending order — the
+// explicit regression test proving the limit addition did not silently
+// change the no-limit path's behavior.
+func TestListSignals_LimitAbsentUnchangedBehavior(t *testing.T) {
+	srv := newSignalServer(t)
+	ctx := newAuthorCtx()
+
+	seedSignalAt(t, srv, "first", "2026-09-20T10:00:00Z")
+	seedSignalAt(t, srv, "second", "2026-09-20T11:00:00Z")
+	seedSignalAt(t, srv, "third", "2026-09-20T12:00:00Z")
+
+	res, rpcErr := callTool(t, srv, ctx, "list_signals", map[string]any{
+		"receiver": "architect",
+	})
+	if rpcErr != nil {
+		t.Fatalf("list_signals: %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, res)
+	signals, _ := fields["signals"].([]any)
+	if len(signals) != 3 {
+		t.Fatalf("len(signals) = %d, want 3", len(signals))
+	}
+	wantOrder := []string{"first", "second", "third"}
+	for i, wantRef := range wantOrder {
+		m, _ := signals[i].(map[string]any)
+		if m["task_ref"] != wantRef {
+			t.Errorf("signals[%d].task_ref = %v, want %v (ascending order)", i, m["task_ref"], wantRef)
+		}
 	}
 }
 
