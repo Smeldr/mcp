@@ -7,6 +7,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.38.0] — 2026-09-21
+
+### Fixed
+
+`create_signal`'s `receiver` parameter is no longer required. `App.dispatchBus` (core) already treats an empty `Signal.receiver` as a genuine broadcast — `NotifySignalCreated`'s receiver lookup passes an empty channel straight through to `dispatchTransitionWebhook`, which already routes `channel == ""` to `broadcaster.broadcast()` rather than a channel-scoped `publish()`. The mechanism was real but unreachable: `create_signal`'s own input validation rejected the one input (an empty `receiver`) that would ever reach it, so no MCP client could create a broadcast Signal despite the downstream handling already working end to end. `receiver` dropped from `InputSchema.required` (now `sender`, `signal_type` only); the handler now reads it with the same `stringArgOr(args, "receiver", "")` pattern `task_ref`/`message` already use, instead of erroring on absence.
+
+Backward-compatible: every existing caller that always supplied `receiver` sees no change. New capability only. MINOR bump.
+
+### Added
+
+3 new tests: `TestCreateSignal_ReceiverOmitted_Succeeds` and `TestCreateSignal_ReceiverEmptyString_Succeeds` (both the omitted-key and explicit-empty-string forms succeed and write an empty `receiver` column), `TestCreateSignal_ReceiverOmitted_BroadcastsToUnrelatedChannel` (end-to-end proof via a real `GET /_events/stream?channel=<unrelated>` subscriber that the receiver-omitted path is a genuine `broadcast()` — reaching a subscriber outside `eventStreamChannelAll` — not merely a channel-scoped `publish()` that a wildcard `/_events/stream` subscriber would happen to also catch). `TestCreateSignal_MissingReceiver` removed — it asserted the old required-parameter behavior this release intentionally changes.
+
+---
+
 ## [1.37.0] — 2026-09-20
 
 ### Added

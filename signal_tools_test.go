@@ -141,15 +141,52 @@ func TestCreateSignal_MissingSender(t *testing.T) {
 	}
 }
 
-// TestCreateSignal_MissingReceiver verifies -32602 when receiver is absent.
-func TestCreateSignal_MissingReceiver(t *testing.T) {
+// TestCreateSignal_ReceiverOmitted_Succeeds verifies that create_signal no
+// longer requires receiver — an omitted receiver succeeds (broadcast intent)
+// and the row's own receiver column is written as an empty string, not left
+// unset or defaulted to something else.
+func TestCreateSignal_ReceiverOmitted_Succeeds(t *testing.T) {
 	srv := newSignalServer(t)
-	_, rpcErr := callTool(t, srv, newAuthorCtx(), "create_signal", map[string]any{
+	res, rpcErr := callTool(t, srv, newAuthorCtx(), "create_signal", map[string]any{
 		"sender":      "core",
 		"signal_type": "plan-ready",
 	})
-	if rpcErr == nil || rpcErr.Code != -32602 {
-		t.Errorf("expected -32602, got %v", rpcErr)
+	if rpcErr != nil {
+		t.Fatalf("create_signal (receiver omitted): %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, res)
+	if fields["status"] != "pending" {
+		t.Errorf("status = %v, want pending", fields["status"])
+	}
+
+	var receiver string
+	db := srv.app.Config().DB
+	if err := db.QueryRowContext(context.Background(),
+		`SELECT receiver FROM smeldr_signals WHERE id = ?`, fields["id"],
+	).Scan(&receiver); err != nil {
+		t.Fatalf("query receiver column: %v", err)
+	}
+	if receiver != "" {
+		t.Errorf("receiver column = %q, want empty string", receiver)
+	}
+}
+
+// TestCreateSignal_ReceiverEmptyString_Succeeds verifies that an explicit
+// empty-string receiver is treated identically to an omitted one — both are
+// a deliberate broadcast, not two different code paths.
+func TestCreateSignal_ReceiverEmptyString_Succeeds(t *testing.T) {
+	srv := newSignalServer(t)
+	res, rpcErr := callTool(t, srv, newAuthorCtx(), "create_signal", map[string]any{
+		"sender":      "core",
+		"receiver":    "",
+		"signal_type": "plan-ready",
+	})
+	if rpcErr != nil {
+		t.Fatalf("create_signal (receiver \"\"): %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, res)
+	if fields["status"] != "pending" {
+		t.Errorf("status = %v, want pending", fields["status"])
 	}
 }
 
@@ -730,6 +767,75 @@ func TestHandleSignalTool_CreateSignal_NotifiesApp(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("timed out waiting for signal.created broadcast — create_signal did not notify the App")
+	}
+}
+
+// TestCreateSignal_ReceiverOmitted_BroadcastsToUnrelatedChannel proves the
+// receiver-omitted path is a genuine broadcast (App.dispatchBus's
+// broadcaster.broadcast, reaching every subscriber unconditionally) rather
+// than a channel-scoped publish that would only happen to reach a plain
+// /_events/stream subscriber because that endpoint defaults to
+// eventStreamChannelAll. Subscribing on an unrelated, specific channel name
+// is the only way to tell the two apart: publish(channel, ...) would never
+// reach it, broadcast(...) always does.
+func TestCreateSignal_ReceiverOmitted_BroadcastsToUnrelatedChannel(t *testing.T) {
+	srv, app := newNotifySignalServer(t)
+
+	httpSrv := httptest.NewServer(app.Handler())
+	defer httpSrv.Close()
+
+	tok, err := smeldr.SignToken(smeldr.User{ID: "u1", Roles: []smeldr.Role{smeldr.Author}}, notifySignalTestSecret, 0)
+	if err != nil {
+		t.Fatalf("SignToken: %v", err)
+	}
+	req, err := http.NewRequest(http.MethodGet, httpSrv.URL+"/_events/stream?channel=totally-unrelated-channel", nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("connect to event stream: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("event stream status = %d, want 200", resp.StatusCode)
+	}
+
+	_, rpcErr := callTool(t, srv, newAuthorCtx(), "create_signal", map[string]any{
+		"sender":      "core",
+		"signal_type": "broadcast-test",
+	})
+	if rpcErr != nil {
+		t.Fatalf("create_signal (receiver omitted): %v", rpcErr.Message)
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	lineCh := make(chan string, 1)
+	go func() {
+		if scanner.Scan() {
+			lineCh <- scanner.Text()
+		}
+	}()
+
+	select {
+	case line := <-lineCh:
+		var payload struct {
+			Event string `json:"event"`
+			Data  struct {
+				Type string `json:"type"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(line), &payload); err != nil {
+			t.Fatalf("unmarshal stream line %q: %v", line, err)
+		}
+		if payload.Event != "signal.created" {
+			t.Errorf("Event = %q, want %q", payload.Event, "signal.created")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for signal.created broadcast on an unrelated channel — " +
+			"receiver-omitted create_signal did not reach a subscriber outside eventStreamChannelAll, " +
+			"meaning it took the channel-scoped publish path instead of a true broadcast")
 	}
 }
 

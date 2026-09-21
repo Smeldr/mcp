@@ -24,19 +24,20 @@ func signalToolDefs() []mcpTool {
 			Name: "create_signal",
 			Description: "Create a protocol signal in the smeldr_signals table with " +
 				"status 'pending'. Used to record pilot-to-architect or " +
-				"architect-to-pilot hand-offs. Requires the smeldr_signals table " +
-				"created by smeldr.CreateOrchestrationTables. Requires Author role.",
+				"architect-to-pilot hand-offs, or — when receiver is omitted or " +
+				"empty — a broadcast to every subscriber. Requires the smeldr_signals " +
+				"table created by smeldr.CreateOrchestrationTables. Requires Author role.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"sender":      map[string]any{"type": "string", "description": "Originating agent identifier, e.g. \"core\", \"architect\"."},
-					"receiver":    map[string]any{"type": "string", "description": "Destination agent identifier."},
+					"receiver":    map[string]any{"type": "string", "description": "Destination agent identifier. Omit or leave empty for a broadcast to every subscriber (no single-recipient filter)."},
 					"signal_type": map[string]any{"type": "string", "description": "Protocol verb, e.g. \"plan-ready\", \"commit-ready\"."},
 					"task_ref":    map[string]any{"type": "string", "description": "Task or amendment identifier this signal relates to, e.g. \"T23\", \"A185\"."},
 					"message":     map[string]any{"type": "string", "description": "Free-text body of the signal."},
 					"sequence":    map[string]any{"type": "integer", "description": "Per-task monotonic counter that orders signals in a conversation."},
 				},
-				"required": []string{"sender", "receiver", "signal_type"},
+				"required": []string{"sender", "signal_type"},
 			},
 		},
 		{
@@ -82,10 +83,12 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		if !ok {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: sender required"}
 		}
-		receiver, ok := stringArg(args, "receiver")
-		if !ok {
-			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: receiver required"}
-		}
+		// Empty/omitted receiver is a deliberate broadcast, not a missing
+		// parameter — NotifySignalCreated's own receiver lookup (webhook.go)
+		// passes an empty channel straight through to dispatchTransitionWebhook,
+		// which already routes channel=="" to a true broadcast() rather than a
+		// channel-scoped publish(). No downstream change needed for this to work.
+		receiver := stringArgOr(args, "receiver", "")
 		signalType, ok := stringArg(args, "signal_type")
 		if !ok {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: signal_type required"}
