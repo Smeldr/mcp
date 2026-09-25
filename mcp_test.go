@@ -1533,6 +1533,120 @@ func TestMCPToolsCall_list_filtered(t *testing.T) {
 	}
 }
 
+// TestMCPToolsCall_list_defaultLimitApplied verifies 01a0d76a's fix: an
+// unfiltered list_{type}s call with no explicit limit no longer returns
+// every row unconditionally — it's capped at defaultListLimit (50).
+// Confirmed live 2026-09-25 against list_tasks: 338 items, ~710KB.
+func TestMCPToolsCall_list_defaultLimitApplied(t *testing.T) {
+	app, repo := newWriteApp(t)
+	srv := New(app)
+	ctx := newEditorCtx()
+
+	for i := 0; i < defaultListLimit+5; i++ {
+		seedPost(t, repo, "post-"+string(rune('a'+i%26))+string(rune('0'+i/26)), smeldr.Published, "Post", "body content here ok")
+	}
+
+	params, _ := json.Marshal(map[string]any{
+		"name":      "list_test_mcp_posts",
+		"arguments": map[string]any{},
+	})
+	result, rpcErr := srv.handleToolsCall(ctx, params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	fields := unwrapToolResult(t, result)
+	items, _ := fields["items"].([]any)
+	if len(items) != defaultListLimit {
+		t.Errorf("got %d items, want %d (default limit)", len(items), defaultListLimit)
+	}
+	total, _ := fields["total"].(float64)
+	if int(total) != defaultListLimit+5 {
+		t.Errorf("total = %v, want %d (real unfiltered count, not the truncated items count)", total, defaultListLimit+5)
+	}
+}
+
+// TestMCPToolsCall_list_offsetAndLimitPaginate verifies limit/offset
+// together produce two non-overlapping, gap-free pages covering a small
+// fixture set.
+func TestMCPToolsCall_list_offsetAndLimitPaginate(t *testing.T) {
+	app, repo := newWriteApp(t)
+	srv := New(app)
+	ctx := newEditorCtx()
+
+	slugs := []string{"p1", "p2", "p3", "p4", "p5"}
+	for _, s := range slugs {
+		seedPost(t, repo, s, smeldr.Published, "Post "+s, "body content here ok")
+	}
+
+	callList := func(limit, offset int) []any {
+		params, _ := json.Marshal(map[string]any{
+			"name":      "list_test_mcp_posts",
+			"arguments": map[string]any{"limit": limit, "offset": offset},
+		})
+		result, rpcErr := srv.handleToolsCall(ctx, params)
+		if rpcErr != nil {
+			t.Fatalf("unexpected error: %+v", rpcErr)
+		}
+		fields := unwrapToolResult(t, result)
+		items, _ := fields["items"].([]any)
+		return items
+	}
+
+	page1 := callList(2, 0)
+	page2 := callList(2, 2)
+	page3 := callList(2, 4)
+	if len(page1) != 2 || len(page2) != 2 || len(page3) != 1 {
+		t.Fatalf("page lengths = %d, %d, %d — want 2, 2, 1", len(page1), len(page2), len(page3))
+	}
+
+	seen := map[string]bool{}
+	for _, page := range [][]any{page1, page2, page3} {
+		for _, item := range page {
+			m, _ := item.(map[string]any)
+			// Node.Slug has no explicit json tag, so it marshals under Go's
+			// default capitalized field name — confirmed against an existing
+			// passing test (line 637's fields["Slug"]), not assumed.
+			slug, _ := m["Slug"].(string)
+			if seen[slug] {
+				t.Errorf("slug %q appeared in more than one page — overlap", slug)
+			}
+			seen[slug] = true
+		}
+	}
+	if len(seen) != len(slugs) {
+		t.Errorf("saw %d distinct slugs across all pages, want %d — gap in coverage", len(seen), len(slugs))
+	}
+}
+
+// TestMCPToolsCall_list_explicitLimitAboveCeiling_Clamped verifies a caller
+// cannot recreate the unbounded-response problem by supplying a very large
+// explicit limit.
+func TestMCPToolsCall_list_explicitLimitAboveCeiling_Clamped(t *testing.T) {
+	app, repo := newWriteApp(t)
+	srv := New(app)
+	ctx := newEditorCtx()
+
+	seedPost(t, repo, "only-post", smeldr.Published, "Post", "body content here ok")
+
+	params, _ := json.Marshal(map[string]any{
+		"name":      "list_test_mcp_posts",
+		"arguments": map[string]any{"limit": 100000},
+	})
+	result, rpcErr := srv.handleToolsCall(ctx, params)
+	if rpcErr != nil {
+		t.Fatalf("unexpected error: %+v", rpcErr)
+	}
+	// Only one real item exists, so this doesn't distinguish "clamped to 500"
+	// from "unclamped" directly — TestClampListLimit (coverage_gap_test.go)
+	// covers the numeric ceiling; this proves the dispatch path actually
+	// calls it rather than passing the raw arg through.
+	fields := unwrapToolResult(t, result)
+	items, _ := fields["items"].([]any)
+	if len(items) != 1 {
+		t.Errorf("got %d items, want 1", len(items))
+	}
+}
+
 // TestMCPToolsCall_get_draft verifies that get_test_mcp_post returns a Draft
 // item — admin read tools are not restricted to Published items.
 func TestMCPToolsCall_get_draft(t *testing.T) {

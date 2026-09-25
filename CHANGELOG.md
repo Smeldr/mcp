@@ -7,6 +7,48 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.39.0] — 2026-09-25
+
+### Added
+
+`limit`/`offset` on the five generic admin-list tools (`list_tasks`, `list_amendments`,
+`list_decisions`, `list_goals`, `list_runs`) — previously an unfiltered call returned
+every row unconditionally (confirmed live: `list_tasks` returned all 338 items, ~710KB).
+Applied as a bounds-checked post-fetch slice in `tool.go`'s `case "list"` — no
+`smeldr/core` change needed, since `Module[T].MCPList`'s own interface has no room for
+pagination without a breaking change to `smeldr.MCPModule`, and this fix fully solves the
+wire-size problem without one. The response gains a `"total"` key alongside `"items"`
+(the real unfiltered count) so a client can tell a result was truncated, not that it saw
+the last page — purely additive to an already-object-shaped response, no existing
+consumer reading only `"items"` is affected. Omitted or explicit `limit: 0` both default
+to 50; an explicit `limit` above 500 is clamped, so a caller cannot recreate the
+unbounded-response problem via a very large explicit number.
+
+### Fixed
+
+`list_signals`'s own existing `limit` parameter (added v1.37.0) now defaults to 50
+instead of unbounded when omitted — the same underlying gap as the five tools above, in
+a different shape: `list_signals` already had a working `limit`, but its own default
+when omitted was true "everything, ascending" (confirmed live: 459KB for a single
+receiver filter, no `limit` supplied). This is a genuine, disclosed behaviour change,
+not purely additive — a caller previously relying on "omit `limit` to get every matching
+signal, `created_at` ascending" now gets the 50 most recent, `created_at` descending,
+same as an explicit `limit` already behaved. Same class of change T237/D53 established
+precedent for (patch-worthy on its own; bundled into this MINOR release since it ships
+alongside the five tools' genuinely new `limit`/`offset` capability).
+
+`list_signals`'s response also gains a real `"total"` key — a companion
+`SELECT COUNT(*)` applying the same `receiver`/`sender`/`state` filters as the paged
+query, evaluated before `LIMIT`. The first version of this change (architect commit
+review, 2026-09-25) had `list_signals` compute `count` post-`LIMIT` only, same as
+before — indistinguishable from the other five tools' `total` at a glance, but
+incapable of ever signalling truncation since it can never exceed `limit`. `count` is
+kept unchanged, for backward compatibility, alongside the new `total`.
+
+Found live 2026-09-25 during architect's own cloud-session pilot.
+
+---
+
 ## [1.38.0] — 2026-09-21
 
 ### Fixed

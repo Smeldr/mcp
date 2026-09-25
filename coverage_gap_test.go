@@ -77,6 +77,54 @@ func TestIntArgOr(t *testing.T) {
 	}
 }
 
+// ── clampListLimit / pageItems (01a0d76a) ────────────────────────────────────
+
+// TestClampListLimit covers every branch: zero, negative, in-range, and
+// above the ceiling.
+func TestClampListLimit(t *testing.T) {
+	cases := []struct {
+		name string
+		in   int
+		want int
+	}{
+		{"zero uses default", 0, defaultListLimit},
+		{"negative uses default", -5, defaultListLimit},
+		{"in range unchanged", 10, 10},
+		{"exactly the ceiling unchanged", listLimitCeiling, listLimitCeiling},
+		{"above ceiling clamped", listLimitCeiling + 1000, listLimitCeiling},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := clampListLimit(tc.in); got != tc.want {
+				t.Errorf("clampListLimit(%d) = %d, want %d", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestPageItems covers the bounds-checked slicing: a normal middle page, an
+// offset at or past the end (empty, not a panic), and a limit that would
+// overrun the slice's own length (clamped to what's actually there).
+func TestPageItems(t *testing.T) {
+	items := []any{"a", "b", "c", "d", "e"}
+
+	if got := pageItems(items, 1, 2); len(got) != 2 || got[0] != "b" || got[1] != "c" {
+		t.Errorf("middle page: got %v, want [b c]", got)
+	}
+	if got := pageItems(items, 5, 2); len(got) != 0 {
+		t.Errorf("offset at end: got %v, want empty", got)
+	}
+	if got := pageItems(items, 10, 2); len(got) != 0 {
+		t.Errorf("offset past end: got %v, want empty", got)
+	}
+	if got := pageItems(items, 3, 100); len(got) != 2 || got[0] != "d" || got[1] != "e" {
+		t.Errorf("limit overruns remaining items: got %v, want [d e]", got)
+	}
+	if got := pageItems(items, -1, 2); len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Errorf("negative offset treated as 0: got %v, want [a b]", got)
+	}
+}
+
 // ── handleToolMethod ──────────────────────────────────────────────────────────
 
 // TestHandleToolMethod_UnknownMethod verifies that an unknown method returns

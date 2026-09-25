@@ -615,7 +615,11 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		if items == nil {
 			items = []any{}
 		}
-		return toolResult(map[string]any{"items": items}), nil
+		total := len(items)
+		limit := clampListLimit(intArgOr(args, "limit", defaultListLimit))
+		offset := intArgOr(args, "offset", 0)
+		items = pageItems(items, offset, limit)
+		return toolResult(map[string]any{"items": items, "total": total}), nil
 
 	case "get":
 		gm, ok := s.moduleForType(typeSnake)
@@ -1035,4 +1039,45 @@ func intArgOr(args map[string]any, key string, fallback int) int {
 		return n
 	}
 	return fallback
+}
+
+// defaultListLimit and listLimitCeiling bound the six orchestration
+// list_{type}s tools' own result size (01a0d76a) — an unfiltered call
+// previously returned every row unconditionally (confirmed live: 338 items,
+// ~710KB for list_tasks alone).
+const (
+	defaultListLimit = 50
+	listLimitCeiling = 500
+)
+
+// clampListLimit normalises a caller-supplied limit: omitted or explicit 0
+// both mean "use the default" (there is no legitimate caller intent behind
+// asking for zero items), never negative, and never above the ceiling —
+// a caller cannot recreate the unbounded-response problem via a very large
+// explicit number.
+func clampListLimit(n int) int {
+	if n <= 0 {
+		return defaultListLimit
+	}
+	if n > listLimitCeiling {
+		return listLimitCeiling
+	}
+	return n
+}
+
+// pageItems returns items[offset : offset+limit], bounds-checked against the
+// slice's own real length so an offset/limit beyond the end returns an empty
+// slice rather than panicking.
+func pageItems(items []any, offset, limit int) []any {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= len(items) {
+		return []any{}
+	}
+	end := offset + limit
+	if end > len(items) {
+		end = len(items)
+	}
+	return items[offset:end]
 }

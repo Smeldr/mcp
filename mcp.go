@@ -410,8 +410,10 @@ func mcpAdminReadToolDefs(m smeldr.MCPModule) []mcpTool {
 	}
 
 	list := mcpTool{
-		Name:        "list_" + pluralSnake(typeSnake),
-		Description: "List all " + meta.TypeName + " items. Requires Editor or Admin role. Returns items at any lifecycle status.",
+		Name: "list_" + pluralSnake(typeSnake),
+		Description: "List all " + meta.TypeName + " items. Requires Editor or Admin role. " +
+			"Returns items at any lifecycle status. Response includes \"total\", the real " +
+			"unfiltered count, alongside \"items\" (possibly truncated to limit).",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -419,6 +421,14 @@ func mcpAdminReadToolDefs(m smeldr.MCPModule) []mcpTool {
 					"type":        "string",
 					"enum":        []string{"draft", "scheduled", "published", "archived"},
 					"description": "Filter by lifecycle status. Omit to return all statuses.",
+				},
+				"limit": map[string]any{
+					"type":        "integer",
+					"description": "Cap the result count. Omitted or 0: defaults to 50. Capped at 500.",
+				},
+				"offset": map[string]any{
+					"type":        "integer",
+					"description": "Skip this many items before applying limit. Omit for 0 (the first page).",
 				},
 			},
 		},

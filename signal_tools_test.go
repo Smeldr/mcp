@@ -331,6 +331,10 @@ func TestListSignals_HappyPath(t *testing.T) {
 	if int(count) != 1 {
 		t.Errorf("count = %v, want 1", count)
 	}
+	total, _ := fields["total"].(float64)
+	if int(total) != 1 {
+		t.Errorf("total = %v, want 1", total)
+	}
 	signals, _ := fields["signals"].([]any)
 	if len(signals) == 0 {
 		t.Fatal("signals is empty")
@@ -362,6 +366,10 @@ func TestListSignals_EmptyResult(t *testing.T) {
 	count, _ := fields["count"].(float64)
 	if int(count) != 0 {
 		t.Errorf("count = %v, want 0", count)
+	}
+	total, _ := fields["total"].(float64)
+	if int(total) != 0 {
+		t.Errorf("total = %v, want 0", total)
 	}
 }
 
@@ -550,11 +558,13 @@ func TestListSignals_LimitTruncatesNewestFirst(t *testing.T) {
 	}
 }
 
-// TestListSignals_LimitAbsentUnchangedBehavior verifies that omitting limit
-// still returns every matching signal in created_at ascending order — the
-// explicit regression test proving the limit addition did not silently
-// change the no-limit path's behavior.
-func TestListSignals_LimitAbsentUnchangedBehavior(t *testing.T) {
+// TestListSignals_DefaultLimitAppliesDescending verifies the D78/01a0d76a
+// behaviour change: omitting limit no longer means "every matching signal,
+// ascending" — it now means "the default limit (50), descending," same as
+// an explicit limit. This replaces the old
+// TestListSignals_LimitAbsentUnchangedBehavior, which asserted the exact
+// behaviour this Task deliberately changes (see the CHANGELOG entry).
+func TestListSignals_DefaultLimitAppliesDescending(t *testing.T) {
 	srv := newSignalServer(t)
 	ctx := newAuthorCtx()
 
@@ -573,12 +583,69 @@ func TestListSignals_LimitAbsentUnchangedBehavior(t *testing.T) {
 	if len(signals) != 3 {
 		t.Fatalf("len(signals) = %d, want 3", len(signals))
 	}
-	wantOrder := []string{"first", "second", "third"}
+	wantOrder := []string{"third", "second", "first"}
 	for i, wantRef := range wantOrder {
 		m, _ := signals[i].(map[string]any)
 		if m["task_ref"] != wantRef {
-			t.Errorf("signals[%d].task_ref = %v, want %v (ascending order)", i, m["task_ref"], wantRef)
+			t.Errorf("signals[%d].task_ref = %v, want %v (descending, default limit applied)", i, m["task_ref"], wantRef)
 		}
+	}
+}
+
+// TestListSignals_ExplicitLimitZero_UsesDefault verifies an explicit
+// limit: 0 behaves identically to omitting limit — "use the default,"
+// never "return zero items."
+func TestListSignals_ExplicitLimitZero_UsesDefault(t *testing.T) {
+	srv := newSignalServer(t)
+	ctx := newAuthorCtx()
+
+	seedSignalAt(t, srv, "first", "2026-09-20T10:00:00Z")
+
+	res, rpcErr := callTool(t, srv, ctx, "list_signals", map[string]any{
+		"receiver": "architect",
+		"limit":    0,
+	})
+	if rpcErr != nil {
+		t.Fatalf("list_signals: %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, res)
+	signals, _ := fields["signals"].([]any)
+	if len(signals) != 1 {
+		t.Fatalf("len(signals) = %d, want 1 (explicit limit:0 should use the default, not return nothing)", len(signals))
+	}
+}
+
+// TestListSignals_TotalReflectsFullCountBeforeLimit verifies that total is
+// the real pre-LIMIT match count, not an alias for count (which is capped by
+// limit and therefore cannot signal truncation) — architect commit review,
+// 01a0d76a, 2026-09-25.
+func TestListSignals_TotalReflectsFullCountBeforeLimit(t *testing.T) {
+	srv := newSignalServer(t)
+	ctx := newAuthorCtx()
+
+	seedSignalAt(t, srv, "first", "2026-09-20T10:00:00Z")
+	seedSignalAt(t, srv, "second", "2026-09-20T11:00:00Z")
+	seedSignalAt(t, srv, "third", "2026-09-20T12:00:00Z")
+
+	res, rpcErr := callTool(t, srv, ctx, "list_signals", map[string]any{
+		"receiver": "architect",
+		"limit":    2,
+	})
+	if rpcErr != nil {
+		t.Fatalf("list_signals: %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, res)
+	signals, _ := fields["signals"].([]any)
+	if len(signals) != 2 {
+		t.Fatalf("len(signals) = %d, want 2 (limited page)", len(signals))
+	}
+	count, _ := fields["count"].(float64)
+	if int(count) != 2 {
+		t.Errorf("count = %v, want 2 (post-LIMIT)", count)
+	}
+	total, _ := fields["total"].(float64)
+	if int(total) != 3 {
+		t.Errorf("total = %v, want 3 (pre-LIMIT match count, proving truncation)", total)
 	}
 }
 
@@ -612,6 +679,10 @@ func TestListSignals_TableMissing(t *testing.T) {
 	count, _ := fields["count"].(float64)
 	if int(count) != 0 {
 		t.Errorf("count = %v, want 0", count)
+	}
+	total, _ := fields["total"].(float64)
+	if int(total) != 0 {
+		t.Errorf("total = %v, want 0 (fail-open on missing table)", total)
 	}
 }
 
