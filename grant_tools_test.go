@@ -73,7 +73,7 @@ func callGrantTool(t *testing.T, srv *Server, ctx smeldr.Context, name string, a
 func TestGrantTools_Presence(t *testing.T) {
 	app, _, _ := newGrantTestApp(t)
 	srv := New(app)
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	tools := result.(map[string]any)["tools"].([]mcpTool)
 	names := make(map[string]bool, len(tools))
 	for _, tool := range tools {
@@ -92,7 +92,7 @@ func TestGrantTools_Absence(t *testing.T) {
 		Secret:  []byte(grantTestSecret),
 	})
 	srv := New(app)
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	tools := result.(map[string]any)["tools"].([]mcpTool)
 	for _, tool := range tools {
 		if tool.Name == "grant_role" || tool.Name == "list_grants" || tool.Name == "revoke_grant" {
@@ -221,8 +221,8 @@ func TestHandleGrantTool_GrantRole_UnknownRole(t *testing.T) {
 		"token_id": "target-user",
 		"role":     "does-not-exist",
 	})
-	if rpcErr == nil || rpcErr.Code != -32001 {
-		t.Errorf("unknown role: expected -32001 (not found), got %v", rpcErr)
+	if rpcErr == nil || rpcErr.Code != -32000 {
+		t.Errorf("unknown role: expected -32000 (not found), got %v", rpcErr)
 	}
 }
 

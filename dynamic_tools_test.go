@@ -68,7 +68,7 @@ func TestDynamicTools_AbsenceWithoutFlag(t *testing.T) {
 		DB:      db,
 	})
 	srv := New(app) // no WithDynamicContent
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	for _, tool := range tools {
@@ -82,7 +82,7 @@ func TestDynamicTools_AbsenceWithoutFlag(t *testing.T) {
 // in tools/list when WithDynamicContent is set.
 func TestDynamicTools_PresenceWithFlag(t *testing.T) {
 	srv, _ := newDynamicServer(t)
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	want := []string{"define_content_type", "create_content", "get_content", "list_content", "update_content", "set_content_status", "schedule_content"}
@@ -658,7 +658,7 @@ func TestGenerateTypedTools_ContentKindExcluded(t *testing.T) {
 	})
 	srv := New(app, WithBlocks())
 
-	names := toolNames(srv.handleToolsList())
+	names := toolNames(srv.handleToolsList(newAdminCtx()))
 	if names["create_recipe"] {
 		t.Error("create_recipe typed tool present for content-kind schema; AllByKind filter not applied")
 	}

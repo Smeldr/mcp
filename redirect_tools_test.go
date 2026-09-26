@@ -41,7 +41,7 @@ func TestRedirectTools_ToolsAbsentWithoutRedirects(t *testing.T) {
 	if srv.redirectEnabled {
 		t.Error("redirectEnabled should be false when App.Redirects not called")
 	}
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m, ok := result.(map[string]any)
 	if !ok {
 		t.Fatal("handleToolsList returned non-map")
@@ -59,7 +59,7 @@ func TestRedirectTools_ToolsPresentWithRedirects(t *testing.T) {
 	if !srv.redirectEnabled {
 		t.Fatal("redirectEnabled should be true after App.Redirects")
 	}
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	found := map[string]bool{}

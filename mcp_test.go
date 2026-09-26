@@ -548,7 +548,7 @@ func TestMCPToolsList(t *testing.T) {
 	app, _ := newWriteApp(t)
 	srv := New(app)
 
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m, ok := result.(map[string]any)
 	if !ok {
 		t.Fatal("handleToolsList did not return map[string]any")
@@ -593,7 +593,7 @@ func TestMCPToolsList(t *testing.T) {
 		smeldr.MCP(smeldr.MCPRead),
 	))
 	srv2 := New(app2)
-	res2 := srv2.handleToolsList()
+	res2 := srv2.handleToolsList(newAdminCtx())
 	m2 := res2.(map[string]any)
 	tools2 := m2["tools"].([]mcpTool)
 	if len(tools2) != 3 {
@@ -622,8 +622,8 @@ func TestMCPToolsCall_create(t *testing.T) {
 	params, _ := json.Marshal(map[string]any{
 		"name": "create_test_mcp_post",
 		"arguments": map[string]any{
-			"Title": "Hello World",
-			"Body":  "This is a body that is long enough.",
+			"title": "Hello World",
+			"body":  "This is a body that is long enough.",
 		},
 	})
 	result, rpcErr := srv.handleToolsCall(ctx, params)
@@ -663,7 +663,7 @@ func TestMCPToolsCall_create_validation(t *testing.T) {
 	params, _ := json.Marshal(map[string]any{
 		"name": "create_test_mcp_post",
 		"arguments": map[string]any{
-			"Body": "This is a body that is long enough.",
+			"body": "This is a body that is long enough.",
 		},
 	})
 	_, rpcErr := srv.handleToolsCall(ctx, params)
@@ -865,8 +865,8 @@ func TestMCPToolsCall_forbidden(t *testing.T) {
 	params, _ := json.Marshal(map[string]any{
 		"name": "create_test_mcp_post",
 		"arguments": map[string]any{
-			"Title": "Hello World",
-			"Body":  "This is a body that is long enough.",
+			"title": "Hello World",
+			"body":  "This is a body that is long enough.",
 		},
 	})
 	_, rpcErr := srv.handleToolsCall(guestCtx, params)
@@ -897,7 +897,7 @@ func TestMCPToolsCall_update_cannot_clear_field(t *testing.T) {
 		"name": "update_test_mcp_post",
 		"arguments": map[string]any{
 			"slug": "upd-post",
-			"Body": "",
+			"body": "",
 		},
 	})
 	_, rpcErr := srv.handleToolsCall(ctx, params)
@@ -1685,8 +1685,8 @@ func TestMCPToolsCall_get_not_found(t *testing.T) {
 	if rpcErr == nil {
 		t.Fatal("expected error for missing slug, got nil")
 	}
-	if rpcErr.Code != -32001 {
-		t.Errorf("error code = %d, want -32001", rpcErr.Code)
+	if rpcErr.Code != -32000 {
+		t.Errorf("error code = %d, want -32000", rpcErr.Code)
 	}
 }
 
@@ -1830,7 +1830,7 @@ func TestTokenToolsAbsentWithoutStore(t *testing.T) {
 	app, _ := newWriteApp(t)
 	srv := New(app)
 
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	for _, tool := range tools {
@@ -1846,7 +1846,7 @@ func TestTokenToolsPresentWithStore(t *testing.T) {
 	app, _ := newTokenApp(t)
 	srv := New(app)
 
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 

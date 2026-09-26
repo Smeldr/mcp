@@ -60,7 +60,7 @@ func TestRelationTools_AbsentWithoutStore(t *testing.T) {
 	if srv.relationStore != nil {
 		t.Error("relationStore should be nil when app.Relations not called")
 	}
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	for _, tool := range tools {
@@ -75,7 +75,7 @@ func TestRelationTools_PresentWithStore(t *testing.T) {
 	if srv.relationStore == nil {
 		t.Fatal("relationStore should be non-nil after app.Relations()")
 	}
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	found := map[string]bool{}
@@ -174,9 +174,9 @@ func TestRelationTools_AssertRelation_UnknownKind(t *testing.T) {
 	if rpcErr == nil {
 		t.Fatal("expected error for unregistered kind")
 	}
-	// ErrNotFound → -32001
-	if rpcErr.Code != -32001 {
-		t.Errorf("expected -32001 not-found, got %d", rpcErr.Code)
+	// ErrNotFound → -32000
+	if rpcErr.Code != -32000 {
+		t.Errorf("expected -32000 not-found, got %d", rpcErr.Code)
 	}
 }
 
@@ -253,8 +253,8 @@ func TestRelationTools_ObserveRelation_UnknownKind(t *testing.T) {
 	if rpcErr == nil {
 		t.Fatal("expected error for unregistered kind")
 	}
-	if rpcErr.Code != -32001 {
-		t.Errorf("expected -32001 not-found, got %d", rpcErr.Code)
+	if rpcErr.Code != -32000 {
+		t.Errorf("expected -32000 not-found, got %d", rpcErr.Code)
 	}
 }
 
@@ -495,6 +495,75 @@ func TestRelationTools_ListRelationKinds(t *testing.T) {
 	kinds, _ := data["kinds"].([]any)
 	if len(kinds) < 2 {
 		t.Errorf("expected at least 2 kinds, got %d", len(kinds))
+	}
+}
+
+// TestRelationTools_ListRelationKinds_ReverseLabelIncludedWhenSet verifies
+// that list_relation_kinds surfaces reverse_label on the wire when the
+// underlying RelationKindDef has one set - closing the gap where a remote
+// caller (cloud's own remoteAnchorFetcher.GetKind) could only ever read the
+// forward label (01a0c43f).
+func TestRelationTools_ListRelationKinds_ReverseLabelIncludedWhenSet(t *testing.T) {
+	srv, store := newRelationServer(t)
+	ctx := newAuthorCtx()
+	if err := store.UpsertKind(ctx, smeldr.RelationKindDef{
+		TypeName:     "belongs_to_domain",
+		Label:        "belongs_to_domain",
+		ReverseLabel: "contains",
+		Mode:         "asserted",
+		Directional:  true,
+	}); err != nil {
+		t.Fatalf("UpsertKind: %v", err)
+	}
+
+	res, rpcErr := callTool(t, srv, ctx, "list_relation_kinds", nil)
+	if rpcErr != nil {
+		t.Fatalf("list_relation_kinds: %v", rpcErr.Message)
+	}
+	data := unwrapToolResult(t, res)
+	kinds, _ := data["kinds"].([]any)
+	var found map[string]any
+	for _, k := range kinds {
+		m, _ := k.(map[string]any)
+		if m["type_name"] == "belongs_to_domain" {
+			found = m
+		}
+	}
+	if found == nil {
+		t.Fatal("belongs_to_domain not found in list_relation_kinds result")
+	}
+	if found["reverse_label"] != "contains" {
+		t.Errorf("reverse_label = %v, want %q", found["reverse_label"], "contains")
+	}
+}
+
+// TestRelationTools_ListRelationKinds_ReverseLabelAbsentWhenUnset verifies
+// that reverse_label is omitted entirely (not present as an empty string)
+// when the underlying RelationKindDef has none - mirrors the existing
+// conditional pattern for type_pairs/attributes.
+func TestRelationTools_ListRelationKinds_ReverseLabelAbsentWhenUnset(t *testing.T) {
+	srv, store := newRelationServer(t)
+	seedRelationKind(t, store, "plain_kind")
+	ctx := newAuthorCtx()
+
+	res, rpcErr := callTool(t, srv, ctx, "list_relation_kinds", nil)
+	if rpcErr != nil {
+		t.Fatalf("list_relation_kinds: %v", rpcErr.Message)
+	}
+	data := unwrapToolResult(t, res)
+	kinds, _ := data["kinds"].([]any)
+	var found map[string]any
+	for _, k := range kinds {
+		m, _ := k.(map[string]any)
+		if m["type_name"] == "plain_kind" {
+			found = m
+		}
+	}
+	if found == nil {
+		t.Fatal("plain_kind not found in list_relation_kinds result")
+	}
+	if _, present := found["reverse_label"]; present {
+		t.Errorf("reverse_label present = %v, want absent", found["reverse_label"])
 	}
 }
 

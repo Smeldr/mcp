@@ -228,8 +228,8 @@ func TestStateTool_GetValidTransitions_Compiled_SlugNotFound(t *testing.T) {
 		"type_name": "Signal",
 		"slug":      "no-such-slug",
 	})
-	if rpcErr == nil || rpcErr.Code != -32001 {
-		t.Fatalf("expected -32001 not found, got %+v", rpcErr)
+	if rpcErr == nil || rpcErr.Code != -32000 {
+		t.Fatalf("expected -32000 not found, got %+v", rpcErr)
 	}
 }
 

@@ -20,11 +20,12 @@ func TestErrorFor_ValidationError(t *testing.T) {
 	}
 }
 
-// TestErrorFor_NotFound verifies ErrNotFound maps to -32001.
+// TestErrorFor_NotFound verifies ErrNotFound maps to its own distinct code,
+// -32000, separate from Forbidden/Conflict's shared -32001 (01a0c487).
 func TestErrorFor_NotFound(t *testing.T) {
 	got := errorFor(smeldr.ErrNotFound)
-	if got.Code != -32001 {
-		t.Errorf("ErrNotFound: code = %d, want -32001", got.Code)
+	if got.Code != -32000 {
+		t.Errorf("ErrNotFound: code = %d, want -32000", got.Code)
 	}
 }
 

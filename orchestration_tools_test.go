@@ -50,7 +50,7 @@ func TestOrchestrationTool_ToolsList_DBNil(t *testing.T) {
 		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
 	})
 	srv := New(app)
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	for _, tool := range tools {
@@ -64,7 +64,7 @@ func TestOrchestrationTool_ToolsList_DBNil(t *testing.T) {
 // in tools/list when the App is configured with a DB.
 func TestOrchestrationTool_ToolsList_DBSet(t *testing.T) {
 	srv, _ := newOrchestrationServer(t)
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	found := false
@@ -97,8 +97,8 @@ func TestGetGoalContext_GoalNotFound(t *testing.T) {
 	_, rpcErr := callTool(t, srv, newAuthorCtx(), "get_goal_context", map[string]any{
 		"goal_id": "NONEXISTENT",
 	})
-	if rpcErr == nil || rpcErr.Code != -32001 {
-		t.Errorf("expected -32001 (not found), got %v", rpcErr)
+	if rpcErr == nil || rpcErr.Code != -32000 {
+		t.Errorf("expected -32000 (not found), got %v", rpcErr)
 	}
 }
 

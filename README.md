@@ -266,6 +266,27 @@ the default Draft→Published→Archived behaviour unchanged.
 
 ---
 
+## Schema discovery tools (`WithSchemaTools`)
+
+`WithBlocks` wires a schema store as one of its own effects, but a deployment that
+wants schema discovery without the rest of the block system's tool surface can enable
+it on its own:
+
+```go
+smeldr.CreateSchemaTable(db)
+mcpSrv := mcp.New(app, mcp.WithSchemaTools(db))
+```
+
+| Tool | Role | Arguments |
+|------|------|-----------|
+| `get_content_type_schema` | Author+ | `type_name` → `{type_name, label, fields}` |
+| `list_content_type_schemas` | Author+ | *(none)* → `{items: [{type_name, label}, ...]}` |
+
+A server already configured with `WithBlocks` does not need `WithSchemaTools` too —
+both tools are already available.
+
+---
+
 ## Relation graph tools
 
 When `app.Relations(store)` is wired, six relation management tools are automatically

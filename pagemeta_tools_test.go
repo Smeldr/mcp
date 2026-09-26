@@ -37,7 +37,7 @@ func TestPageMeta_AbsenceWithoutOption(t *testing.T) {
 		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
 	})
 	srv := New(app)
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	for _, tool := range tools {
@@ -51,7 +51,7 @@ func TestPageMeta_AbsenceWithoutOption(t *testing.T) {
 // WithPageMeta is set.
 func TestPageMeta_PresenceWithOption(t *testing.T) {
 	srv, _ := newPageMetaServer(t)
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	want := []string{"set_page_meta", "get_page_meta", "delete_page_meta", "list_page_meta"}

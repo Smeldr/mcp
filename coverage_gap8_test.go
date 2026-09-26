@@ -129,8 +129,8 @@ func TestToolsCall_Update_Success(t *testing.T) {
 	// Pass only the slug — seeded fields pass validation.
 	res, rpcErr := callTool(t, srv, newAuthorCtx(), "update_test_mcp_post", map[string]any{
 		"slug":  "update-target",
-		"Title": "Updated Title",
-		"Body":  "updated body content here enough",
+		"title": "Updated Title",
+		"body":  "updated body content here enough",
 	})
 	if rpcErr != nil {
 		t.Fatalf("update_test_mcp_post: %v", rpcErr.Message)
@@ -186,8 +186,8 @@ func TestNavDelete_NotFound(t *testing.T) {
 	_, rpcErr := callTool(t, srv, newEditorCtx(), "delete_nav_item", map[string]any{
 		"id": "does-not-exist-xyz",
 	})
-	if rpcErr == nil || rpcErr.Code != -32001 {
-		t.Errorf("want -32001 for nonexistent nav item, got %v", rpcErr)
+	if rpcErr == nil || rpcErr.Code != -32000 {
+		t.Errorf("want -32000 for nonexistent nav item, got %v", rpcErr)
 	}
 }
 
@@ -352,8 +352,8 @@ func TestRemoveEdge_NoEdgeExists(t *testing.T) {
 		"parent_id": "parent-no-exist",
 		"child_id":  "child-no-exist",
 	})
-	if rpcErr == nil || rpcErr.Code != -32001 {
-		t.Errorf("want -32001 for nonexistent edge, got %v", rpcErr)
+	if rpcErr == nil || rpcErr.Code != -32000 {
+		t.Errorf("want -32000 for nonexistent edge, got %v", rpcErr)
 	}
 }
 

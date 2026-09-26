@@ -7,6 +7,50 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.40.0] — 2026-09-26
+
+### Added
+
+- Every `create_*`/`update_*` tool now rejects a call whose arguments contain a key not
+  declared in that tool's own `InputSchema.properties`, with a clear `-32602 "unknown
+  parameter: <key>"` error, instead of silently accepting and dropping it. One shared
+  validation pass (`validateKnownArgs`) runs at the top of `handleToolsCall`, applying
+  uniformly across every dispatch branch rather than duplicated per-tool. Shallow: only
+  top-level argument keys are checked, never a nested object's own keys (dynamic
+  content's `fields` map stays schema-free at this layer, governed by the content
+  type's own registered schema instead). Found live 2026-09-25: `create_signal` called
+  with `body` instead of `message`, four times, always succeeding with an empty field.
+- `list_relation_kinds` now includes `reverse_label` in its response when the
+  underlying kind has one set, mirroring the existing conditional `type_pairs`/
+  `attributes` fields. Previously a remote caller (cloud's own `remoteAnchorFetcher`)
+  could only ever read the forward `label`.
+- `tools/list` now filters its response to the tools the caller's own role could ever
+  successfully call (via the same `smeldr.Admin`/`Editor`/`Author` mapping
+  `handleToolsCall` already used, extracted into a shared `legacyRoleFor` so the two
+  never drift apart). A curation UX feature, not a security boundary — `tools/call`
+  still fully enforces the real authorization, including any DB-backed governance
+  override, regardless of what `tools/list` showed.
+- New `mcp.WithSchemaTools(db)` `ServerOption`, wiring a schema store on its own so a
+  deployment can expose `get_content_type_schema`/`list_content_type_schemas` without
+  also turning on the full block/node/composition tool surface `WithBlocks` brings as a
+  side effect. Closes a real gap found live 2026-09-26: `process.smeldr.dev` had no path
+  to schema discovery at all, since `WithBlocks` was the only existing route to a
+  non-nil schema store. Both schema tools' own listing and dispatch were previously
+  nested under `blockRepo != nil`, even though neither ever reads `blockRepo` — that
+  gate is now `schemaStore != nil` on its own.
+
+### Fixed
+
+`errorFor` gives `smeldr.ErrNotFound` its own distinct JSON-RPC code, `-32000`, instead
+of sharing `-32001` with `ErrForbidden`/`ErrConflict`. This is a **wire-visible
+behaviour change**: any remote caller currently matching on `-32001` specifically to
+detect "not found" (cloud's own `mcpclient.isNotFoundError` does exactly this) will need
+updating to match `-32000` instead. `ErrForbidden`/`ErrConflict` are unaffected, still
+`-32001`. `-32000` is within the JSON-RPC 2.0 implementation-defined server-error range
+and was unused anywhere in this module before this change.
+
+---
+
 ## [1.39.0] — 2026-09-25
 
 ### Added

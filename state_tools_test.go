@@ -51,7 +51,7 @@ func TestStateTool_ToolsList_DBNil(t *testing.T) {
 		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
 	})
 	srv := New(app)
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	for _, tool := range tools {
@@ -65,7 +65,7 @@ func TestStateTool_ToolsList_DBNil(t *testing.T) {
 // tools/list when the App is configured with a DB.
 func TestStateTool_ToolsList_DBSet(t *testing.T) {
 	srv := newStateServer(t)
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	want := []string{"transition_item", "get_valid_transitions", "list_items_by_state", "define_state_flow"}
@@ -273,7 +273,7 @@ func TestStateTool_TransitionItem_TypeNotFound(t *testing.T) {
 	}
 }
 
-// TestStateTool_TransitionItem_SlugNotFound verifies that a nonexistent slug returns -32001.
+// TestStateTool_TransitionItem_SlugNotFound verifies that a nonexistent slug returns -32000.
 func TestStateTool_TransitionItem_SlugNotFound(t *testing.T) {
 	srv := newStateServer(t)
 	seedDynamicType(t, srv, "article")
@@ -282,8 +282,8 @@ func TestStateTool_TransitionItem_SlugNotFound(t *testing.T) {
 		"slug":      "does-not-exist",
 		"to_state":  "published",
 	})
-	if rpcErr == nil || rpcErr.Code != -32001 {
-		t.Errorf("expected -32001 (not found), got %v", rpcErr)
+	if rpcErr == nil || rpcErr.Code != -32000 {
+		t.Errorf("expected -32000 (not found), got %v", rpcErr)
 	}
 }
 
@@ -504,7 +504,7 @@ func TestStateTool_GetValidTransitions_TypeNotFound(t *testing.T) {
 }
 
 // TestStateTool_GetValidTransitions_SlugNotFound verifies that a nonexistent
-// slug returns -32001.
+// slug returns -32000.
 func TestStateTool_GetValidTransitions_SlugNotFound(t *testing.T) {
 	srv := newStateServer(t)
 	seedDynamicType(t, srv, "note")
@@ -512,8 +512,8 @@ func TestStateTool_GetValidTransitions_SlugNotFound(t *testing.T) {
 		"type_name": "note",
 		"slug":      "does-not-exist",
 	})
-	if rpcErr == nil || rpcErr.Code != -32001 {
-		t.Errorf("expected -32001 (not found), got %v", rpcErr)
+	if rpcErr == nil || rpcErr.Code != -32000 {
+		t.Errorf("expected -32000 (not found), got %v", rpcErr)
 	}
 }
 

@@ -15,7 +15,11 @@
 //     [WithOAuth] is also set, keeping non-OAuth clients (smeldr-cli, Claude
 //     Desktop) working.
 //   - [WithBlocks] — enables the block system's MCP tools (create_node,
-//     update_node, add_section, add_item, and related tools).
+//     update_node, add_section, add_item, and related tools), plus schema
+//     discovery as a side effect.
+//   - [WithSchemaTools] — enables schema discovery tools
+//     (get_content_type_schema, list_content_type_schemas) on their own,
+//     without the rest of the block system's tool surface.
 //   - [WithPageMeta] — enables per-path SEO override tools (set_page_meta,
 //     get_page_meta, delete_page_meta, list_page_meta).
 //   - [WithDynamicContent] — enables MCP tools for content types registered

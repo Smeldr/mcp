@@ -16,9 +16,10 @@ var schemaToolSet = map[string]bool{
 func isSchemaTool(name string) bool { return schemaToolSet[name] }
 
 // schemaToolDefs returns the two schema discovery tool definitions.
-// Appended to tools/list by [handleToolsList] when the server has block
-// support and a schema store ([WithBlocks] + schema table present).
-// Both require Author role.
+// Appended to tools/list by [handleToolsList] whenever the server has a
+// schema store (either [WithSchemaTools] on its own, or as a side effect of
+// [WithBlocks]) - independent of the block-system tools, since both schema
+// tools only ever read the schema store directly. Both require Author role.
 func schemaToolDefs() []mcpTool {
 	return []mcpTool{
 		{

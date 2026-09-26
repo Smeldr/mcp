@@ -51,7 +51,7 @@ func newWebhookServer(t *testing.T) (*Server, *smeldr.WebhookStore) {
 // when the app has a webhook store configured.
 func TestWebhookTools_Presence(t *testing.T) {
 	srv, _ := newWebhookServer(t)
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	want := []string{"create_webhook", "list_webhooks", "delete_webhook", "list_webhook_deliveries", "retry_webhook"}
@@ -73,7 +73,7 @@ func TestWebhookTools_Absence(t *testing.T) {
 		Secret:  []byte(webhookTestSecret),
 	})
 	srv := New(app)
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	for _, tool := range tools {

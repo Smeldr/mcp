@@ -31,7 +31,7 @@ func TestSweepRunTool_ToolsList_DBNil(t *testing.T) {
 		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
 	})
 	srv := New(app)
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	for _, tool := range tools {
@@ -45,7 +45,7 @@ func TestSweepRunTool_ToolsList_DBNil(t *testing.T) {
 // tools/list when the App is configured with a DB.
 func TestSweepRunTool_ToolsList_DBSet(t *testing.T) {
 	srv := newSweepRunServer(t)
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	found := false

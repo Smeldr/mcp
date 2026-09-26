@@ -403,6 +403,9 @@ func relationKindMap(k smeldr.RelationKindDef) map[string]any {
 	if len(k.Attributes) > 0 {
 		m["attributes"] = k.Attributes
 	}
+	if k.ReverseLabel != "" {
+		m["reverse_label"] = k.ReverseLabel
+	}
 	return m
 }
 

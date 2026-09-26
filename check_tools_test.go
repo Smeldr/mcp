@@ -57,7 +57,7 @@ func TestCheckTool_ToolsList_DBNil(t *testing.T) {
 		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
 	})
 	srv := New(app)
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	for _, tool := range tools {
@@ -69,7 +69,7 @@ func TestCheckTool_ToolsList_DBNil(t *testing.T) {
 
 func TestCheckTool_ToolsList_DBSet(t *testing.T) {
 	srv, _ := newCheckServer(t)
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	found := false

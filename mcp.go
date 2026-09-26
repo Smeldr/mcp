@@ -83,6 +83,28 @@ func WithBlocks() ServerOption {
 	}
 }
 
+// WithSchemaTools wires a [smeldr.SchemaStore] into the MCP server on its
+// own, exposing get_content_type_schema and list_content_type_schemas
+// without also turning on the full block/node/composition tool surface
+// WithBlocks brings with it. Use this when a deployment only needs schema
+// discovery (D76's discovery-first workflow, e.g. an AI operator managing a
+// customer's Project Memory) and does not want the block-system tools
+// exposed as a side effect (found live 2026-09-26: process.smeldr.dev had
+// neither, since WithBlocks was the only existing path to a non-nil
+// schemaStore).
+//
+// The db value should be the same database passed to the smeldr.App; the
+// schema table must already exist ([smeldr.CreateSchemaTable]).
+//
+//	smeldr.CreateSchemaTable(db)
+//	mcpSrv := mcp.New(app, mcp.WithSchemaTools(db))
+//
+// A server already configured with [WithBlocks] does not need this option -
+// WithBlocks already wires the same schemaStore as one of its own effects.
+func WithSchemaTools(db smeldr.DB) ServerOption {
+	return func(s *Server) { s.schemaStore = smeldr.NewSchemaStore(db) }
+}
+
 // WithPageMeta wires a [smeldr.PageMetaStore] into the MCP server and exposes
 // four Admin-role tools for managing per-path SEO overrides:
 //
@@ -183,6 +205,13 @@ type Server struct {
 	// relation graph tools (assert_relation, propose_relation, get_relations,
 	// preview_impact, upsert_relation_kind, list_relation_kinds).
 	relationStore *smeldr.RelationStore
+
+	// toolDefsByName indexes allToolDefs() by name, built once at the end of
+	// New() since every field allToolDefs() reads is fully set by then and
+	// never mutates afterward. Backs validateKnownArgs's create_*/update_*
+	// unknown-parameter check without rebuilding the full tool list (many
+	// nested map[string]any allocations) on every tools/call.
+	toolDefsByName map[string]mcpTool
 }
 
 // New creates a Server for the given Smeldr App, collecting all content modules
@@ -227,6 +256,11 @@ func New(app *smeldr.App, opts ...ServerOption) *Server {
 			return
 		}
 	})
+	defs := s.allToolDefs()
+	s.toolDefsByName = make(map[string]mcpTool, len(defs))
+	for _, t := range defs {
+		s.toolDefsByName[t.Name] = t
+	}
 	return s
 }
 

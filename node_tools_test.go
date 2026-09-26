@@ -264,7 +264,7 @@ func TestNodeTools_RequiresAuthor(t *testing.T) {
 func TestNodeTools_ListedOnlyWithBlocks(t *testing.T) {
 	// With blocks enabled, node + composition tools appear.
 	srv, _ := newBlocksServer(t)
-	names := toolNames(srv.handleToolsList())
+	names := toolNames(srv.handleToolsList(newAdminCtx()))
 	for _, want := range []string{"create_node", "list_nodes", "add_section", "add_item"} {
 		if !names[want] {
 			t.Errorf("tools/list missing %q with WithBlocks", want)
@@ -274,7 +274,7 @@ func TestNodeTools_ListedOnlyWithBlocks(t *testing.T) {
 	// Without WithBlocks, they must not appear.
 	app := smeldr.New(smeldr.Config{BaseURL: "http://localhost", Secret: []byte("test-secret-32-bytes-xxxxxxxxxxxx")})
 	plain := New(app)
-	pn := toolNames(plain.handleToolsList())
+	pn := toolNames(plain.handleToolsList(newAdminCtx()))
 	for _, absent := range []string{"create_node", "add_section"} {
 		if pn[absent] {
 			t.Errorf("tools/list unexpectedly contains %q without WithBlocks", absent)

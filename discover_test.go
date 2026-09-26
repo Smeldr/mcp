@@ -32,7 +32,7 @@ func TestListTypeTools(t *testing.T) {
 	srv := New(app)
 
 	t.Run("appears_in_tools_list", func(t *testing.T) {
-		names := toolNames(srv.handleToolsList())
+		names := toolNames(srv.handleToolsList(newAdminCtx()))
 		if !names["list_type_tools"] {
 			t.Error("list_type_tools not found in tools/list")
 		}

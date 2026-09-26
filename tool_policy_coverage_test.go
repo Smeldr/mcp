@@ -63,7 +63,7 @@ func newPolicyCoverageServer(t *testing.T) (*Server, *sql.DB, *smeldr.RoleStore)
 // coverage is caught here, not discovered live (T224's own failure mode).
 func TestAuthoriseTool_PolicyCoverage_Enumerated(t *testing.T) {
 	srv, _, store := newPolicyCoverageServer(t)
-	resp, ok := srv.handleToolsList().(map[string]any)
+	resp, ok := srv.handleToolsList(newAdminCtx()).(map[string]any)
 	if !ok {
 		t.Fatal("handleToolsList: unexpected response shape")
 	}

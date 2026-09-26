@@ -38,7 +38,7 @@ func newNavServer(t *testing.T) *Server {
 // a NavTree is configured.
 func TestNavTools_Presence(t *testing.T) {
 	srv := newNavServer(t)
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	names := make(map[string]bool, len(tools))
@@ -63,7 +63,7 @@ func TestNavTools_Absence(t *testing.T) {
 		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
 	})
 	srv := New(app)
-	result := srv.handleToolsList()
+	result := srv.handleToolsList(newAdminCtx())
 	m := result.(map[string]any)
 	tools := m["tools"].([]mcpTool)
 	for _, tool := range tools {

@@ -75,6 +75,55 @@ func TestGetContentTypeSchema_NotFound(t *testing.T) {
 	}
 }
 
+// TestWithSchemaTools_StandaloneWithoutBlocks verifies that WithSchemaTools
+// alone (no WithBlocks) exposes and correctly dispatches the two schema
+// discovery tools, without pulling in any of the block/node/composition
+// tool surface - closing the gap found live 2026-09-26 where schema
+// discovery was only ever reachable as a side effect of WithBlocks
+// (core-schema-store-not-wired-on-process).
+func TestWithSchemaTools_StandaloneWithoutBlocks(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Skipf("sqlite unavailable: %v", err)
+	}
+	defer db.Close()
+	if err := smeldr.CreateSchemaTable(db); err != nil {
+		t.Fatalf("CreateSchemaTable: %v", err)
+	}
+	if err := smeldr.SeedBlockTypeSchemas(db); err != nil {
+		t.Fatalf("SeedBlockTypeSchemas: %v", err)
+	}
+	app := smeldr.New(smeldr.Config{
+		BaseURL: "http://localhost",
+		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
+		DB:      db,
+	})
+	srv := New(app, WithSchemaTools(db)) // no WithBlocks
+
+	names := toolNames(srv.handleToolsList(newAdminCtx()))
+	for _, want := range []string{"get_content_type_schema", "list_content_type_schemas"} {
+		if !names[want] {
+			t.Errorf("tools/list missing %q with WithSchemaTools alone", want)
+		}
+	}
+	for _, notWant := range []string{"create_node", "update_node", "add_section", "create_content_block"} {
+		if names[notWant] {
+			t.Errorf("tools/list unexpectedly includes block-system tool %q with WithSchemaTools alone (no WithBlocks)", notWant)
+		}
+	}
+
+	res, rpcErr := callTool(t, srv, newAuthorCtx(), "get_content_type_schema", map[string]any{
+		"type_name": "content_block",
+	})
+	if rpcErr != nil {
+		t.Fatalf("get_content_type_schema with WithSchemaTools alone: %v", rpcErr.Message)
+	}
+	got := unwrapToolResult(t, res)
+	if got["type_name"] != "content_block" {
+		t.Errorf("type_name = %v, want content_block", got["type_name"])
+	}
+}
+
 func TestListContentTypeSchemas(t *testing.T) {
 	srv, _ := newSchemaBlocksServer(t)
 	ctx := newAuthorCtx()
@@ -98,7 +147,7 @@ func TestListContentTypeSchemas(t *testing.T) {
 func TestTypedTools_PresentAtStartup(t *testing.T) {
 	srv, _ := newSchemaBlocksServer(t)
 
-	toolsList := srv.handleToolsList()
+	toolsList := srv.handleToolsList(newAdminCtx())
 	toolsMap, ok := toolsList.(map[string]any)
 	if !ok {
 		t.Fatalf("handleToolsList unexpected type %T", toolsList)
