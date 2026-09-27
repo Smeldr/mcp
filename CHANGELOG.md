@@ -7,6 +7,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.40.2] — 2026-09-27
+
+### Fixed
+
+- `create_signal` and `list_signals` were each registered twice under the identical tool name, with two different schemas and two different intended behaviors: once generically (every compiled orchestration type — Task, Decision, Amendment, Goal, Run, Signal — is auto-registered as an ordinary content module, which generates a generic `create_<type>`/`list_<type>s` pair for each), and once explicitly via this package's own hand-written `signal_tools.go` (the real receiver/sender-filtered `list_signals`, and the real `create_signal` that performs the actual INSERT). `tools/list` advertised both entries for each name; a caller whose client happened to pick up the generic wrapper's schema (no `receiver`/`sender` fields at all) would have every call routed to the explicit handler anyway at invocation time, which always requires `receiver` or `sender` — meaning that caller could never construct a working call, since the schema it was shown never exposed the field the handler actually required.
+- Fixed with a general `dedupeToolsByName` pass over the full tool list (not a Signal-specific special case), keeping the last-registered definition for each name — matching the order `handleToolsCall`'s own dispatch already resolves calls in. `tools/list` and `tools/call` now agree for every tool name, not just these two; the fix also protects against the same class of collision for any future compiled type that ships its own bespoke tool file alongside the generic per-module registration.
+
+---
+
 ## [1.40.1] — 2026-09-27
 
 ### Added

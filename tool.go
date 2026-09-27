@@ -386,7 +386,37 @@ func (s *Server) allToolDefs() []mcpTool {
 		tools = append(tools, stewardshipToolDefs()...)
 		tools = append(tools, checkToolDefs()...)
 	}
-	return tools
+	return dedupeToolsByName(tools)
+}
+
+// dedupeToolsByName removes duplicate tool names, keeping the last
+// definition for each name and otherwise preserving order. Every
+// hand-authored tool family in allToolDefs (state/signal/orchestration/
+// sweep-run/stewardship/check) is appended after the generic per-module
+// CRUD/admin-read loop, and handleToolsCall's own dispatch order always
+// checks these explicit isXTool families before ever reaching the generic
+// module-lookup path — so once a name exists in both places, the
+// last-appended definition is the only one actually reachable via
+// tools/call, and tools/list must agree with it. Found live 2026-09-27
+// (01a0e224): the compiled Signal type is registered generically
+// (RegisterOrchestrationTypes, MCP(MCPRead, MCPWrite)) exactly like
+// Task/Decision/Amendment/Goal/Run, which produces a generic create_signal/
+// list_signals with the wrong schema — signal_tools.go's own explicit pair
+// is the one every real call actually reaches, but tools/list advertised
+// both, and a client that happened to read the generic one's schema could
+// never successfully call it.
+func dedupeToolsByName(tools []mcpTool) []mcpTool {
+	lastIndex := make(map[string]int, len(tools))
+	for i, t := range tools {
+		lastIndex[t.Name] = i
+	}
+	out := make([]mcpTool, 0, len(lastIndex))
+	for i, t := range tools {
+		if lastIndex[t.Name] == i {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // handleToolsCall dispatches a tools/call request to the appropriate module
