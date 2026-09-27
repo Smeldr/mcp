@@ -45,7 +45,9 @@ func TestStateTool_TransitionItem_Compiled_HappyPath(t *testing.T) {
 // TestStateTool_TransitionItem_Compiled_RoleGated proves authority parity
 // with the REST path (D49): the same validateTransition call, same
 // ErrForbidden -> -32001 mapping, for a real compiled-type strict role gate
-// (Decision's proposed->ratified, admin-only per D34/D40).
+// (Decision's proposed->ratified, gated on the "approve" operation per
+// D34/D40 - as of 01a0e3f9-2/A361, admin alone no longer carries it, so the
+// authorized actor below also needs an explicit decision-steward grant).
 func TestStateTool_TransitionItem_Compiled_RoleGated(t *testing.T) {
 	srv, db, store := newPolicyCoverageServer(t)
 	repo := smeldr.NewSQLRepo[*smeldr.Decision](db, smeldr.Table("smeldr_decisions"))
@@ -66,6 +68,14 @@ func TestStateTool_TransitionItem_Compiled_RoleGated(t *testing.T) {
 
 	if _, err := store.Grant(context.Background(), smeldr.RoleGrant{TokenID: "admin-grant", RoleName: "admin"}); err != nil {
 		t.Fatalf("Grant admin: %v", err)
+	}
+	// admin alone no longer carries review/approve (01a0e3f9-2, A361) -
+	// ratifying a Decision needs the separate decision-steward grant too.
+	if err := smeldr.RegisterDecisionStewardRole(context.Background(), store); err != nil {
+		t.Fatalf("RegisterDecisionStewardRole: %v", err)
+	}
+	if _, err := store.Grant(context.Background(), smeldr.RoleGrant{TokenID: "admin-grant", RoleName: "decision-steward"}); err != nil {
+		t.Fatalf("Grant decision-steward: %v", err)
 	}
 	adminCtx := smeldr.NewTestContext(smeldr.User{ID: "admin-grant"})
 	res, rpcErr := callTool(t, srv, adminCtx, "transition_item", map[string]any{

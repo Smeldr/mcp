@@ -498,6 +498,17 @@ func TestGrantTools_EndToEnd_MintedGrantRatifiesDecision(t *testing.T) {
 	}); rpcErr != nil {
 		t.Fatalf("grant_role to second actor: %v", rpcErr.Message)
 	}
+	// admin alone no longer carries review/approve (01a0e3f9-2, A361) -
+	// ratifying a Decision needs the separate decision-steward grant too.
+	if err := smeldr.RegisterDecisionStewardRole(context.Background(), store); err != nil {
+		t.Fatalf("RegisterDecisionStewardRole: %v", err)
+	}
+	if _, rpcErr := callGrantTool(t, srv, granterCtx, "grant_role", map[string]any{
+		"token_id": newUserID,
+		"role":     "decision-steward",
+	}); rpcErr != nil {
+		t.Fatalf("grant_role decision-steward to second actor: %v", rpcErr.Message)
+	}
 
 	// Seed a Decision directly (bypassing HTTP) in the "proposed" state.
 	repo := smeldr.NewSQLRepo[*smeldr.Decision](db, smeldr.Table("smeldr_decisions"))

@@ -349,6 +349,7 @@ func (s *Server) allToolDefs() []mcpTool {
 	}
 	if s.app.RoleStore() != nil {
 		tools = append(tools, grantToolDefs()...)
+		tools = append(tools, delegateToolDefs()...)
 	}
 	if s.navTree != nil {
 		tools = append(tools, navToolDefs(s.navTree.HasDB())...)
@@ -472,6 +473,14 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 				return nil, rpcErr
 			}
 			return s.handleGrantTool(ctx, rs, p.Name, coalesceArgs(p.Arguments))
+		case "delegate_item":
+			// Coarse floor gate only (seedToolPolicies: "read", every real
+			// role holds it) — the real per-item, per-operation check is
+			// inside handleDelegateTool itself, against the actual target.
+			if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
+				return nil, rpcErr
+			}
+			return s.handleDelegateTool(ctx, rs, p.Name, coalesceArgs(p.Arguments))
 		}
 	}
 

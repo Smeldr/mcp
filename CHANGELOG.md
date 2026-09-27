@@ -7,6 +7,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.41.0] — 2026-09-28
+
+### Added
+
+- New MCP tool `delegate_item` lets any token holding governance authority delegate a subset to another token, scoped to one item for a limited time (unlike `grant_role`, which is Admin-only and unrestricted).
+- Parameters: `token_id` (recipient), `role` (role to delegate), `operation` (must be in role's operations), `type`/`id` (target item), `expires_in_days` (optional, 1–90 days, defaults to 14).
+- Privilege-escalation defense: checks delegator is authorized for *every* operation in the named role against the target — prevents an attack where a delegator holding only "read" could delegate a role bundling much stronger operations, e.g. "admin".
+- Uses new `smeldr.dev/core` v1.100.0 function `RoleStore.GetRole` to read a role's own operations; revocation and audit reuse the existing `revoke_grant` tool and `GovernanceAuditStore` wiring unchanged.
+- Bumped `smeldr.dev/core` dependency to v1.100.0 (adds `RoleStore.GetRole`; also carries the prior release's `RoleGrant.ExpiresAt`).
+- 14 new tests in `delegate_tools_test.go` covering success, the privilege-escalation defense above, an operation not belonging to the named role, an unknown role, expiry range validation, missing required parameters, a caller with no grants at all, audit recording, and tools/list presence/absence. Two pre-existing tests needed a `decision-steward` grant added alongside their existing `admin` grant — stale since core's admin role stopped bundling `review`/`approve` back in core v1.98.0, a change this module's own dependency pin had not been bumped past until now. Full suite green with `-race`, coverage 96.5%.
+- This is a MINOR version bump (v1.40.2 to v1.41.0): a new tool, fully additive, no existing tool's behavior changed.
+
+---
+
 ## [1.40.2] — 2026-09-27
 
 ### Fixed
