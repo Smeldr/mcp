@@ -113,12 +113,14 @@ func TestCreateSignal_HappyPath(t *testing.T) {
 func TestCreateSignal_AllFields(t *testing.T) {
 	srv := newSignalServer(t)
 	res, rpcErr := callTool(t, srv, newAuthorCtx(), "create_signal", map[string]any{
-		"sender":      "core",
-		"receiver":    "architect",
-		"signal_type": "commit-ready",
-		"task_ref":    "T23",
-		"message":     "Step 11 verified.",
-		"sequence":    float64(5),
+		"sender":       "core",
+		"receiver":     "architect",
+		"signal_type":  "commit-ready",
+		"task_ref":     "T23",
+		"message":      "Step 11 verified.",
+		"sequence":     float64(5),
+		"subject_type": "Decision",
+		"subject_id":   "D84",
 	})
 	if rpcErr != nil {
 		t.Fatalf("create_signal (all fields): %v", rpcErr.Message)
@@ -126,6 +128,77 @@ func TestCreateSignal_AllFields(t *testing.T) {
 	fields := unwrapToolResult(t, res)
 	if fields["status"] != "pending" {
 		t.Errorf("status = %v, want pending", fields["status"])
+	}
+}
+
+// TestCreateSignal_SubjectFields_Threaded verifies that subject_type/
+// subject_id (D86) are threaded through to the smeldr_signals row and
+// surfaced by list_signals, alongside from_state/to_state/required_role
+// coming back as empty strings — the existing scan gate in list_signals
+// groups all five structured columns on subject_type != "", so a row with
+// only subject_type/subject_id set still surfaces all five keys.
+func TestCreateSignal_SubjectFields_Threaded(t *testing.T) {
+	srv := newSignalServer(t)
+	ctx := newAuthorCtx()
+
+	_, rpcErr := callTool(t, srv, ctx, "create_signal", map[string]any{
+		"sender":       "core",
+		"receiver":     "architect",
+		"signal_type":  "commit-ready",
+		"subject_type": "Decision",
+		"subject_id":   "D84",
+	})
+	if rpcErr != nil {
+		t.Fatalf("create_signal: %v", rpcErr.Message)
+	}
+
+	res, rpcErr := callTool(t, srv, ctx, "list_signals", map[string]any{
+		"receiver": "architect",
+	})
+	if rpcErr != nil {
+		t.Fatalf("list_signals: %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, res)
+	signals, _ := fields["signals"].([]any)
+	if len(signals) != 1 {
+		t.Fatalf("len(signals) = %d, want 1", len(signals))
+	}
+	got, _ := signals[0].(map[string]any)
+	if got["subject_type"] != "Decision" || got["subject_id"] != "D84" {
+		t.Errorf("subject_type/subject_id = %v/%v, want Decision/D84", got["subject_type"], got["subject_id"])
+	}
+	for _, key := range []string{"from_state", "to_state", "required_role"} {
+		if got[key] != "" {
+			t.Errorf("%s = %v, want empty string", key, got[key])
+		}
+	}
+}
+
+// TestCreateSignal_SubjectFieldsOmitted_DefaultsEmpty verifies that omitting
+// subject_type/subject_id leaves the smeldr_signals row's own columns at
+// their schema default (”), not NULL or unset — the omitted-param path
+// stays fully backward-compatible with every pre-D86 create_signal caller.
+func TestCreateSignal_SubjectFieldsOmitted_DefaultsEmpty(t *testing.T) {
+	srv := newSignalServer(t)
+	res, rpcErr := callTool(t, srv, newAuthorCtx(), "create_signal", map[string]any{
+		"sender":      "core",
+		"receiver":    "architect",
+		"signal_type": "plan-ready",
+	})
+	if rpcErr != nil {
+		t.Fatalf("create_signal: %v", rpcErr.Message)
+	}
+	fields := unwrapToolResult(t, res)
+
+	var subjectType, subjectID string
+	db := srv.app.Config().DB
+	if err := db.QueryRowContext(context.Background(),
+		`SELECT subject_type, subject_id FROM smeldr_signals WHERE id = ?`, fields["id"],
+	).Scan(&subjectType, &subjectID); err != nil {
+		t.Fatalf("query subject_type/subject_id columns: %v", err)
+	}
+	if subjectType != "" || subjectID != "" {
+		t.Errorf("subject_type/subject_id = %q/%q, want empty strings", subjectType, subjectID)
 	}
 }
 

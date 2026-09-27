@@ -7,6 +7,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.40.1] — 2026-09-27
+
+### Added
+
+- `create_signal` now accepts two new optional input parameters, `subject_type` and `subject_id` — the general way any Signal pattern points at a real item (Decision D86). The two columns already existed in `smeldr_signals` since A296 (added for the internal `authorization-required` signal path only); this change exposes them as ordinary optional `create_signal` inputs, threaded straight into the existing INSERT. `from_state`/`to_state`/`required_role` are unaffected and remain `authorization-required`'s own specific extension of the row shape, not general-purpose.
+- `list_signals` already returned these two columns when set (no change needed there) — this release is purely about making `create_signal` able to set them for any signal pattern, not just the one internal system path.
+
+---
+
 ## [1.40.0] — 2026-09-26
 
 ### Added

@@ -18,6 +18,11 @@ import (
 // Role assignment:
 //   - create_signal — Author (pilots create signals)
 //   - list_signals  — Author (read-only signal query)
+//
+// create_signal also accepts optional subject_type/subject_id — the general
+// way any Signal pattern points at a real item (D86). from_state/to_state/
+// required_role stay recordAuthorizationRequiredSignal's own specific
+// extension of the row shape (core, state.go) and are not exposed here.
 func signalToolDefs() []mcpTool {
 	return []mcpTool{
 		{
@@ -30,12 +35,14 @@ func signalToolDefs() []mcpTool {
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"sender":      map[string]any{"type": "string", "description": "Originating agent identifier, e.g. \"core\", \"architect\"."},
-					"receiver":    map[string]any{"type": "string", "description": "Destination agent identifier. Omit or leave empty for a broadcast to every subscriber (no single-recipient filter)."},
-					"signal_type": map[string]any{"type": "string", "description": "Protocol verb, e.g. \"plan-ready\", \"commit-ready\"."},
-					"task_ref":    map[string]any{"type": "string", "description": "Task or amendment identifier this signal relates to, e.g. \"T23\", \"A185\"."},
-					"message":     map[string]any{"type": "string", "description": "Free-text body of the signal."},
-					"sequence":    map[string]any{"type": "integer", "description": "Per-task monotonic counter that orders signals in a conversation."},
+					"sender":       map[string]any{"type": "string", "description": "Originating agent identifier, e.g. \"core\", \"architect\"."},
+					"receiver":     map[string]any{"type": "string", "description": "Destination agent identifier. Omit or leave empty for a broadcast to every subscriber (no single-recipient filter)."},
+					"signal_type":  map[string]any{"type": "string", "description": "Protocol verb, e.g. \"plan-ready\", \"commit-ready\"."},
+					"task_ref":     map[string]any{"type": "string", "description": "Task or amendment identifier this signal relates to, e.g. \"T23\", \"A185\"."},
+					"message":      map[string]any{"type": "string", "description": "Free-text body of the signal."},
+					"sequence":     map[string]any{"type": "integer", "description": "Per-task monotonic counter that orders signals in a conversation."},
+					"subject_type": map[string]any{"type": "string", "description": "Type name of the item this signal is about, e.g. \"Decision\", \"Task\". Optional — the general way a signal pattern points at a real item (D86)."},
+					"subject_id":   map[string]any{"type": "string", "description": "ID or slug of the item this signal is about. Optional, paired with subject_type."},
 				},
 				"required": []string{"sender", "signal_type"},
 			},
@@ -95,6 +102,8 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		taskRef := stringArgOr(args, "task_ref", "")
 		message := stringArgOr(args, "message", "")
 		sequence := intArgOr(args, "sequence", 0)
+		subjectType := stringArgOr(args, "subject_type", "")
+		subjectID := stringArgOr(args, "subject_id", "")
 
 		id := smeldr.NewID()
 		slug := signalSlug(sender, signalType, id)
@@ -102,10 +111,11 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 
 		_, err := db.ExecContext(ctx,
 			`INSERT INTO smeldr_signals
-				(id, slug, status, created_at, updated_at, sender, receiver, signal_type, message, task_ref, sequence)
+				(id, slug, status, created_at, updated_at, sender, receiver, signal_type, message, task_ref, sequence,
+				 subject_type, subject_id)
 			VALUES
-				(?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?)`,
-			id, slug, now, now, sender, receiver, signalType, message, taskRef, sequence,
+				(?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			id, slug, now, now, sender, receiver, signalType, message, taskRef, sequence, subjectType, subjectID,
 		)
 		if err != nil {
 			slog.ErrorContext(ctx, "mcp: create_signal: db exec failed", "error", err)
