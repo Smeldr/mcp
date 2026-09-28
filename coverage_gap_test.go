@@ -540,14 +540,15 @@ func TestFloatPtrArg(t *testing.T) {
 // ── relationEdgeMap optional fields ──────────────────────────────────────────
 
 // TestRelationEdgeMap_OptionalFields verifies that Confidence, ValidAt,
-// InvalidAt, CreatedByJob, Attributes, and LastConfirmedAt are included
-// when set.
+// InvalidAt, CreatedByJob, CreatedBy, Attributes, and LastConfirmedAt are
+// included when set.
 func TestRelationEdgeMap_OptionalFields(t *testing.T) {
 	conf := 0.9
 	validAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	invalidAt := time.Date(2027, 1, 1, 0, 0, 0, 0, time.UTC)
 	lastConfirmedAt := time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC)
 	job := "job-abc"
+	actor := "actor-abc"
 	e := smeldr.RelationEdge{
 		ID:              "e1",
 		SourceType:      "post",
@@ -560,6 +561,7 @@ func TestRelationEdgeMap_OptionalFields(t *testing.T) {
 		ValidAt:         &validAt,
 		InvalidAt:       &invalidAt,
 		CreatedByJob:    &job,
+		CreatedBy:       &actor,
 		Attributes:      json.RawMessage(`{"note":"test"}`),
 		LastConfirmedAt: &lastConfirmedAt,
 	}
@@ -575,6 +577,9 @@ func TestRelationEdgeMap_OptionalFields(t *testing.T) {
 	}
 	if m["created_by_job"] != "job-abc" {
 		t.Errorf("created_by_job = %v, want job-abc", m["created_by_job"])
+	}
+	if m["created_by"] != "actor-abc" {
+		t.Errorf("created_by = %v, want actor-abc", m["created_by"])
 	}
 	if m["attributes"] == nil {
 		t.Error("attributes = nil, want non-nil")
@@ -596,7 +601,7 @@ func TestRelationEdgeMap_NilOptionals(t *testing.T) {
 		EdgeClass:    "asserted",
 	}
 	m := relationEdgeMap(e)
-	for _, key := range []string{"confidence", "valid_at", "invalid_at", "created_by_job", "attributes", "last_confirmed_at"} {
+	for _, key := range []string{"confidence", "valid_at", "invalid_at", "created_by_job", "created_by", "attributes", "last_confirmed_at"} {
 		if _, ok := m[key]; ok {
 			t.Errorf("key %q present for nil optional, want absent", key)
 		}

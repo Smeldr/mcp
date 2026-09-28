@@ -376,6 +376,9 @@ func relationEdgeMap(e smeldr.RelationEdge) map[string]any {
 	if e.CreatedByJob != nil {
 		m["created_by_job"] = *e.CreatedByJob
 	}
+	if e.CreatedBy != nil {
+		m["created_by"] = *e.CreatedBy
+	}
 	if len(e.Attributes) > 0 {
 		m["attributes"] = e.Attributes
 	}

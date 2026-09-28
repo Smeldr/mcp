@@ -7,6 +7,17 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.42.1] — 2026-09-28
+
+### Fixed
+
+- `relationEdgeMap` in `relation_tools.go` — the single function that converts every `smeldr.RelationEdge` to its MCP JSON response shape, used by `get_relations`, `assert_relation`, `propose_relation`, and `observe_relation` — already emitted an optional `created_by_job` field (the system/job that wrote an edge) but never emitted `created_by`, the human/agent actor's own ID, even though core's `RelationEdge.CreatedBy *string` field has existed since core v1.97.0 (added in Amendment A359). This left MCP callers unable to see who asserted, proposed, or observed a relation edge, only which automated job did (when applicable) — a gap that blocked Smeldr Cloud's Workspace UI, which needs to display who asserted a contradiction between two Decisions.
+- Fix: `relationEdgeMap` now emits `created_by` (a string) when `e.CreatedBy` is non-nil, using the same optional-field pattern as `created_by_job` (omitted from the response when nil, present as a plain string when set). Purely additive to the existing response shape, no new tool, no new parameter, no breaking change. Two existing test functions extended: `TestRelationEdgeMap_OptionalFields` now also sets and asserts `created_by`, and `TestRelationEdgeMap_NilOptionals` now asserts `created_by` is absent when nil. No new tests required; full suite green with `-race`, coverage 96.6%.
+- Depends on `smeldr.dev/core`'s existing `RelationEdge.CreatedBy` field (carried since v1.97.0); no core-side change needed — mcp already pins v1.101.0, which carries it.
+- This is a PATCH version bump (v1.42.0 to v1.42.1): one optional field added to an existing tool's response shape, fully additive, no field removed or changed.
+
+---
+
 ## [1.42.0] — 2026-09-28
 
 ### Added
