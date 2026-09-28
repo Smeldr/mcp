@@ -481,6 +481,22 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 				return nil, rpcErr
 			}
 			return s.handleDelegateTool(ctx, rs, p.Name, coalesceArgs(p.Arguments))
+		case "withdraw_delegation":
+			// Coarse floor gate only, same shape as delegate_item — the real
+			// check (is the caller this grant's own recorded creator, is it
+			// actually a time-boxed delegation) is inside the handler.
+			if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
+				return nil, rpcErr
+			}
+			return s.handleWithdrawDelegationTool(ctx, rs, p.Name, coalesceArgs(p.Arguments))
+		case "list_roles":
+			// Read-only, Author+ via legacyRoleFor's generic fallback — not
+			// grouped with the Admin-gated grant_role/list_grants/revoke_grant
+			// case above.
+			if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
+				return nil, rpcErr
+			}
+			return s.handleListRolesTool(ctx, rs)
 		}
 	}
 

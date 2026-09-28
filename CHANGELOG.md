@@ -7,6 +7,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.42.0] — 2026-09-28
+
+### Added
+
+- Fixed a scoping gap in `delegate_item`: roles whose `ScopeMode` is not "static" (e.g. global-scope or dynamic-scope roles) are now refused with JSON-RPC error -32602 and a clear error message. Previously, delegating a global-scope role "for one item" would silently ignore the item-scoping and authorize the recipient on every item of that type. The tool now checks the role's `ScopeMode` via the existing `GetRole` call before accepting the delegation. Two new tests added.
+- `delegate_item`'s response now reports the actually-stored grant (via core's new `RoleStore.GetGrant`) instead of echoing the locally-computed request value. The underlying `RoleStore.Grant` idempotency behavior changed: a repeat delegation of the same item correctly resolves to the same existing grant row, which may carry an earlier call's expiry rather than this call's requested value. The tool now reads the real stored value back and reports it. New tests verify grants authorize only the target item, repeat delegations report the first call's stored expiry, and error handling when the read-back fails.
+- New MCP tool `withdraw_delegation` lets a delegator (the token who created a delegation) withdraw it before expiry, without requiring Admin access. Takes parameter `grant_id`. Uses core's new `RoleStore.GetGrant` to verify the caller is the original `Grantor`, refuses (JSON-RPC error -32001) if the grant is a standing grant (use `revoke_grant`/Admin instead) or if the caller is not the grantor. Revokes the grant with full audit trail on success. Full test coverage: success, audit recorded, denial when caller isn't the grantor, denial for standing grants, grant not found, missing parameters, floor gate (Author+), and DB failures during lookup and revoke.
+- New MCP tool `list_roles` reads every role defined on the instance (name, operations, scope shape) via core's new `RoleStore.ListRoles`, letting callers inspect role definitions before granting or delegating without hardcoding role semantics. Author+ floor gate (same as `delegate_item`). Full test coverage: success, floor gate, DB failure.
+- Both new tools (`withdraw_delegation`, `list_roles`) use Author+ floor gate, not the Admin-only gate that `grant_role`/`list_grants`/`revoke_grant` require, with per-request authorization checked inside each tool's handler.
+- Depends on `smeldr.dev/core`'s new `RoleStore.GetGrant`, `RoleStore.ListRoles`, and the `item-approver`/`item-reviewer` roles — available today only via this repo's local `go.work` override pointing at the core checkout; the `go.mod` pin itself stays at v1.100.0 until core v1.101.0 is tagged and released, then bumped in a follow-up release.
+- Full test suite green with `-race`, coverage 96.6%.
+- This is a MINOR version bump (v1.41.0 to v1.42.0): two new tools fully additive; the `delegate_item` ScopeMode refusal closes a real security gap rather than breaking legitimate existing calls (no such misuse was possible before this same release's core version introduced static-scope roles).
+
+---
+
 ## [1.41.0] — 2026-09-28
 
 ### Added
