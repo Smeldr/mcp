@@ -346,6 +346,7 @@ func (s *Server) allToolDefs() []mcpTool {
 	}
 	if s.tokenStore != nil {
 		tools = append(tools, tokenToolDefs()...)
+		tools = append(tools, lookupTokenNamesToolDefs()...)
 	}
 	if s.app.RoleStore() != nil {
 		tools = append(tools, grantToolDefs()...)
@@ -620,6 +621,19 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return nil, rpcErr
 		}
 		return s.handleCheckTool(ctx, p.Name, coalesceArgs(p.Arguments))
+	}
+
+	// Lookup token names tool. Gated on TokenStore presence (same guard as
+	// create_token/list_tokens/revoke_token), but deliberately not joined
+	// to their own switch case above — those resolve to Admin via
+	// legacyRoleFor's explicit case, this one needs the lower Author floor,
+	// so it falls through to legacyRoleFor's generic tail instead (same
+	// shape as withdraw_delegation/list_roles).
+	if s.tokenStore != nil && isLookupTokenNamesTool(p.Name) {
+		if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
+			return nil, rpcErr
+		}
+		return s.handleLookupTokenNamesTool(ctx, coalesceArgs(p.Arguments))
 	}
 
 	// Discoverability meta-tool. Requires Author role.

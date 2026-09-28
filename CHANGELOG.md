@@ -7,6 +7,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.43.0] — 2026-09-28
+
+### Added
+
+- New MCP tool `lookup_token_names(user_ids: string[]) -> {names: {<user_id>: <token_name>}}` — batch-resolves JWT `User.ID` actor values (the kind visible in `last_actor`, `RoleGrant.Grantor`, or a relation edge's `created_by`) back to their human-readable token `Name`. Returns a map of IDs found in the token store to their names; IDs with no matching token are omitted from the result (never guessed). Calls the new `smeldr.TokenStore.NamesForUserIDs` method (added in core v1.104.0). Registered only when a `TokenStore` is configured. Per-call bound of 500 IDs (`maxLookupTokenNamesIDs` constant) is enforced to respect SQLite's parameter-count limits; calls exceeding this bound return JSON-RPC error -32602.
+- Authorization: requires Author role — narrower than the Admin-only `create_token`/`list_tokens`/`revoke_token`, since this is a read-only lookup revealing only a token's `Name`, not its role, expiry, or revoked status. Depends on a seeded `smeldr_tool_policies` row (added in core v1.104.1) for governance-enabled instances to authorize correctly — identical pattern as `get_sweep_run` and `get_check_status`, which received their own policy rows before shipping.
+- `go.mod` bumped: `smeldr.dev/core` v1.101.0 → v1.104.1 (carries both `TokenStore.NamesForUserIDs` and the `lookup_token_names` tool-policy seed).
+- Test coverage: 13 new tests in `lookup_token_names_tools_test.go` — tool presence gated on TokenStore, Guest caller rejection, authorized Author grant (verifies core's policy row works), found/not-found/mixed-ID lookups, empty input, missing/malformed/over-bound arguments, and store-query failure mapping. Package coverage 96.6%, `-race` clean, every new function 100% covered.
+- This is a MINOR version bump (v1.42.1 → v1.43.0): new exported tool surface, new consumer-observable capability, no breaking change.
+
+---
+
 ## [1.42.1] — 2026-09-28
 
 ### Fixed
