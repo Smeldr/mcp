@@ -13,10 +13,17 @@ import (
 )
 
 // newPolicyCoverageServer builds an in-memory SQLite-backed server with
-// governance and all six compiled orchestration types wired — the exact
-// combination T224's investigation found broken (generated per-type tools
-// with no smeldr_tool_policies row, denied for every caller including a
-// real admin grant).
+// governance and every tool family wired at once: the six compiled
+// orchestration types (T224's own investigation), dynamic content
+// (WithDynamicContent), relations (app.Relations), and one seeded
+// Kind="block" schema (WithBlocks) so a real typed create_{block} tool
+// appears too. This is deliberately the union of every family a real
+// deployment (process.smeldr.dev) can wire together, not just the one
+// combination a past incident happened to touch — core-tool-policy-gaps-
+// schedule-observe-blocks found that dynamic content, relations, and blocks
+// were never wired here at all, so the enumeration test below could not
+// have caught schedule_content/observe_relation/create_{block} falling
+// closed for every caller.
 func newPolicyCoverageServer(t *testing.T) (*Server, *sql.DB, *smeldr.RoleStore) {
 	t.Helper()
 	db, err := sql.Open("sqlite", ":memory:")
@@ -35,10 +42,31 @@ func newPolicyCoverageServer(t *testing.T) (*Server, *sql.DB, *smeldr.RoleStore)
 	if err := smeldr.CreateOrchestrationTables(db); err != nil {
 		t.Fatalf("CreateOrchestrationTables: %v", err)
 	}
+	if err := smeldr.CreateRelationTables(db); err != nil {
+		t.Fatalf("CreateRelationTables: %v", err)
+	}
 	if _, err := db.ExecContext(context.Background(),
 		`CREATE TABLE IF NOT EXISTS smeldr_tokens (id TEXT NOT NULL PRIMARY KEY, role TEXT NOT NULL DEFAULT '')`,
 	); err != nil {
 		t.Fatalf("create smeldr_tokens: %v", err)
+	}
+
+	// One real Kind="block" schema so generateTypedTools (WithBlocks) puts
+	// a genuine typed create_hero_banner tool into tools/list — a fixed
+	// block name would never have caught this, only a real seeded schema
+	// exercises the same dynamic-name derivation path a live deployment hits.
+	schemaStore := smeldr.NewSchemaStore(db)
+	if err := schemaStore.Save(context.Background(), &smeldr.ContentTypeSchema{
+		TypeName: "hero_banner",
+		Kind:     "block",
+		Fields:   json.RawMessage(`[{"name":"title","type":"string","required":true}]`),
+	}); err != nil {
+		t.Fatalf("SchemaStore.Save: %v", err)
+	}
+
+	relStore, err := smeldr.NewRelationStore(db)
+	if err != nil {
+		t.Fatalf("NewRelationStore: %v", err)
 	}
 
 	store := smeldr.NewRoleStore(db)
@@ -46,13 +74,14 @@ func newPolicyCoverageServer(t *testing.T) (*Server, *sql.DB, *smeldr.RoleStore)
 		BaseURL: "http://localhost",
 		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
 		DB:      db,
-	})
+	}).Relations(relStore)
+	app.ServeDynamicContent()
 	if err := app.Governance(store); err != nil {
 		t.Fatalf("Governance: %v", err)
 	}
 	smeldr.RegisterOrchestrationTypes(app, db)
 
-	return New(app), db, store
+	return New(app, WithDynamicContent(), WithBlocks()), db, store
 }
 
 // TestAuthoriseTool_PolicyCoverage_Enumerated proves every tool a real
@@ -129,5 +158,167 @@ func TestAuthoriseTool_GetSignal_NoLongerForbidden(t *testing.T) {
 	_, rpcErr := srv.handleToolsCall(ctx, params)
 	if rpcErr != nil {
 		t.Fatalf("get_signal: unexpected error %+v (was -32001 forbidden before D48)", rpcErr)
+	}
+}
+
+// TestAuthoriseTool_ScheduleContent_NoLongerForbidden reproduces
+// core-tool-policy-gaps-schedule-observe-blocks' own reported symptom
+// directly: a real Editor-granted caller calling schedule_content on a
+// governed instance got -32001 forbidden regardless of role, since
+// deriveToolPolicy could never resolve "content" to a compiled module.
+// Proves the fix through the real handleToolsCall entry point.
+func TestAuthoriseTool_ScheduleContent_NoLongerForbidden(t *testing.T) {
+	srv, _, store := newPolicyCoverageServer(t)
+	ctx := context.Background()
+
+	if _, err := srv.app.DefineContentType(ctx, &smeldr.ContentTypeSchema{
+		TypeName: "bulletin",
+		Fields:   json.RawMessage(`[{"name":"title","type":"string","required":true}]`),
+	}); err != nil {
+		t.Fatalf("DefineContentType: %v", err)
+	}
+	repo, err := srv.app.DynamicContentRepo("bulletin")
+	if err != nil {
+		t.Fatalf("DynamicContentRepo: %v", err)
+	}
+	node, err := repo.CreateDraft(ctx, map[string]any{"title": "Hello"})
+	if err != nil {
+		t.Fatalf("CreateDraft: %v", err)
+	}
+
+	if _, err := store.Grant(ctx, smeldr.RoleGrant{TokenID: "editor-1", RoleName: "editor"}); err != nil {
+		t.Fatalf("Grant editor: %v", err)
+	}
+	callerCtx := smeldr.NewTestContext(smeldr.User{ID: "editor-1"})
+
+	_, rpcErr := callTool(t, srv, callerCtx, "schedule_content", map[string]any{
+		"type_name":    "bulletin",
+		"id":           node.ID,
+		"scheduled_at": "2026-09-01T10:00:00Z",
+	})
+	if rpcErr != nil {
+		t.Fatalf("schedule_content: unexpected error %+v (was -32001 forbidden before the fix)", rpcErr)
+	}
+}
+
+// TestAuthoriseTool_ScheduleContent_GuestForbidden confirms the fix did not
+// open the floor wide: a caller with no role grant at all is still denied.
+func TestAuthoriseTool_ScheduleContent_GuestForbidden(t *testing.T) {
+	srv, _, _ := newPolicyCoverageServer(t)
+	_, rpcErr := callTool(t, srv, newTestCtx(), "schedule_content", map[string]any{
+		"type_name":    "bulletin",
+		"id":           "whatever",
+		"scheduled_at": "2026-09-01T10:00:00Z",
+	})
+	if rpcErr == nil {
+		t.Fatal("expected error for a Guest caller")
+	}
+}
+
+// TestAuthoriseTool_ObserveRelation_NoLongerForbidden reproduces
+// core-tool-policy-gaps-schedule-observe-blocks' own reported symptom
+// directly: a real Author-granted caller calling observe_relation on a
+// governed instance got -32001 forbidden regardless of role, since
+// "observe" was never even a key deriveToolPolicy's own verb table knew.
+// Proves the fix through the real handleToolsCall entry point.
+func TestAuthoriseTool_ObserveRelation_NoLongerForbidden(t *testing.T) {
+	srv, _, store := newPolicyCoverageServer(t)
+	ctx := context.Background()
+
+	if err := srv.relationStore.UpsertKind(ctx, smeldr.RelationKindDef{
+		TypeName:    "cites",
+		Label:       "Cites",
+		Mode:        "asserted",
+		Directional: true,
+	}); err != nil {
+		t.Fatalf("UpsertKind: %v", err)
+	}
+
+	if _, err := store.Grant(ctx, smeldr.RoleGrant{TokenID: "author-1", RoleName: "author"}); err != nil {
+		t.Fatalf("Grant author: %v", err)
+	}
+	callerCtx := smeldr.NewTestContext(smeldr.User{ID: "author-1"})
+
+	_, rpcErr := callTool(t, srv, callerCtx, "observe_relation", map[string]any{
+		"source_type":   "post",
+		"source_id":     "p1",
+		"target_type":   "post",
+		"target_id":     "p2",
+		"relation_kind": "cites",
+	})
+	if rpcErr != nil {
+		t.Fatalf("observe_relation: unexpected error %+v (was -32001 forbidden before the fix)", rpcErr)
+	}
+}
+
+// TestAuthoriseTool_ObserveRelation_GuestForbidden confirms the fix did not
+// open the floor wide: a caller with no role grant at all is still denied.
+func TestAuthoriseTool_ObserveRelation_GuestForbidden(t *testing.T) {
+	srv, _, _ := newPolicyCoverageServer(t)
+	_, rpcErr := callTool(t, srv, newTestCtx(), "observe_relation", map[string]any{
+		"source_type":   "post",
+		"source_id":     "p1",
+		"target_type":   "post",
+		"target_id":     "p2",
+		"relation_kind": "cites",
+	})
+	if rpcErr == nil {
+		t.Fatal("expected error for a Guest caller")
+	}
+}
+
+// TestAuthoriseTool_CreateBlockTool_NoLongerForbidden reproduces
+// core-tool-policy-gaps-schedule-observe-blocks' own reported symptom
+// directly: a real Author-granted caller calling a typed create_{block}
+// tool (create_hero_banner, seeded by newPolicyCoverageServer) got -32001
+// forbidden regardless of role, since block schema names are dynamic and
+// can never get a static smeldr_tool_policies row. Proves the fix through
+// the real handleToolsCall entry point, exercising deriveToolPolicy's new
+// typedToolSet branch rather than calling it directly.
+func TestAuthoriseTool_CreateBlockTool_NoLongerForbidden(t *testing.T) {
+	srv, _, store := newPolicyCoverageServer(t)
+	ctx := context.Background()
+
+	if _, err := store.Grant(ctx, smeldr.RoleGrant{TokenID: "author-1", RoleName: "author"}); err != nil {
+		t.Fatalf("Grant author: %v", err)
+	}
+	callerCtx := smeldr.NewTestContext(smeldr.User{ID: "author-1"})
+
+	_, rpcErr := callTool(t, srv, callerCtx, "create_hero_banner", map[string]any{
+		"title": "Welcome",
+	})
+	if rpcErr != nil {
+		t.Fatalf("create_hero_banner: unexpected error %+v (was -32001 forbidden before the fix)", rpcErr)
+	}
+}
+
+// TestAuthoriseTool_CreateBlockTool_GuestForbidden confirms the fix did not
+// open the floor wide: a caller with no role grant at all is still denied.
+func TestAuthoriseTool_CreateBlockTool_GuestForbidden(t *testing.T) {
+	srv, _, _ := newPolicyCoverageServer(t)
+	_, rpcErr := callTool(t, srv, newTestCtx(), "create_hero_banner", map[string]any{
+		"title": "Welcome",
+	})
+	if rpcErr == nil {
+		t.Fatal("expected error for a Guest caller")
+	}
+}
+
+// TestDeriveToolPolicy_TypedBlockTool_NoBlanketCreateBypass is the direct
+// negative case for deriveToolPolicy's new typedToolSet branch: a
+// "create_*"-shaped name that is neither a compiled module nor a real typed
+// block tool must still fail closed. The new branch checks s.typedToolSet
+// membership, not just the "create_" prefix — this pins that a name is
+// never treated as a typed tool just because it looks like one.
+func TestDeriveToolPolicy_TypedBlockTool_NoBlanketCreateBypass(t *testing.T) {
+	srv, _, _ := newPolicyCoverageServer(t)
+	if _, ok := srv.deriveToolPolicy("create_totally_unknown_xyz"); ok {
+		t.Error(`deriveToolPolicy("create_totally_unknown_xyz") = ok, want !ok (no module, not a real typed tool)`)
+	}
+	// Sanity check the positive branch is actually reachable via this same
+	// server, so a false negative above isn't masked by typedToolSet being
+	// empty for an unrelated reason (e.g. a setup regression).
+	if _, ok := srv.deriveToolPolicy("create_hero_banner"); !ok {
+		t.Fatal(`deriveToolPolicy("create_hero_banner") = !ok, want ok (real seeded block schema)`)
 	}
 }

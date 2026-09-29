@@ -7,6 +7,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.43.1] — 2026-09-29
+
+### Fixed
+
+- Bug: a typed block-schema tool (`create_{schema.TypeName}`, one generated per registered block schema via `WithBlocks`, e.g. `create_hero_banner`) was silently forbidden for every caller, including Admin, on any server with governance wired (a `RoleStore` configured) - exactly `process.smeldr.dev`'s own configuration.
+- Root cause: `authoriseTool` looks up a `smeldr_tool_policies` row for each tool name, then falls back to `deriveToolPolicy` (a verb-derivation heuristic) when no row exists. Block schema names are dynamic - one per organization, registered at runtime, never knowable at compile time - so no fixed `smeldr_tool_policies` row could ever cover them. `deriveToolPolicy`'s existing "create" derivation path only succeeded when a real compiled `Module[T]` backed the parsed type name, which a block schema never is.
+- Fix: `deriveToolPolicy` (`tool.go`) gained a new resolution path for the "create" verb: if the full tool name is found in `s.typedToolSet` (the set of real, currently-registered typed block tools, already populated by `WithBlocks()` from actual `Kind="block"` schema rows - never spoofable, never containing anything but a genuinely registered typed tool), it resolves to the `"create"` operation, the same floor `create_node` itself already uses (typed block tools are documented as "Typed shorthand for create_node. Requires Author role.", so this is the same authority they always claimed, now actually enforced instead of silently denied to everyone).
+- Two related governance gaps in the same family were fixed on the `smeldr.dev/core` side (not this module) in core v1.105.1: `schedule_content` and `observe_relation` each gained a `smeldr_tool_policies` row (`manage` and `create` respectively). This module's `go.mod` was bumped to pin that core version.
+- Test coverage: `tool_policy_coverage_test.go`'s server-setup helper (`newPolicyCoverageServer`) was extended to wire every tool family in one server - dynamic content, relations, and one seeded `Kind="block"` schema, alongside the six orchestration types it already wired - turning the existing full-surface enumeration test into a true regression pin across every tool family instead of just the one combination a past incident happened to touch. Six new targeted tests were added: three proving each of `schedule_content`, `observe_relation`, and `create_hero_banner` (the seeded typed block tool) now succeed for a caller holding the correct role grant, and three proving each is still correctly denied for a caller with no grant at all (the fix did not open the floor wide). A seventh new test exercises `deriveToolPolicy` directly, confirming an unrelated `create_*`-shaped tool name that is neither a compiled module nor a real registered typed tool still fails closed - the new derivation path checks real `typedToolSet` membership, not just a name prefix.
+- No exported Go symbols were added or changed (`deriveToolPolicy` is unexported). `go build`, `go vet`, and `gofmt -l` are clean; `go test ./...` and `go test -race ./...` both pass; package coverage is 96.7% (this module's own gate). `golangci-lint run ./...` reports three pre-existing findings in `mcp_test.go` (unchecked `pw.Write` return values), confirmed unrelated to this change and out of scope to fix here.
+- PATCH version bump (v1.43.0 → v1.43.1): a real, consumer-visible behaviour fix (a previously-unusable tool family now works for its documented role), no exported symbol changed.
+
+---
+
 ## [1.43.0] — 2026-09-28
 
 ### Added

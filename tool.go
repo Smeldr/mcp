@@ -77,10 +77,11 @@ var toolOpFallback = map[string]string{
 
 // deriveToolPolicy derives the required operation for a tool name with no
 // smeldr_tool_policies row, per D48. Derivation applies only when a real
-// registered module backs the parsed type name — moduleForAdminList for a
-// list_* name (plural type name), moduleForType for every other verb — so
-// an unknown or misspelled tool name still fails closed: nothing derives a
-// requirement for a type name that confirms no module.
+// backing artifact confirms the parsed type name — moduleForAdminList for a
+// list_* name (plural type name), moduleForType for every other verb, or (for
+// "create" only) a live typed block tool tracked in s.typedToolSet — so an
+// unknown or misspelled tool name still fails closed: nothing derives a
+// requirement for a type name that confirms no module and no typed tool.
 func (s *Server) deriveToolPolicy(toolName string) (requiredOp string, ok bool) {
 	op, typeSnake, splitOK := parseToolName(toolName)
 	if !splitOK {
@@ -94,10 +95,23 @@ func (s *Server) deriveToolPolicy(toolName string) (requiredOp string, ok bool) 
 		if _, moduleOK := s.moduleForAdminList(typeSnake); !moduleOK {
 			return "", false
 		}
-	} else if _, moduleOK := s.moduleForType(typeSnake); !moduleOK {
-		return "", false
+		return requiredOp, true
 	}
-	return requiredOp, true
+	if _, moduleOK := s.moduleForType(typeSnake); moduleOK {
+		return requiredOp, true
+	}
+	// A typed block-schema tool (create_{schema.TypeName}, WithBlocks,
+	// core-tool-policy-gaps-schedule-observe-blocks) has no compiled
+	// Module[T] behind it — block schemas are dynamic, one per organization,
+	// unknowable at compile time — so moduleForType can never find it. It is
+	// a typed shorthand for create_node (same doc contract, same
+	// Author-floor policy: typed_tools.go's own description says so), so
+	// resolve it the same way create_node's static "create" row does,
+	// rather than requiring an impossible static row per dynamic type name.
+	if op == "create" && s.typedToolSet[toolName] {
+		return "create", true
+	}
+	return "", false
 }
 
 // authoriseTool enforces tool-level access control using the three-branch
