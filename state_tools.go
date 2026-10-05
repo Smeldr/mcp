@@ -7,6 +7,11 @@ import (
 	"smeldr.dev/core"
 )
 
+// surfaceMCP names this module as the entry point in the provenance record
+// core writes for a state change made through transition_item (core v1.109.0,
+// App.TransitionItemVia). Same value as core's own MCP lifecycle paths use.
+const surfaceMCP = "mcp"
+
 // stateToolDefs returns the three tool definitions for state flow management.
 // All three are registered when App.Config().DB is non-nil (same guard used in
 // handleToolsList and handleToolsCall).
@@ -142,7 +147,7 @@ func (s *Server) handleStateTool(ctx smeldr.Context, name string, args map[strin
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: to_state required"}
 		}
 		reason := stringArgOr(args, "reason", "")
-		result, err := s.app.TransitionItemWithReason(ctx, typeName, slug, toState, reason)
+		result, err := s.app.TransitionItemVia(ctx, surfaceMCP, typeName, slug, toState, reason)
 		if err != nil {
 			return nil, errorFor(err)
 		}

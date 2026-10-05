@@ -857,7 +857,11 @@ func TestHandleSignalTool_CreateSignal_NotifiesApp(t *testing.T) {
 	httpSrv := httptest.NewServer(app.Handler())
 	defer httpSrv.Close()
 
-	tok, err := smeldr.SignToken(smeldr.User{ID: "u1", Roles: []smeldr.Role{smeldr.Author}}, notifySignalTestSecret, 0)
+	// The subscriber must be a different user from the one creating the signal
+	// (newAuthorCtx is "u1"): since core v1.107.0 an event is not delivered to the
+	// connection whose own token caused it, so an "u1" subscriber would see no
+	// echo. A distinct observer proves the real contract: other subscribers get it.
+	tok, err := smeldr.SignToken(smeldr.User{ID: "observer", Roles: []smeldr.Role{smeldr.Author}}, notifySignalTestSecret, 0)
 	if err != nil {
 		t.Fatalf("SignToken: %v", err)
 	}
@@ -928,7 +932,11 @@ func TestCreateSignal_ReceiverOmitted_BroadcastsToUnrelatedChannel(t *testing.T)
 	httpSrv := httptest.NewServer(app.Handler())
 	defer httpSrv.Close()
 
-	tok, err := smeldr.SignToken(smeldr.User{ID: "u1", Roles: []smeldr.Role{smeldr.Author}}, notifySignalTestSecret, 0)
+	// The subscriber must be a different user from the one creating the signal
+	// (newAuthorCtx is "u1"): since core v1.107.0 an event is not delivered to the
+	// connection whose own token caused it, so an "u1" subscriber would see no
+	// echo. A distinct observer proves the real contract: other subscribers get it.
+	tok, err := smeldr.SignToken(smeldr.User{ID: "observer", Roles: []smeldr.Role{smeldr.Author}}, notifySignalTestSecret, 0)
 	if err != nil {
 		t.Fatalf("SignToken: %v", err)
 	}

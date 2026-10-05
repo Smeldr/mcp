@@ -7,6 +7,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.44.0] - 2026-10-05
+
+### Changed
+
+- The `transition_item` tool now calls smeldr.dev/core's `App.TransitionItemVia` (added in core v1.109.0) with surface `mcp`, instead of `TransitionItemWithReason`. When core's `App.Provenance` is wired, every provenance record written through `transition_item` therefore carries surface `mcp`; before, the surface was empty. No tool name, argument or response changed.
+- `go.mod` raises the minimum `smeldr.dev/core` from v1.105.1 to v1.109.0. Consumers gain, through core: v1.106.0 (`signal.transitioned` events are no longer streamed), v1.107.0 (an event is not delivered to the connection whose own token caused it; no Amendment events on the stream; `?include_own=true` opts back in), v1.108.0 (the Task state flow gains `commit-reviewing` to `implementing`, `implementing` to `blocked` and `blocked` to `implementing`, which `transition_item` and `get_valid_transitions` now report), and v1.109.0 (core records a provenance entry for each state change made through `transition_item`). Because this raises the core floor across four minor versions, this release is a MINOR.
+- core v1.109.1 is a security fix for core's `POST /_content/{type}/{id}/status` endpoint (any Editor could previously perform a non-Strict operation-gated transition without the operation). This module does not call that endpoint and does not require v1.109.1, but consumers should take core v1.109.1 or later.
+
+### Known gaps
+
+- The `set_content_status` and `schedule_content` tools call core methods that cannot be given a surface, so provenance records written through them still have an empty surface. This is planned to be addressed by core's single `transition` capability (D96).
+
+---
+
 ## [1.43.1] — 2026-09-29
 
 ### Fixed
