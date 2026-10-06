@@ -7,6 +7,24 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.45.0] - 2026-10-05
+
+### Added
+
+- The `define_state_flow` tool accepts `locked` (boolean, content edits are refused while an item is in that state, core A306) and `standing` (string, only `holds` or empty, core D100) on each state, and `active_state` and `conflict_policy` (`reject` or `supersede`) on the flow. A `standing` other than `holds` returns -32602 naming the flow and state (core's own check). `conflict_policy` outside `reject`/`supersede` and an `active_state` that is not one of the flow's states return -32602. A present `locked` or `standing` of the wrong JSON type returns -32602 naming `states[i].locked` or `states[i].standing`; the older three flags keep their lenient parsing.
+
+### Changed
+
+- BEHAVIOUR CHANGE: `define_state_flow` now refuses a `type_name` that is a Go-defined type (Decision, Task, Amendment, Signal and the like) with -32602 saying its flow is set in code. Before, it accepted the call, and core's own RegisterFlow at the next startup rewrote the flow anyway. An unregistered `type_name` is accepted as before.
+- The tool description now states that every flag and field is written as given and one left out is reset to false or empty, so callers send the full definition.
+- `go.mod` raises the minimum `smeldr.dev/core` from v1.109.0 to v1.113.0. From core v1.113.0 (A399) `RegisterFlow` updates every flag of an existing state row, which is what makes a re-sent `locked` take effect on a state that already exists.
+
+### Upgrading
+
+- Deploy this release together with core v1.113.0: core v1.113.0 resets `locked` and `standing` for any `define_state_flow` call that omits them, and this release is the one that can send them.
+
+---
+
 ## [1.44.0] - 2026-10-05
 
 ### Changed

@@ -70,6 +70,9 @@ func stateToolDefs() []mcpTool {
 			Name: "define_state_flow",
 			Description: "Register or update a state flow for a dynamic content type. " +
 				"Calls App.RegisterFlow — idempotent, safe to re-run on every restart. " +
+				"Every flag of a state, and active_state and conflict_policy, is written as given: " +
+				"a flag or field you leave out is reset to false or empty, so always send the full definition. " +
+				"A Go-defined type's flow is set in code and is refused here. " +
 				"Requires Admin role.",
 			InputSchema: map[string]any{
 				"type": "object",
@@ -82,9 +85,18 @@ func stateToolDefs() []mcpTool {
 						"type":        "string",
 						"description": "Go type name this flow applies to. Omit for the default flow.",
 					},
+					"active_state": map[string]any{
+						"type":        "string",
+						"description": "The state where the uniqueness invariant applies. Must be one of the flow's states. Leave out for none.",
+					},
+					"conflict_policy": map[string]any{
+						"type":        "string",
+						"enum":        []string{"reject", "supersede"},
+						"description": "What happens when a second item enters active_state. Leave out for no enforcement.",
+					},
 					"states": map[string]any{
 						"type":        "array",
-						"description": "States in the flow.",
+						"description": "States in the flow. Send every flag of every state: a flag left out is reset to false.",
 						"items": map[string]any{
 							"type": "object",
 							"properties": map[string]any{
@@ -92,6 +104,8 @@ func stateToolDefs() []mcpTool {
 								"is_initial":         map[string]any{"type": "boolean"},
 								"is_terminal":        map[string]any{"type": "boolean"},
 								"suppresses_signals": map[string]any{"type": "boolean"},
+								"locked":             map[string]any{"type": "boolean", "description": "Content edits are refused while an item is in this state (A306)."},
+								"standing":           map[string]any{"type": "string", "enum": []string{"holds"}, "description": "\"holds\" says an item in this state is in force (D100). Leave out for none."},
 							},
 							"required": []string{"name"},
 						},
@@ -208,6 +222,10 @@ func (s *Server) handleStateTool(ctx smeldr.Context, name string, args map[strin
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: name required"}
 		}
 		typeName, _ := stringArg(args, "type_name")
+		if desc := s.app.TypeRegistry().Lookup(typeName); desc != nil && desc.Kind != "content" {
+			return nil, &jsonRPCError{Code: -32602, Message: fmt.Sprintf(
+				"invalid params: type_name %q is a Go-defined type; its state flow is set in code (App.RegisterFlow at startup) and cannot be defined here", typeName)}
+		}
 		statesRaw, ok := args["states"].([]any)
 		if !ok {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: states must be an array"}
@@ -224,11 +242,17 @@ func (s *Server) handleStateTool(ctx smeldr.Context, name string, args map[strin
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
+		activeState, conflictPolicy, rpcErr := parseConflict(args, states)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
 		if err := s.app.RegisterFlow(smeldr.StateFlow{
-			Name:        name,
-			TypeName:    typeName,
-			States:      states,
-			Transitions: trans,
+			Name:           name,
+			TypeName:       typeName,
+			States:         states,
+			Transitions:    trans,
+			ActiveState:    activeState,
+			ConflictPolicy: conflictPolicy,
 		}); err != nil {
 			return nil, errorFor(err)
 		}
@@ -252,11 +276,21 @@ func parseStates(raw []any) ([]smeldr.State, *jsonRPCError) {
 				Message: fmt.Sprintf("invalid params: states[%d] must be an object", i)}
 		}
 		n, _ := m["name"].(string)
+		locked, rpcErr := strictBool(m, "locked", i)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		standing, rpcErr := strictString(m, "standing", i)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
 		out = append(out, smeldr.State{
 			Name:              n,
 			IsInitial:         boolField(m, "is_initial"),
 			IsTerminal:        boolField(m, "is_terminal"),
 			SuppressesSignals: boolField(m, "suppresses_signals"),
+			Locked:            locked,
+			Standing:          smeldr.Standing(standing),
 		})
 	}
 	return out, nil
@@ -277,6 +311,75 @@ func parseTransitions(raw []any) ([]smeldr.Transition, *jsonRPCError) {
 		out = append(out, smeldr.Transition{From: from, To: to, RequiredOperation: role})
 	}
 	return out, nil
+}
+
+// strictBool reads an optional boolean key of states[i]. An absent key is
+// false; a key present with any other JSON type is -32602 naming the state and
+// key (the older flags keep boolField's silent-false behaviour).
+func strictBool(m map[string]any, key string, i int) (bool, *jsonRPCError) {
+	v, present := m[key]
+	if !present || v == nil {
+		return false, nil
+	}
+	b, ok := v.(bool)
+	if !ok {
+		return false, &jsonRPCError{Code: -32602,
+			Message: fmt.Sprintf("invalid params: states[%d].%s must be a boolean", i, key)}
+	}
+	return b, nil
+}
+
+// strictString is strictBool's counterpart for an optional string key.
+func strictString(m map[string]any, key string, i int) (string, *jsonRPCError) {
+	v, present := m[key]
+	if !present || v == nil {
+		return "", nil
+	}
+	s, ok := v.(string)
+	if !ok {
+		return "", &jsonRPCError{Code: -32602,
+			Message: fmt.Sprintf("invalid params: states[%d].%s must be a string", i, key)}
+	}
+	return s, nil
+}
+
+// parseConflict reads active_state and conflict_policy. core's RegisterFlow
+// stores both without checking them, so the tool does: conflict_policy must be
+// empty, reject or supersede, and a non-empty active_state must name one of the
+// flow's own states.
+func parseConflict(args map[string]any, states []smeldr.State) (string, smeldr.ConflictPolicy, *jsonRPCError) {
+	activeState, _ := args["active_state"].(string)
+	policy, _ := args["conflict_policy"].(string)
+	if v, present := args["active_state"]; present && v != nil {
+		if _, ok := v.(string); !ok {
+			return "", "", &jsonRPCError{Code: -32602, Message: "invalid params: active_state must be a string"}
+		}
+	}
+	if v, present := args["conflict_policy"]; present && v != nil {
+		if _, ok := v.(string); !ok {
+			return "", "", &jsonRPCError{Code: -32602, Message: "invalid params: conflict_policy must be a string"}
+		}
+	}
+	switch smeldr.ConflictPolicy(policy) {
+	case "", smeldr.ConflictReject, smeldr.ConflictSupersede:
+	default:
+		return "", "", &jsonRPCError{Code: -32602,
+			Message: fmt.Sprintf("invalid params: conflict_policy %q must be %q or %q", policy, smeldr.ConflictReject, smeldr.ConflictSupersede)}
+	}
+	if activeState != "" {
+		found := false
+		for _, st := range states {
+			if st.Name == activeState {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return "", "", &jsonRPCError{Code: -32602,
+				Message: fmt.Sprintf("invalid params: active_state %q is not one of the flow's states", activeState)}
+		}
+	}
+	return activeState, smeldr.ConflictPolicy(policy), nil
 }
 
 // boolField extracts an optional boolean field from a map, defaulting to false.
