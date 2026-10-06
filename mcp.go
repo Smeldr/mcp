@@ -422,7 +422,7 @@ func mcpAdminReadToolDefs(m smeldr.MCPModule) []mcpTool {
 	getAndDelete := []mcpTool{
 		{
 			Name:        "get_" + typeSnake,
-			Description: "Get a single " + meta.TypeName + " by id or slug. Requires Editor or Admin role. Returns the item at any lifecycle status.",
+			Description: "Get a single " + meta.TypeName + " by id or slug. Requires Editor or Admin role. Returns the item at any lifecycle status." + standingNote,
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -447,7 +447,7 @@ func mcpAdminReadToolDefs(m smeldr.MCPModule) []mcpTool {
 		Name: "list_" + pluralSnake(typeSnake),
 		Description: "List all " + meta.TypeName + " items. Requires Editor or Admin role. " +
 			"Returns items at any lifecycle status. Response includes \"total\", the real " +
-			"unfiltered count, alongside \"items\" (possibly truncated to limit).",
+			"unfiltered count, alongside \"items\" (possibly truncated to limit)." + standingNote,
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

@@ -7,6 +7,24 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.46.0] - 2026-10-06
+
+### Added
+
+- A separate `standing` key (D100) on the results of the typed `get_<type>` and `list_<type>` tools, `get_content`, `list_content`, `list_items_by_state` and `transition_item`, for a type whose flow tags a state as holding. Values are `holds`, `ceased` or `none` (an item of such a type with no stored row is `none`), next to the item's state and never merged into it. A type that has no standing carries no key. A page costs one tagged-state lookup plus one standing query (core's `TypeHasStanding` and `ItemStandings`), not two queries per item. The key is spliced after the item's own fields, so field order is unchanged.
+- The `get_item_standing(type_name, slug)` tool (Editor): returns `{type_name, slug, standing}`, or just `{type_name, slug}` when the type has no standing. Unlike the key on the other tools, a failed lookup is returned as an error here, never as an absent field.
+
+### Changed
+
+- On the other tools the lookup is fail-open: a failure is logged and the key is left out, so an absent `standing` means either no standing for the type or a failed lookup. Every affected tool description now says so.
+- `go.mod` raises the minimum `smeldr.dev/core` from v1.113.0 to v1.115.0 (v1.114.0 added `TypeHasStanding` and `ItemStandings`; v1.115.0 seeds the tool policy row `get_item_standing` needs when governance is wired).
+
+### Upgrading
+
+- Deploy with core v1.115.0 or later: without the seeded policy row `get_item_standing` is refused for every caller when governance is wired. An existing instance gets the row at its next start.
+
+---
+
 ## [1.45.0] - 2026-10-05
 
 ### Added

@@ -27,7 +27,7 @@ func stateToolDefs() []mcpTool {
 			Description: "Move an item — dynamic content or a compiled type (e.g. Signal, " +
 				"Task, Decision) — to a new state. The transition is validated against the " +
 				"registered state flow, including any role requirement; returns an error if " +
-				"the transition is not permitted. Requires Editor role.",
+				"the transition is not permitted. Requires Editor role." + standingNote,
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -56,7 +56,7 @@ func stateToolDefs() []mcpTool {
 		{
 			Name: "list_items_by_state",
 			Description: "List all items of a content type — dynamic or compiled — that are " +
-				"in the given state. Returns item slugs, IDs, and status. Requires Author role.",
+				"in the given state. Returns item slugs, IDs, and status. Requires Author role." + standingNote,
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -165,7 +165,7 @@ func (s *Server) handleStateTool(ctx smeldr.Context, name string, args map[strin
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		return toolResult(result), nil
+		return toolResult(s.withStandingResult(ctx, typeName, result)), nil
 
 	case "get_valid_transitions":
 		typeName, ok := stringArg(args, "type_name")
@@ -210,6 +210,7 @@ func (s *Server) handleStateTool(ctx smeldr.Context, name string, args map[strin
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
+		items = s.withStandingItems(ctx, typeName, items)
 		return toolResult(map[string]any{
 			"type_name": typeName,
 			"state":     state,

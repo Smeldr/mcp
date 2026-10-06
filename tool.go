@@ -252,6 +252,9 @@ func (s *Server) legacyRoleFor(name string) smeldr.Role {
 			return smeldr.Author
 		}
 	}
+	if s.app.Config().DB != nil && isStandingTool(name) {
+		return smeldr.Editor
+	}
 	if s.app.Config().DB != nil && isStateTool(name) {
 		switch name {
 		case "define_state_flow":
@@ -396,6 +399,7 @@ func (s *Server) allToolDefs() []mcpTool {
 	}
 	if s.app.Config().DB != nil {
 		tools = append(tools, stateToolDefs()...)
+		tools = append(tools, standingToolDefs()...)
 		tools = append(tools, signalToolDefs()...)
 		tools = append(tools, orchestrationToolDefs()...)
 		tools = append(tools, sweepRunToolDefs()...)
@@ -590,6 +594,14 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return nil, rpcErr
 		}
 		return s.handleStateTool(ctx, p.Name, coalesceArgs(p.Arguments))
+	}
+
+	// Standing read tool (get_item_standing). Gated on DB presence; Editor.
+	if s.app.Config().DB != nil && isStandingTool(p.Name) {
+		if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
+			return nil, rpcErr
+		}
+		return s.handleStandingTool(ctx, p.Name, coalesceArgs(p.Arguments))
 	}
 
 	// Signal protocol tools. Gated on DB presence (same guard as state tools).
@@ -840,6 +852,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		limit := clampListLimit(intArgOr(args, "limit", defaultListLimit))
 		offset := intArgOr(args, "offset", 0)
 		items = pageItems(items, offset, limit)
+		items = s.withStandingItems(ctx, lm.MCPMeta().TypeName, items)
 		return toolResult(map[string]any{"items": items, "total": total}), nil
 
 	case "get":
@@ -858,7 +871,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		return toolResult(item), nil
+		return toolResult(s.withStanding(ctx, gm.MCPMeta().TypeName, item)), nil
 
 	default:
 		return nil, &jsonRPCError{Code: -32602, Message: "unknown operation: " + op}

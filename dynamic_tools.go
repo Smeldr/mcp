@@ -73,7 +73,7 @@ func dynamicContentToolDefs() []mcpTool {
 		},
 		{
 			Name:        "get_content",
-			Description: "Get a single content item by type name and slug, at any lifecycle status. Requires Author role.",
+			Description: "Get a single content item by type name and slug, at any lifecycle status. Requires Author role." + standingNote,
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -85,7 +85,7 @@ func dynamicContentToolDefs() []mcpTool {
 		},
 		{
 			Name:        "list_content",
-			Description: "List content items of the given type. Supports pagination and status filter. Requires Author role.",
+			Description: "List content items of the given type. Supports pagination and status filter. Requires Author role." + standingNote,
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -209,7 +209,7 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		return toolResult(node), nil
+		return toolResult(s.withStanding(ctx, typeName, node)), nil
 
 	case "list_content":
 		typeName, ok := stringArg(args, "type_name")
@@ -236,7 +236,7 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if items == nil {
 			items = []map[string]any{}
 		}
-		return toolResult(map[string]any{"items": items, "total": len(items)}), nil
+		return toolResult(map[string]any{"items": s.withStandingMaps(ctx, typeName, items), "total": len(items)}), nil
 
 	case "update_content":
 		typeName, ok := stringArg(args, "type_name")
