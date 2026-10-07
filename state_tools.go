@@ -56,7 +56,7 @@ func stateToolDefs() []mcpTool {
 		{
 			Name: "list_items_by_state",
 			Description: "List all items of a content type — dynamic or compiled — that are " +
-				"in the given state. Returns item slugs, IDs, and status. Requires Author role." + standingNote,
+				"in the given state. Returns item slugs, IDs, and status. Requires Author role." + standingNote + stateSinceNote,
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -211,6 +211,7 @@ func (s *Server) handleStateTool(ctx smeldr.Context, name string, args map[strin
 			return nil, rpcErr
 		}
 		items = s.withStandingItems(ctx, typeName, items)
+		items = s.withStateSinceItems(ctx, typeName, items)
 		return toolResult(map[string]any{
 			"type_name": typeName,
 			"state":     state,

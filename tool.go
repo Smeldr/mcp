@@ -853,6 +853,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		offset := intArgOr(args, "offset", 0)
 		items = pageItems(items, offset, limit)
 		items = s.withStandingItems(ctx, lm.MCPMeta().TypeName, items)
+		items = s.withStateSinceItems(ctx, lm.MCPMeta().TypeName, items)
 		return toolResult(map[string]any{"items": items, "total": total}), nil
 
 	case "get":
@@ -871,7 +872,8 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		return toolResult(s.withStanding(ctx, gm.MCPMeta().TypeName, item)), nil
+		typeName := gm.MCPMeta().TypeName
+		return toolResult(s.withStateSince(ctx, typeName, s.withStanding(ctx, typeName, item))), nil
 
 	default:
 		return nil, &jsonRPCError{Code: -32602, Message: "unknown operation: " + op}

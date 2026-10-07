@@ -15,6 +15,23 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.47.0] - 2026-10-07
+
+### Added
+
+- Task and Goal items returned by the typed `get_<type>` and `list_<type>` tools and by `list_items_by_state` carry two more keys, spliced in after the item's own fields like `standing`: `state_since` (RFC3339 UTC, second resolution; two transitions in the same second are ordered by record id) and, when the transition carried a reason, `state_reason`. They say when the item entered the state it is in now and why, from the latest provenance record of a transition into that state (core `App.ItemsStateSince`, one batch per page). An absent `state_since` means unknown, never "has not moved": provenance may be off, the item may have moved before it was switched on, its status may have changed by a path that wrote no record, or the lookup failed (logged; the tool never fails because of it). The actor of the transition is deliberately not on this surface. The tool descriptions say all of this. (A415)
+
+### Changed
+
+- The splice of `standing` now goes through a shared `spliceJSONKeys`; the result is byte for byte the same.
+
+### Upgrading
+
+- Requires `smeldr.dev/core` v1.120.0 (`ItemsStateSince`). Raising the floor from v1.119.3 brings nothing else that changes behaviour.
+- The keys appear only where core's provenance is wired (`ENABLE_PROVENANCE` in the example server) and only for transitions made after it was switched on. CLI is unchanged: `smeldr-cli` reads the REST routes, whose item is the module's own struct.
+
+---
+
 ## [1.46.1] - 2026-10-07
 
 ### Fixed

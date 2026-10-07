@@ -70,18 +70,7 @@ func (s *Server) withStandingItems(ctx smeldr.Context, typeName string, items []
 		if !ok {
 			continue
 		}
-		val, _ := json.Marshal(string(st))
-		sep := ","
-		if len(b) == 2 {
-			sep = ""
-		}
-		nb := make([]byte, 0, len(b)+24)
-		nb = append(nb, b[:len(b)-1]...)
-		nb = append(nb, sep...)
-		nb = append(nb, `"standing":`...)
-		nb = append(nb, val...)
-		nb = append(nb, '}')
-		out[i] = json.RawMessage(nb)
+		out[i] = spliceJSONKeys(b, jsonKV{"standing", string(st)})
 	}
 	return out
 }
