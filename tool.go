@@ -255,6 +255,9 @@ func (s *Server) legacyRoleFor(name string) smeldr.Role {
 	if s.app.Config().DB != nil && isStandingTool(name) {
 		return smeldr.Editor
 	}
+	if s.app.Config().DB != nil && isProvenanceTool(name) {
+		return smeldr.Editor
+	}
 	if s.app.Config().DB != nil && isStateTool(name) {
 		switch name {
 		case "define_state_flow":
@@ -400,6 +403,7 @@ func (s *Server) allToolDefs() []mcpTool {
 	if s.app.Config().DB != nil {
 		tools = append(tools, stateToolDefs()...)
 		tools = append(tools, standingToolDefs()...)
+		tools = append(tools, provenanceToolDefs()...)
 		tools = append(tools, signalToolDefs()...)
 		tools = append(tools, orchestrationToolDefs()...)
 		tools = append(tools, sweepRunToolDefs()...)
@@ -602,6 +606,14 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return nil, rpcErr
 		}
 		return s.handleStandingTool(ctx, p.Name, coalesceArgs(p.Arguments))
+	}
+
+	// Item provenance read tool (get_item_provenance). Gated on DB presence; Editor.
+	if s.app.Config().DB != nil && isProvenanceTool(p.Name) {
+		if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
+			return nil, rpcErr
+		}
+		return s.handleProvenanceTool(ctx, coalesceArgs(p.Arguments))
 	}
 
 	// Signal protocol tools. Gated on DB presence (same guard as state tools).

@@ -15,6 +15,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.49.0] - 2026-10-07
+
+### Added
+
+- `get_item_provenance` (A428, D101): one item's history, newest first, paged. Arguments `type_name`, `slug`, optional `limit` (default 50, at most 500), `offset` and `view`. Each entry has its time (RFC3339 UTC, second resolution), verb (create, update, transition, standing-began, standing-ended), `from_state`, `to_state`, `gated` and, by view, the actor. The default view `members` carries `actor_kind`, `actor_id`, `surface` and `reason` on every entry; view `gated` carries them only on a gated transition (a caller can only narrow its view, never widen it). `actor_kind` is job, agent, human or unclassified (D105); rows written before core v1.121.0 say `human` for an actor with no classification and mean unclassified, never a verified person. Requires Editor and the `read` operation (a policy row is seeded). Provenance not enabled on the instance is an error that says so, never an empty list. Relation events (an edge asserted or ended) are not part of this read.
+
+### Upgrading
+
+- Requires `smeldr.dev/core` v1.123.0 (`ItemProvenance`, the policy row). The tool needs provenance wired on the instance (`ENABLE_PROVENANCE` in the example server), and the history it returns starts when provenance was switched on.
+
+---
+
 ## [1.48.0] - 2026-10-07
 
 ### Added
