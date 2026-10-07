@@ -675,6 +675,48 @@ func TestMCPToolsCall_create_validation(t *testing.T) {
 	}
 }
 
+// TestMCPToolsCall_beforeHooksRefuseWrites verifies a module's Before hooks
+// run on the MCP write tools as on HTTP (core v1.126.0, A432): a refusing
+// BeforeCreate, BeforeUpdate or BeforeDelete returns the hook's validation
+// error as -32602 and leaves the stored item untouched.
+func TestMCPToolsCall_beforeHooksRefuseWrites(t *testing.T) {
+	refuse := func(_ smeldr.Context, _ *testMCPPost) error { return smeldr.Err("title", "refused by hook") }
+	cases := []struct {
+		name string
+		sig  smeldr.LifecycleEvent
+		tool string
+		args map[string]any
+	}{
+		{"create", smeldr.BeforeCreate, "create_test_mcp_post", map[string]any{"title": "New Post", "body": "This is a body that is long enough."}},
+		{"update", smeldr.BeforeUpdate, "update_test_mcp_post", map[string]any{"slug": "seeded", "title": "Changed Title"}},
+		{"delete", smeldr.BeforeDelete, "delete_test_mcp_post", map[string]any{"slug": "seeded"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			app, repo := newWriteApp(t, smeldr.On(c.sig, refuse))
+			srv := New(app)
+			seedPost(t, repo, "seeded", smeldr.Draft, "Seeded Post", "body content here ok")
+
+			params, _ := json.Marshal(map[string]any{"name": c.tool, "arguments": c.args})
+			_, rpcErr := srv.handleToolsCall(newEditorCtx(), params)
+			if rpcErr == nil {
+				t.Fatal("expected the hook's refusal, got nil")
+			}
+			if rpcErr.Code != -32602 {
+				t.Errorf("error code = %d, want -32602", rpcErr.Code)
+			}
+
+			items, _ := repo.FindAll(context.Background(), smeldr.ListOptions{})
+			if len(items) != 1 {
+				t.Fatalf("repo has %d items, want only the seed", len(items))
+			}
+			if items[0].Title != "Seeded Post" {
+				t.Errorf("seed Title = %q, want it unchanged", items[0].Title)
+			}
+		})
+	}
+}
+
 // TestMCPToolsCall_publish verifies that publish transitions a Draft item to
 // Published and that PublishedAt is set to a non-zero time.
 func TestMCPToolsCall_publish(t *testing.T) {
