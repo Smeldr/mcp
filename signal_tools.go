@@ -3,6 +3,7 @@
 package mcp
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -114,7 +115,7 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 				(id, slug, status, created_at, updated_at, sender, receiver, signal_type, message, task_ref, sequence,
 				 subject_type, subject_id)
 			VALUES
-				(?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				($1, $2, 'pending', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
 			id, slug, now, now, sender, receiver, signalType, message, taskRef, sequence, subjectType, subjectID,
 		)
 		if err != nil {
@@ -147,15 +148,17 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		// Shared WHERE clause for both the paged SELECT and the pre-LIMIT
 		// COUNT(*) below — built once so the two queries can never drift
 		// apart on which filters they apply.
-		where := ` WHERE status = ?`
+		// Placeholders are numbered from the argument count so far ($1, $2, ...): that is
+		// what Postgres through pgx understands, and SQLite accepts it as well.
+		where := ` WHERE status = $1`
 		whereArgs := []any{state}
 		if receiver != "" {
-			where += ` AND receiver = ?`
 			whereArgs = append(whereArgs, receiver)
+			where += fmt.Sprintf(` AND receiver = $%d`, len(whereArgs))
 		}
 		if sender != "" {
-			where += ` AND sender = ?`
 			whereArgs = append(whereArgs, sender)
+			where += fmt.Sprintf(` AND sender = $%d`, len(whereArgs))
 		}
 
 		// total is the real count of every row matching the filters, before
@@ -165,7 +168,7 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		// commit review 2026-09-25).
 		var total int
 		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM smeldr_signals`+where, whereArgs...).Scan(&total); err != nil {
-			if strings.Contains(err.Error(), "no such table") {
+			if isMissingTable(err) {
 				slog.WarnContext(ctx, "mcp: list_signals: smeldr_signals table not found — returning empty list")
 				return toolResult(map[string]any{"signals": []map[string]any{}, "count": 0, "total": 0}), nil
 			}
@@ -175,7 +178,7 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		query := `SELECT id, slug, status, created_at, updated_at, sender, receiver,
 			        signal_type, message, task_ref, sequence,
 			        subject_type, subject_id, from_state, to_state, required_role
-			FROM smeldr_signals` + where + ` ORDER BY created_at DESC LIMIT ?`
+			FROM smeldr_signals` + where + fmt.Sprintf(` ORDER BY created_at DESC LIMIT $%d`, len(whereArgs)+1)
 		queryArgs := append(append([]any{}, whereArgs...), limit)
 
 		rows, err := db.QueryContext(ctx, query, queryArgs...)
@@ -233,6 +236,26 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		return toolResult(map[string]any{"signals": signals, "count": len(signals), "total": total}), nil
 	}
 	return nil, &jsonRPCError{Code: -32602, Message: "unknown signal tool: " + name}
+}
+
+// isMissingTable reports whether err says a table does not exist, on SQLite ("no such
+// table") or on Postgres (SQLSTATE 42P01, or the message `relation "x" does not
+// exist` from a driver that hides the code).
+//
+// This is a deliberate copy of smeldr.dev/core's unexported isNoSuchTable (dbprobe.go),
+// kept private here instead of growing core's stable API for one caller. If the two
+// drift, core's is the reference: change both together.
+func isMissingTable(err error) bool {
+	if err == nil {
+		return false
+	}
+	var st interface{ SQLState() string }
+	if errors.As(err, &st) && st.SQLState() == "42P01" {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "no such table") ||
+		(strings.Contains(msg, `relation "`) && strings.Contains(msg, "does not exist"))
 }
 
 // signalSlug derives a human-readable unique slug for a signal record from

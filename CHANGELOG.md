@@ -7,6 +7,26 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.46.1] - 2026-10-07
+
+### Fixed
+
+- `create_signal` and `list_signals` did not work on Postgres: both used `?` placeholders, which pgx does not understand (SQLSTATE 42601, "syntax error at or near"), and `list_signals` recognised a missing `smeldr_signals` table only by SQLite's message, so on Postgres a missing table was an internal error instead of the documented empty list. The statements now use numbered placeholders (`$1`, `$2`, ...), numbered from the argument count so the COUNT and the paged SELECT still share one WHERE clause, and the missing-table check also recognises Postgres (SQLSTATE 42P01 and its message). SQLite accepts numbered placeholders, so nothing changes there: `process.smeldr.dev` runs SQLite and is not affected. A known difference between the databases: `created_at` and `updated_at` in the `list_signals` result are the stored text on SQLite and RFC3339 with nanoseconds (`2026-10-07T05:22:48.496966Z`) on Postgres, because Postgres returns a time and `database/sql` formats it; both parse as RFC3339, but compare them as times, not as strings.
+
+### Added
+
+- A test that fails on SQLite-only SQL in any non-test Go file of this module (a copy of the guard in smeldr.dev/core, with an empty allowlist), and Postgres integration tests of the two signal tools (build tag `integration`, run in CI against postgres:16, with the pgx stdlib driver as a test-only dependency).
+
+### Changed
+
+- `go.mod` raises the minimum `smeldr.dev/core` from v1.115.0 to v1.119.3 so that the Postgres tests run against a core that supports Postgres.
+
+### Upgrading
+
+- On SQLite nothing changes, including the core floor's behaviour. On Postgres, raising mcp raises core with it, and that matters: from core v1.118.0 the state machine is enforced on Postgres with no opt-out (D103; before, a registered flow was stored and never consulted there, so a transition's role gate was not checked), and from v1.119.0 the conflict policy takes a lock shared by all processes on the database. A Postgres deployment that upgrades mcp therefore also gets that core behaviour: read the upgrade note under State flows in core's `docs/REFERENCE.md` before you do.
+
+---
+
 ## [1.46.0] - 2026-10-06
 
 ### Added
