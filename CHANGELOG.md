@@ -15,6 +15,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.50.0] - 2026-10-07
+
+### Added
+
+- `get_reachability` (A430, assessment B3): walk the live relation graph outward from one item, up to 10 hops, and report what is reachable at each distance. Arguments `type_name`, `id`, optional `kind`, `direction` (`incoming`, `outgoing` or `both`, default both: the walk's own words, not `get_relations`' `source` and `target`), `depth` (1 to 10, default 1), `max_items` (default 500, at most 2000), `limit` (default 100, at most 500) and `offset`. Result: `items` (each with `depth`, `type`, `id`, `edge_class` and `confidence` when set), `ring_sizes`, `total`, `count` and `cut`. The walk is bounded: when `max_items` stops it, `cut` is `{depth, dropped}`, the ring where the cap landed and how many items found there were not returned; rings deeper than that are absent, never reported as empty. Live edges only; graph structure only, no item content. Requires Author and the `read` operation (a policy row is seeded).
+
+### Upgrading
+
+- Requires `smeldr.dev/core` v1.124.0 (`ReachabilityBounded`, the policy row). The tool needs the relation store wired, like the other relation tools.
+
+---
+
 ## [1.49.0] - 2026-10-07
 
 ### Added

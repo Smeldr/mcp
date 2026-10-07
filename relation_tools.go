@@ -15,7 +15,7 @@ import (
 //   - preview_impact — Editor (used before archive/delete editorial decisions)
 //   - upsert_relation_kind — Admin (manages the kind registry schema)
 func relationToolDefs() []mcpTool {
-	return []mcpTool{
+	defs := []mcpTool{
 		{
 			Name: "assert_relation",
 			Description: "Assert a typed edge between two content items (edge_class=asserted). " +
@@ -139,13 +139,14 @@ func relationToolDefs() []mcpTool {
 			},
 		},
 	}
+	return append(defs, reachabilityToolDefs()...)
 }
 
-// isRelationTool reports whether name is one of the seven relation management tools.
+// isRelationTool reports whether name is one of the relation management tools.
 func isRelationTool(name string) bool {
 	switch name {
 	case "assert_relation", "propose_relation", "observe_relation", "get_relations",
-		"preview_impact", "upsert_relation_kind", "list_relation_kinds":
+		"preview_impact", "upsert_relation_kind", "list_relation_kinds", "get_reachability":
 		return true
 	}
 	return false
@@ -285,6 +286,9 @@ func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[st
 			edgeMaps[i] = relationEdgeMap(e)
 		}
 		return toolResult(map[string]any{"edges": edgeMaps}), nil
+
+	case "get_reachability":
+		return s.handleReachabilityTool(ctx, args)
 
 	case "preview_impact":
 		targetType, ok := stringArg(args, "target_type")
