@@ -969,7 +969,7 @@ func tokenToolDefs() []mcpTool {
 	return []mcpTool{
 		{
 			Name:        "create_token",
-			Description: "Create a named, revocable bearer token. Requires Admin role. Returns the raw token (store it securely; it cannot be retrieved again) and token_id — the identity to pass directly to grant_role, since creating a token grants no governance role by itself.",
+			Description: "Create a named, revocable bearer token. Requires Admin role. Returns the raw token (store it securely; it cannot be retrieved again) and token_id — the identity to pass directly to grant_role, since creating a token grants no governance role by itself." + actorClassNote,
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -986,13 +986,18 @@ func tokenToolDefs() []mcpTool {
 						"type":        "number",
 						"description": "Token lifetime in days (e.g. 90).",
 					},
+					"actor_class": map[string]any{
+						"type":        "string",
+						"enum":        []string{"agent", "job", "human"},
+						"description": actorClassDescription,
+					},
 				},
 				"required": []string{"name", "role", "expires_in_days"},
 			},
 		},
 		{
 			Name:        "list_tokens",
-			Description: "List all named bearer tokens. Requires Admin role. Includes revoked and expired tokens.",
+			Description: "List all named bearer tokens. Requires Admin role. Includes revoked and expired tokens. Each record carries \"ActorClass\": the classification the token was minted with (agent, job or human), or empty for an unclassified token, including every token created before classification existed.",
 			InputSchema: map[string]any{
 				"type":       "object",
 				"properties": map[string]any{},
@@ -1034,7 +1039,11 @@ func (s *Server) handleTokenTool(ctx smeldr.Context, name string, args map[strin
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: expires_in_days must be a positive number"}
 		}
 		ttl := time.Duration(float64(24*time.Hour) * days)
-		raw, tokenID, err := s.tokenStore.CreateWithID(ctx, tokenName, role, ttl)
+		class, rpcErr := actorClassArg(args)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		raw, tokenID, err := s.tokenStore.CreateClassified(ctx, tokenName, role, class, ttl)
 		if err != nil {
 			return nil, errorFor(err)
 		}
@@ -1316,4 +1325,39 @@ func pageItems(items []any, offset, limit int) []any {
 		end = len(items)
 	}
 	return items[offset:end]
+}
+
+// actorClassDescription is the schema description of create_token's
+// actor_class parameter.
+const actorClassDescription = "Optional actor classification (D105): agent, job or human. It decides what " +
+	"provenance records as actor_kind for everything done with this token. It never grants or changes a " +
+	"permission. You attest it: a token may be human only if every use of it is the direct result of one authenticated request by that person (an interactive session, or a personal token a service uses only inside that person's own request); a token that software uses on its own initiative is never human. Leave it out for an " +
+	"unclassified token, which records unclassified."
+
+// actorClassNote ends create_token's description: what the classification is
+// and what leaving it out means.
+const actorClassNote = " Optional actor_class (agent, job or human) classifies the token's actor: provenance " +
+	"then records that kind instead of unclassified; it never grants or changes a permission, and an issued " +
+	"token cannot be classified afterwards (issue a new one and revoke the old). Without it the token is " +
+	"unclassified and records actor_kind unclassified (before core v1.121.0 that read human; older rows " +
+	"keep human and mean unclassified, not a verified person)."
+
+// actorClassArg reads create_token's optional actor_class: absent or empty is an
+// unclassified token; anything but agent, job or human is invalid params.
+func actorClassArg(args map[string]any) (smeldr.Role, *jsonRPCError) {
+	v, present := args["actor_class"]
+	if !present || v == nil {
+		return "", nil
+	}
+	s, ok := v.(string)
+	if !ok {
+		return "", &jsonRPCError{Code: -32602, Message: "invalid params: actor_class must be a string"}
+	}
+	switch smeldr.Role(s) {
+	case "":
+		return "", nil
+	case smeldr.Agent, smeldr.Job, smeldr.Human:
+		return smeldr.Role(s), nil
+	}
+	return "", &jsonRPCError{Code: -32602, Message: `invalid params: actor_class must be "agent", "job" or "human"`}
 }

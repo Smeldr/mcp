@@ -15,6 +15,23 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.48.0] - 2026-10-07
+
+### Added
+
+- `create_token` takes an optional `actor_class`: `agent`, `job` or `human` (A416, D105). The token is minted classified through core's `TokenStore.CreateClassified`, so provenance records that kind (`actor_kind`) for everything done with it. It never grants or changes a permission, you attest it as the minting Admin (a token may be human only if every use of it is the direct result of one authenticated request by that person (an interactive session, or a personal token a service uses only inside that person's own request); a token that software uses on its own initiative is never human), and an issued token cannot be classified afterwards: issue a new one and revoke the old. An invalid value is invalid params (-32602). Without it the call is exactly what it was.
+- `list_tokens` records carry `ActorClass` (empty for an unclassified token and for a token created before classification existed). The tool descriptions say all of this.
+
+### Changed
+
+- The actor of an unclassified token is now recorded `unclassified` instead of `human` (core v1.121.0, D105): this is core's change, visible through this module's tools only in what provenance reads show. **Provenance rows written before core v1.121.0 keep `human` for what were untagged actors, and that older `human` means unclassified, not a verified person.**
+
+### Upgrading
+
+- Requires `smeldr.dev/core` v1.121.0. Call `smeldr.EnsureTokenActorClassColumn` at boot on an instance whose `smeldr_tokens` predates the column (the example server does): a classified `create_token` on a table without it is refused with an error naming that function, and a plain `create_token` keeps working.
+
+---
+
 ## [1.47.0] - 2026-10-07
 
 ### Added

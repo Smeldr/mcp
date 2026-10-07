@@ -22,9 +22,9 @@ import (
 //
 // Needs DATABASE_URL and the integration build tag, like the pgx module's tests.
 
-// newPGSignalServer gives the test a Postgres schema of its own: every connection of
+// pgSchemaDB gives the test a Postgres schema of its own: every connection of
 // the pool selects it through search_path, and it is dropped on cleanup.
-func newPGSignalServer(t *testing.T, createTables bool) (*Server, *sql.DB) {
+func pgSchemaDB(t *testing.T) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
@@ -53,6 +53,14 @@ func newPGSignalServer(t *testing.T, createTables bool) (*Server, *sql.DB) {
 		_, _ = admin.ExecContext(ctx, "DROP SCHEMA "+schema+" CASCADE")
 		admin.Close()
 	})
+	return db
+}
+
+// newPGSignalServer is a server over a schema of its own, with the orchestration
+// tables when createTables is set.
+func newPGSignalServer(t *testing.T, createTables bool) (*Server, *sql.DB) {
+	t.Helper()
+	db := pgSchemaDB(t)
 	if createTables {
 		if err := smeldr.CreateOrchestrationTables(db); err != nil {
 			t.Fatalf("CreateOrchestrationTables: %v", err)
