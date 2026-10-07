@@ -85,7 +85,7 @@ func TestRelationTools_PresentWithStore(t *testing.T) {
 		}
 	}
 	expected := []string{
-		"assert_relation", "propose_relation", "observe_relation", "get_relations",
+		"assert_relation", "withdraw_relation", "propose_relation", "observe_relation", "get_relations",
 		"preview_impact", "upsert_relation_kind", "list_relation_kinds", "get_reachability",
 	}
 	for _, name := range expected {
@@ -97,7 +97,7 @@ func TestRelationTools_PresentWithStore(t *testing.T) {
 
 func TestRelationTools_IsRelationTool(t *testing.T) {
 	for _, name := range []string{
-		"assert_relation", "propose_relation", "observe_relation", "get_relations",
+		"assert_relation", "withdraw_relation", "propose_relation", "observe_relation", "get_relations",
 		"preview_impact", "upsert_relation_kind", "list_relation_kinds", "get_reachability",
 	} {
 		if !isRelationTool(name) {
@@ -584,8 +584,8 @@ func TestRelationTools_ListRelationKinds_EmptyIsNonNil(t *testing.T) {
 
 func TestRelationTools_RelationToolDefs_AllPresent(t *testing.T) {
 	defs := relationToolDefs()
-	if len(defs) != 8 {
-		t.Fatalf("expected 8 tool defs, got %d", len(defs))
+	if len(defs) != 9 {
+		t.Fatalf("expected 9 tool defs, got %d", len(defs))
 	}
 	names := map[string]bool{}
 	for _, d := range defs {
@@ -601,7 +601,7 @@ func TestRelationTools_RelationToolDefs_AllPresent(t *testing.T) {
 		names[d.Name] = true
 	}
 	for _, expected := range []string{
-		"assert_relation", "propose_relation", "observe_relation", "get_relations",
+		"assert_relation", "withdraw_relation", "propose_relation", "observe_relation", "get_relations",
 		"preview_impact", "upsert_relation_kind", "list_relation_kinds", "get_reachability",
 	} {
 		if !names[expected] {

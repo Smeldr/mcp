@@ -2,16 +2,17 @@ package mcp
 
 import (
 	"encoding/json"
+	"errors"
 
 	"smeldr.dev/core"
 )
 
-// relationToolDefs returns the seven tool definitions for relation graph management.
-// All seven are registered when App.RelationStore() is non-nil (app.Relations was called).
+// relationToolDefs returns the tool definitions for relation graph management.
+// All are registered when App.RelationStore() is non-nil (app.Relations was called).
 //
 // Role assignment:
-//   - assert_relation, propose_relation, observe_relation, get_relations,
-//     list_relation_kinds — Author
+//   - assert_relation, withdraw_relation, propose_relation, observe_relation,
+//     get_relations, list_relation_kinds — Author
 //   - preview_impact — Editor (used before archive/delete editorial decisions)
 //   - upsert_relation_kind — Admin (manages the kind registry schema)
 func relationToolDefs() []mcpTool {
@@ -19,8 +20,9 @@ func relationToolDefs() []mcpTool {
 		{
 			Name: "assert_relation",
 			Description: "Assert a typed edge between two content items (edge_class=asserted). " +
-				"Each call inserts a new edge record with a unique ID — use get_relations first to " +
-				"check whether an edge already exists before asserting. Requires Author role.",
+				"Asserting a relation that is live updates its one row; asserting one whose rows have " +
+				"all ended starts a new row (one row per life, so its history is kept). End a relation " +
+				"with withdraw_relation. Requires Author role.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -33,6 +35,22 @@ func relationToolDefs() []mcpTool {
 					"attributes":    map[string]any{"type": "object", "description": "Arbitrary edge-level metadata."},
 				},
 				"required": []string{"source_type", "source_id", "target_type", "target_id", "relation_kind"},
+			},
+		},
+		{
+			Name: "withdraw_relation",
+			Description: "End a live relation on purpose. Its row stays as history, ended now, and the end " +
+				"is recorded with you as the actor and your reason (cause \"withdrawn\"); get_relations " +
+				"shows it under \"ended\". Asserting the same relation again later starts a new row. " +
+				"A relation that has already ended is refused, never silently accepted. There is no " +
+				"delete tool for relations. Requires Author role (operation: archive).",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"id":     map[string]any{"type": "string", "description": "ID of the relation row to end (from get_relations)."},
+					"reason": map[string]any{"type": "string", "description": "Why the relation no longer holds. Required."},
+				},
+				"required": []string{"id", "reason"},
 			},
 		},
 		{
@@ -77,7 +95,11 @@ func relationToolDefs() []mcpTool {
 		{
 			Name: "get_relations",
 			Description: "Query the relation graph for a content item. Returns edges where the item " +
-				"is the source, the target, or both, with optional kind and edge_class filters. Requires Author role.",
+				"is the source, the target, or both, with optional kind and edge_class filters. This is the " +
+				"history view: every row, ended ones included, in creation order (one row per life of a " +
+				"relation). An ended row has invalid_at and \"ended\": {cause, at, reason, actor_kind, actor_id}, " +
+				"cause one of withdrawn, swept, recomputed, amendment-rejected, purged, or not-recorded " +
+				"(ended before causes were recorded). Requires Author role.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -145,7 +167,7 @@ func relationToolDefs() []mcpTool {
 // isRelationTool reports whether name is one of the relation management tools.
 func isRelationTool(name string) bool {
 	switch name {
-	case "assert_relation", "propose_relation", "observe_relation", "get_relations",
+	case "assert_relation", "withdraw_relation", "propose_relation", "observe_relation", "get_relations",
 		"preview_impact", "upsert_relation_kind", "list_relation_kinds", "get_reachability":
 		return true
 	}
@@ -194,6 +216,20 @@ func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[st
 			return nil, errorFor(err)
 		}
 		return toolResult(relationEdgeMap(edge)), nil
+
+	case "withdraw_relation":
+		id, ok := stringArg(args, "id")
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: id required"}
+		}
+		reason, ok := stringArg(args, "reason")
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: reason required"}
+		}
+		if err := s.relationStore.Withdraw(ctx, id, reason); err != nil {
+			return nil, errorFor(err)
+		}
+		return toolResult(map[string]any{"id": id, "withdrawn": true}), nil
 
 	case "propose_relation":
 		sourceType, ok := stringArg(args, "source_type")
@@ -275,6 +311,9 @@ func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[st
 		kindFilter := stringArgOr(args, "kind", "")
 		edgeClass := stringArgOr(args, "edge_class", "")
 		edges, err := s.relationStore.MCPGetRelations(ctx, typeName, id, direction, kindFilter)
+		if errors.Is(err, smeldr.ErrInternal) {
+			return nil, errorFor(err)
+		}
 		if err != nil {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: " + err.Error()}
 		}
@@ -388,6 +427,17 @@ func relationEdgeMap(e smeldr.RelationEdge) map[string]any {
 	}
 	if e.LastConfirmedAt != nil {
 		m["last_confirmed_at"] = *e.LastConfirmedAt
+	}
+	if e.Ended != nil {
+		ended := map[string]any{"cause": e.Ended.Cause, "at": e.Ended.At}
+		if e.Ended.Reason != "" {
+			ended["reason"] = e.Ended.Reason
+		}
+		if e.Ended.ActorID != "" {
+			ended["actor_kind"] = e.Ended.ActorKind
+			ended["actor_id"] = e.Ended.ActorID
+		}
+		m["ended"] = ended
 	}
 	return m
 }

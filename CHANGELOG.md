@@ -9,6 +9,22 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.51.0] - 2026-10-07
+
+### Added
+
+- `withdraw_relation(id, reason)` (A434, relation history): end a live relation on purpose. Its row stays as history, ended now, and an `invalidate` provenance record names you, your reason and the cause `withdrawn`. Asserting the same relation again later starts a new row. A relation that has already ended is refused with a conflict error, never silently accepted; an unknown id is not-found; a missing reason is `-32602`. Requires Author and the `archive` operation (core seeds the policy row). There is no delete tool for relations.
+- `get_relations` returns, on every ended row, `ended`: `{cause, at, reason, actor_kind, actor_id}`. `cause` is one of `withdrawn`, `swept`, `recomputed`, `amendment-rejected`, `purged`, or `not-recorded` for an end with no record (every end before core v1.128.0). A remote reader such as a Workspace "Detected" view can tell a withdrawn relation from a swept one without inferring it from timing.
+
+### Changed
+
+- `get_relations` is the history view in creation order: since core v1.128.0 a relation that ended and was asserted again is two rows. `assert_relation`'s description no longer claims every call inserts a new row: re-asserting a live relation updates it.
+- A failure to read how ended relations ended is an internal error, no longer reported as invalid params.
+
+### Upgrading
+
+- Requires `smeldr.dev/core` v1.128.0 (`RelationStore.Withdraw`, `RelationEdge.Ended`, the `withdraw_relation` policy row).
+
 ### Notes
 
 - `create_amendment`, `update_amendment`, `get_amendment` and `list_amendments` carry core's new optional `amends` field (a Decision number, write-once; core v1.125.0, A431) from the Amendment struct with no change in this module: a test creates an Amendment that amends a Decision, reads the field and the `amends` edge back through `get_relations`, and checks the refusals (a number that names no Decision, changing it). Tests and this note only, so no release; the core floor is raised to v1.125.0 for the test.
