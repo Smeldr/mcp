@@ -11,6 +11,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Notes
 
+- `create_amendment`, `update_amendment`, `get_amendment` and `list_amendments` carry core's new optional `amends` field (a Decision number, write-once; core v1.125.0, A431) from the Amendment struct with no change in this module: a test creates an Amendment that amends a Decision, reads the field and the `amends` edge back through `get_relations`, and checks the refusals (a number that names no Decision, changing it). Tests and this note only, so no release; the core floor is raised to v1.125.0 for the test.
 - `github.com/jackc/pgx/v5` appears in `go.mod` (and `go.sum`) since v1.46.1 only because the Postgres integration tests use its `database/sql` driver; like `modernc.org/sqlite` it is a test-only dependency. The module's packages do not import it, so it is not part of any build of a consumer of mcp, only of the module graph.
 
 ---
