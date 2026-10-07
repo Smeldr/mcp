@@ -57,7 +57,7 @@ func TestAmendmentAmends_ThroughTheTools(t *testing.T) {
 	if _, rpcErr := callTool(t, srv, admin, "create_amendment", map[string]any{"amendment_number": "A9002", "amends": "D404"}); rpcErr == nil {
 		t.Error("an Amendment naming no Decision must be refused")
 	}
-	res, rpcErr = callTool(t, srv, admin, "update_amendment", map[string]any{"slug": created["Slug"], "amends": "D1"})
+	_, rpcErr = callTool(t, srv, admin, "update_amendment", map[string]any{"slug": created["Slug"], "amends": "D1"})
 	if rpcErr == nil || !strings.Contains(rpcErr.Message, "write-once") {
 		t.Errorf("changing amends = %v, want a write-once refusal", rpcErr)
 	}
