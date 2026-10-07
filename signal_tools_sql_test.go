@@ -80,7 +80,7 @@ func newRecordingSignalServer(t *testing.T) (*Server, *recordingDB) {
 
 // TestListSignals_PlaceholdersAreNumbered: for every filter combination the COUNT and
 // the paged SELECT share one WHERE clause, numbered $1.. from the argument count, and
-// the LIMIT takes the next number. A ? placeholder (SQLite only) never appears.
+// LIMIT and OFFSET take the next numbers. A ? placeholder (SQLite only) never appears.
 func TestListSignals_PlaceholdersAreNumbered(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -119,11 +119,11 @@ func TestListSignals_PlaceholdersAreNumbered(t *testing.T) {
 			if !strings.HasSuffix(count.query, tt.where) {
 				t.Errorf("COUNT = %q, want it to end with %q", count.query, tt.where)
 			}
-			if !strings.Contains(sel.query, tt.where) || !strings.HasSuffix(sel.query, fmt.Sprintf("LIMIT $%d", tt.limitNo)) {
-				t.Errorf("SELECT = %q, want the same where and LIMIT $%d", sel.query, tt.limitNo)
+			if !strings.Contains(sel.query, tt.where) || !strings.HasSuffix(sel.query, fmt.Sprintf("ORDER BY created_at DESC, id DESC LIMIT $%d OFFSET $%d", tt.limitNo, tt.limitNo+1)) {
+				t.Errorf("SELECT = %q, want the same where, the id tie-break, LIMIT $%d and OFFSET $%d", sel.query, tt.limitNo, tt.limitNo+1)
 			}
-			if fmt.Sprint(count.args) != fmt.Sprint(tt.whereArgs) || fmt.Sprint(sel.args) != fmt.Sprint(append(append([]any{}, tt.whereArgs...), 7)) {
-				t.Errorf("args: COUNT %v, SELECT %v, want %v and %v plus the limit 7", count.args, sel.args, tt.whereArgs, tt.whereArgs)
+			if fmt.Sprint(count.args) != fmt.Sprint(tt.whereArgs) || fmt.Sprint(sel.args) != fmt.Sprint(append(append([]any{}, tt.whereArgs...), 7, 0)) {
+				t.Errorf("args: COUNT %v, SELECT %v, want %v and %v plus the limit 7 and offset 0", count.args, sel.args, tt.whereArgs, tt.whereArgs)
 			}
 			for _, s := range rec.stmts {
 				if strings.Contains(s.query, "?") {

@@ -9,6 +9,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.52.0] - 2026-10-07
+
+### Added
+
+- `list_signals` takes an optional `offset` (default 0; negative is `-32602`), the same paging contract as the other list tools, so more than 500 matching Signals can be read page by page. `total` stays the count of every match, before `limit` and `offset`; `count` is the page's length; an offset past the end gives an empty page with the real `total`.
+
+### Changed
+
+- `list_signals` orders ties by id: `created_at DESC, id DESC`. Signals created in the same instant (a bulk create, the conflict-detected pair) used to come back in no defined order, so pages could repeat or skip one; they are now in a stable order. Callers who do not page see the same set, with ties now ordered by id.
+- `create_content` and `update_content` record the surface `mcp` on the item's provenance entry (core v1.130.0, A436, `CreateDraftVia`/`UpdateFieldsVia`): a dynamic item's creation and each content edit now name the caller and the door in `get_item_provenance`.
+
+### Upgrading
+
+- Requires `smeldr.dev/core` v1.130.0.
+
 ## [1.51.0] - 2026-10-07
 
 ### Added

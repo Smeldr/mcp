@@ -34,6 +34,19 @@ func (r *recordingProvenance) records() []smeldr.ProvenanceRecord {
 	return out
 }
 
+// transitions is records() without the create entry the fixture item's own
+// creation writes (core v1.130.0, A436), so a test counts only what its
+// transition_item call recorded.
+func (r *recordingProvenance) transitions() []smeldr.ProvenanceRecord {
+	var out []smeldr.ProvenanceRecord
+	for _, rec := range r.records() {
+		if rec.Verb != "create" {
+			out = append(out, rec)
+		}
+	}
+	return out
+}
+
 // TestStateTool_TransitionItem_Compiled_RecordsSurfaceMCP proves a state change
 // made through the tool on a compiled type is recorded with surface "mcp"
 // (core records an empty surface for the older TransitionItemWithReason).
@@ -89,7 +102,7 @@ func TestStateTool_TransitionItem_Dynamic_RecordsSurfaceMCPOnce(t *testing.T) {
 		t.Fatalf("transition_item: %v", rpcErr.Message)
 	}
 
-	got := prov.records()
+	got := prov.transitions()
 	if len(got) != 1 {
 		t.Fatalf("got %d provenance records, want exactly 1: %+v", len(got), got)
 	}
@@ -114,7 +127,7 @@ func TestStateTool_TransitionItem_Rejected_RecordsNothing(t *testing.T) {
 	if rpcErr == nil {
 		t.Fatal("transition to an unknown state: want an error, got nil")
 	}
-	if got := prov.records(); len(got) != 0 {
+	if got := prov.transitions(); len(got) != 0 {
 		t.Errorf("records after a rejected transition: %+v, want none", got)
 	}
 }

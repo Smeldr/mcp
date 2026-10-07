@@ -152,3 +152,28 @@ func TestPG_SignalTools_MissingTableIsAnEmptyList(t *testing.T) {
 		t.Errorf("result = %v, want an empty list", got)
 	}
 }
+
+// TestPG_ListSignals_Offset pages past 500 on Postgres: disjoint pages that
+// together hold every match, total the full count, and same-instant Signals in
+// id order.
+func TestPG_ListSignals_Offset(t *testing.T) {
+	srv, db := newPGSignalServer(t, true)
+	seedSignals(t, db, "core", 520, 30)
+	p1, c1, t1 := listPage(t, srv, map[string]any{"receiver": "core", "limit": 500})
+	p2, c2, t2 := listPage(t, srv, map[string]any{"receiver": "core", "limit": 500, "offset": 500})
+	if c1 != 500 || c2 != 20 || t1 != 520 || t2 != 520 {
+		t.Fatalf("pages: count %d/%d total %d/%d; want 500/20 and 520/520", c1, c2, t1, t2)
+	}
+	seen := map[string]bool{}
+	for _, id := range append(p1, p2...) {
+		if seen[id] {
+			t.Fatalf("signal %s on both pages", id)
+		}
+		seen[id] = true
+	}
+	for i := 1; i < len(p2); i++ {
+		if p2[i-1] < p2[i] {
+			t.Fatalf("same-instant signals not in id DESC order: %s before %s", p2[i-1], p2[i])
+		}
+	}
+}

@@ -52,7 +52,8 @@ func signalToolDefs() []mcpTool {
 			Name: "list_signals",
 			Description: "List protocol signals from smeldr_signals filtered by receiver " +
 				"and/or sender, and status. At least one of receiver/sender is required. " +
-				"Returns the most recent limit signals, created_at descending. Returns an " +
+				"Returns the most recent limit signals, created_at descending (ties by id), " +
+				"from offset on; total is the count of every match. Returns an " +
 				"empty list when the smeldr_signals table does not exist (fail-open). " +
 				"Requires Author role.",
 			InputSchema: map[string]any{
@@ -62,6 +63,7 @@ func signalToolDefs() []mcpTool {
 					"sender":   map[string]any{"type": "string", "description": "Filter by originating agent identifier. At least one of receiver or sender is required."},
 					"state":    map[string]any{"type": "string", "description": "Filter by status (default \"pending\")."},
 					"limit":    map[string]any{"type": "integer", "description": "Cap the result count, returning the most recent N (created_at descending). Omitted or 0: defaults to 50. Capped at 500."},
+					"offset":   map[string]any{"type": "integer", "description": "Skip this many signals before applying limit (newest first). Omit for 0."},
 				},
 				"required": []string{},
 			},
@@ -144,6 +146,10 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		// unfiltered call previously returned the entire matching history
 		// unconditionally (confirmed live: ~459KB for a single receiver).
 		limit := clampListLimit(intArgOr(args, "limit", defaultListLimit))
+		offset := intArgOr(args, "offset", 0)
+		if offset < 0 {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: offset must not be negative"}
+		}
 
 		// Shared WHERE clause for both the paged SELECT and the pre-LIMIT
 		// COUNT(*) below — built once so the two queries can never drift
@@ -162,7 +168,7 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		}
 
 		// total is the real count of every row matching the filters, before
-		// LIMIT is applied — count (below) is post-LIMIT and can never
+		// LIMIT and OFFSET are applied — count (below) is post-LIMIT and can never
 		// exceed limit, so it cannot signal truncation the way the other
 		// five list_* tools' own "total" key does (01a0d76a, architect
 		// commit review 2026-09-25).
@@ -178,8 +184,11 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		query := `SELECT id, slug, status, created_at, updated_at, sender, receiver,
 			        signal_type, message, task_ref, sequence,
 			        subject_type, subject_id, from_state, to_state, required_role
-			FROM smeldr_signals` + where + fmt.Sprintf(` ORDER BY created_at DESC LIMIT $%d`, len(whereArgs)+1)
-		queryArgs := append(append([]any{}, whereArgs...), limit)
+			FROM smeldr_signals` + where +
+			// id DESC breaks ties between Signals created in the same instant,
+			// so pages never repeat or skip a row (ids are UUIDv7, time-ordered).
+			fmt.Sprintf(` ORDER BY created_at DESC, id DESC LIMIT $%d OFFSET $%d`, len(whereArgs)+1, len(whereArgs)+2)
+		queryArgs := append(append([]any{}, whereArgs...), limit, offset)
 
 		rows, err := db.QueryContext(ctx, query, queryArgs...)
 		if err != nil {

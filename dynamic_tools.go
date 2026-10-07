@@ -186,7 +186,7 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if err != nil {
 			return nil, &jsonRPCError{Code: -32602, Message: err.Error()}
 		}
-		node, err := repo.CreateDraft(ctx, fields)
+		node, err := repo.CreateDraftVia(ctx, "mcp", fields)
 		if err != nil {
 			return nil, errorFor(err)
 		}
@@ -255,7 +255,7 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if err != nil {
 			return nil, &jsonRPCError{Code: -32602, Message: err.Error()}
 		}
-		if err := repo.UpdateFields(ctx, id, patch); err != nil {
+		if err := repo.UpdateFieldsVia(ctx, "mcp", id, patch); err != nil {
 			return nil, errorFor(err)
 		}
 		node, err := repo.GetByID(ctx, id)
