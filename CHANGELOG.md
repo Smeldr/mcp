@@ -7,6 +7,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [Unreleased]
+
+### Notes
+
+- `github.com/jackc/pgx/v5` appears in `go.mod` (and `go.sum`) since v1.46.1 only because the Postgres integration tests use its `database/sql` driver; like `modernc.org/sqlite` it is a test-only dependency. The module's packages do not import it, so it is not part of any build of a consumer of mcp, only of the module graph.
+
+---
+
 ## [1.46.1] - 2026-10-07
 
 ### Fixed
