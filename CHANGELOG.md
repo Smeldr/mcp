@@ -9,6 +9,22 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.53.0] - 2026-10-08
+
+### Added
+
+- `create_token`, `revoke_token`, `grant_role` and `revoke_grant` take an optional `reason` (string, up to 1000 characters), stored on the act's provenance record (A444, D96). `list_tokens` returns `Reason` and `RevokeReason` on each token, `list_grants` returns `Reason` on each grant. A non-string reason is -32602; an over-long one is refused by core. The reason is free text that people read: never put a token value or other secret in it.
+- `get_item_provenance` reads a token's and a grant's history (A446): `type_name` `Token` with the fingerprint id from `list_tokens`, or `RoleGrant` with the grant id. It returns the mint, grant and revoke entries with actor and reason, also after a grant's row is deleted. It requires the same access as `list_tokens` or `list_grants`. These two names take precedence over a content type of the same name. `smeldr-cli history Token <fingerprint>` works through it with no cli change.
+- `grant_role` takes an optional `expires_in_days` (a positive number of days, at most 36500; fractions allowed) for a time-boxed grant (A447). The grant stops authorizing when it expires, with no revoke needed, and `list_grants` still shows it with its `ExpiresAt`. The response carries `expires_at`. Same name and unit as `create_token` and `delegate_item`.
+
+### Fixed
+
+- `create_token` refuses an `expires_in_days` above 36500 (100 years) with invalid params (A447). Before, a value above about 106,751 days overflowed the duration and minted a token that was already expired, with a success response.
+
+### Upgrading
+
+- Requires smeldr.dev/core v1.135.0 (`CreateClassifiedWithReason`, `RevokeWithReason`, `RoleGrant.Reason`). From that core release on, minting a token also writes a provenance record.
+
 ## [1.52.0] - 2026-10-07
 
 ### Added

@@ -1003,13 +1003,17 @@ func tokenToolDefs() []mcpTool {
 						"enum":        []string{"agent", "job", "human"},
 						"description": actorClassDescription,
 					},
+					"reason": map[string]any{
+						"type":        "string",
+						"description": actReasonDescription,
+					},
 				},
 				"required": []string{"name", "role", "expires_in_days"},
 			},
 		},
 		{
 			Name:        "list_tokens",
-			Description: "List all named bearer tokens. Requires Admin role. Includes revoked and expired tokens. Each record carries \"ActorClass\": the classification the token was minted with (agent, job or human), or empty for an unclassified token, including every token created before classification existed.",
+			Description: "List all named bearer tokens. Requires Admin role. Includes revoked and expired tokens. Each record carries \"ActorClass\": the classification the token was minted with (agent, job or human), or empty for an unclassified token, including every token created before classification existed. \"Reason\" and \"RevokeReason\" carry the reasons given when the token was minted and revoked (empty when none was given).",
 			InputSchema: map[string]any{
 				"type":       "object",
 				"properties": map[string]any{},
@@ -1024,6 +1028,10 @@ func tokenToolDefs() []mcpTool {
 					"id": map[string]any{
 						"type":        "string",
 						"description": "SHA-256 hex fingerprint of the token (from list_tokens).",
+					},
+					"reason": map[string]any{
+						"type":        "string",
+						"description": actReasonDescription,
 					},
 				},
 				"required": []string{"id"},
@@ -1046,16 +1054,22 @@ func (s *Server) handleTokenTool(ctx smeldr.Context, name string, args map[strin
 		if !ok {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: role required"}
 		}
-		days, ok := args["expires_in_days"].(float64)
-		if !ok || days <= 0 {
+		ttl, present, rpcErr := daysArg(args, "expires_in_days")
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		if !present {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: expires_in_days must be a positive number"}
 		}
-		ttl := time.Duration(float64(24*time.Hour) * days)
 		class, rpcErr := actorClassArg(args)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
-		raw, tokenID, err := s.tokenStore.CreateClassified(ctx, tokenName, role, class, ttl)
+		reason, rpcErr := reasonArg(args)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		raw, tokenID, err := s.tokenStore.CreateClassifiedWithReason(ctx, tokenName, role, class, ttl, reason)
 		if err != nil {
 			return nil, errorFor(err)
 		}
@@ -1080,7 +1094,11 @@ func (s *Server) handleTokenTool(ctx smeldr.Context, name string, args map[strin
 		if !ok {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: id required"}
 		}
-		if err := s.tokenStore.Revoke(ctx, id); err != nil {
+		reason, rpcErr := reasonArg(args)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		if err := s.tokenStore.RevokeWithReason(ctx, id, reason); err != nil {
 			if errors.Is(err, smeldr.ErrLastAdmin) {
 				return nil, &jsonRPCError{Code: -32602, Message: "Cannot revoke token: it is the last active admin token. Create a replacement admin token before revoking this one."}
 			}

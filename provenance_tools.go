@@ -2,10 +2,33 @@ package mcp
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	smeldr "smeldr.dev/core"
 )
+
+// adminSubjectListTool maps the provenance subjects that are not content
+// types (core records a token's mint and revocation under "Token", a grant's
+// under "RoleGrant") to the list tool whose gate guards reading them. These
+// names take precedence over a content type of the same name.
+var adminSubjectListTool = map[string]string{
+	"Token":     "list_tokens",
+	"RoleGrant": "list_grants",
+}
+
+// adminSubjectAvailable reports whether the list tool guarding subject's
+// history is served here: list_tokens needs a TokenStore, list_grants a
+// RoleStore.
+func (s *Server) adminSubjectAvailable(subject string) bool {
+	switch subject {
+	case "Token":
+		return s.tokenStore != nil
+	case "RoleGrant":
+		return s.app.RoleStore() != nil
+	}
+	return false
+}
 
 // isProvenanceTool reports whether name is the item-provenance read tool.
 func isProvenanceTool(name string) bool { return name == "get_item_provenance" }
@@ -27,7 +50,10 @@ func provenanceToolDefs() []mcpTool {
 			"at most 500) and offset; total is the item's whole history. Relation events (an edge asserted or " +
 			"ended) are recorded against the relation, not the item, and are not part of this read. An error " +
 			"says when provenance is not enabled on the instance: an empty list means the item has no recorded " +
-			"history. Requires Editor role.",
+			"history. Requires Editor role. type_name \"Token\" (slug: the fingerprint id from list_tokens) or " +
+			"\"RoleGrant\" (slug: the grant id) reads a token's or a grant's history (minted, granted, revoked, " +
+			"with actor and reason), also after a grant's row is deleted; it requires the same access as " +
+			"list_tokens or list_grants, and these two names take precedence over a content type of the same name.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -78,9 +104,24 @@ func (s *Server) handleProvenanceTool(ctx smeldr.Context, args map[string]any) (
 	if limit < 0 || offset < 0 {
 		return nil, &jsonRPCError{Code: -32602, Message: "invalid params: limit and offset must not be negative"}
 	}
-	id, rpcErr := s.itemID(ctx, typeName, slug)
-	if rpcErr != nil {
-		return nil, rpcErr
+	var id string
+	if listTool, ok := adminSubjectListTool[typeName]; ok {
+		// A token's or a grant's history: the subject id is the slug, and the
+		// caller must pass the gate of the matching list tool. Without that
+		// tool on this server (no TokenStore, no RoleStore) there is no gate
+		// to inherit, so the read is refused rather than left at a lower floor.
+		if !s.adminSubjectAvailable(typeName) {
+			return nil, &jsonRPCError{Code: -32602, Message: fmt.Sprintf("invalid params: %s history needs %s on this server", typeName, listTool)}
+		}
+		if rpcErr := s.authoriseTool(ctx, listTool, s.legacyRoleFor(listTool), s.app.RoleStore(), smeldr.AuthTarget{}); rpcErr != nil {
+			return nil, rpcErr
+		}
+		id = slug
+	} else {
+		var rpcErr *jsonRPCError
+		if id, rpcErr = s.itemID(ctx, typeName, slug); rpcErr != nil {
+			return nil, rpcErr
+		}
 	}
 	page, err := s.app.ItemProvenance(ctx, typeName, id, view, limit, offset)
 	if err != nil {
