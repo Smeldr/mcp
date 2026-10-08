@@ -161,6 +161,16 @@ token, err := smeldr.SignToken(smeldr.User{
 
 ---
 
+## Tool reference
+
+This README describes the tool families and how they are wired; it does not list every
+tool. The source of truth is `tools/list` on a running server: it returns exactly the
+tools that server exposes, with their parameters. The maintained per-tool references are
+the MCP table in core's `AGENTS.md` and the Smeldr skill file (`smeldr.md`) that agents
+read.
+
+---
+
 ## MCPRead vs MCPWrite
 
 Register each module with the operations you want:
@@ -289,13 +299,15 @@ both tools are already available.
 
 ## Relation graph tools
 
-When `app.Relations(store)` is wired, six relation management tools are automatically
+When `app.Relations(store)` is wired, eight relation management tools are automatically
 available — no additional server option is required.
 
 | Tool | Role | What it does |
 |------|------|--------------|
-| `assert_relation` | Author+ | Create an asserted edge between two content items. Each call inserts a new record with a unique ID — use `get_relations` first to check for duplicates. |
+| `assert_relation` | Author+ | Create an asserted edge between two content items. Re-asserting a live edge updates it; asserting one that has ended starts a new row, and the ended row stays as history. |
+| `withdraw_relation` | Author+ | End a live asserted edge on purpose, with a reason. The row stays, ended with cause `withdrawn`; there is no delete tool. |
 | `propose_relation` | Author+ | Propose an inferred edge for human or agent review (`edge_class=inferred`). Promote it via `assert_relation`. |
+| `observe_relation` | Author+ | Record an edge a system directly witnessed (`edge_class=observed`), such as a webhook-reported fact. Each call inserts a new record. |
 | `get_relations` | Author+ | Query edges by source, target, or both. Optional `kind` and `edge_class` filters. |
 | `preview_impact` | Editor+ | Return all source-side dependents of a target item without firing any signals. Use before archiving or deleting an item. |
 | `upsert_relation_kind` | Admin | Register or update a relation kind (idempotent on `type_name`). |
