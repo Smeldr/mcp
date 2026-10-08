@@ -9,6 +9,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.54.0] - 2026-10-08
+
+### Changed
+
+- Resource subscribers are notified when `transition_item` moves an item of a compiled type (A452, core D107): one `notifications/resources/updated` for a move between custom states, and one per status event as well for a move into or out of `published`, `archived` or `scheduled`, the same count as an HTTP PUT. Before, `transition_item` sent none. Runtime-defined types have no resource URI and are not notified.
+- `create_webhook`'s `events` description lists `unpublished` and `transitioned`, and says `updated` is a content edit (core D107: a status-only PUT no longer sends `x.updated`).
+- `get_item_provenance`'s description says a status change is one entry on every path, and that entries written before that core release may repeat a transition.
+
+### Upgrading
+
+- Requires smeldr.dev/core v1.137.0 (`AfterTransition`, one record and one event per status change).
+
 ## [1.53.0] - 2026-10-08
 
 ### Added

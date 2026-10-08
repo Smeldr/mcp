@@ -28,7 +28,7 @@ func webhookToolDefs() []mcpTool {
 					"events": map[string]any{
 						"type":        "array",
 						"items":       map[string]any{"type": "string"},
-						"description": `Event names to subscribe to, e.g. ["post.published", "post.created"]. Supported suffixes: created, updated, published, scheduled, archived, deleted.`,
+						"description": `Event names to subscribe to, e.g. ["post.published", "post.created"]. Supported suffixes: created, updated (a content edit), published, unpublished, scheduled, archived, deleted, and transitioned (every status change, with from_state, to_state, reason and the actor; core D107).`,
 					},
 				},
 				"required": []string{"url", "events"},

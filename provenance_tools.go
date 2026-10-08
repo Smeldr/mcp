@@ -53,7 +53,10 @@ func provenanceToolDefs() []mcpTool {
 			"history. Requires Editor role. type_name \"Token\" (slug: the fingerprint id from list_tokens) or " +
 			"\"RoleGrant\" (slug: the grant id) reads a token's or a grant's history (minted, granted, revoked, " +
 			"with actor and reason), also after a grant's row is deleted; it requires the same access as " +
-			"list_tokens or list_grants, and these two names take precedence over a content type of the same name.",
+			"list_tokens or list_grants, and these two names take precedence over a content type of the same name. " +
+			"A status change is one transition entry on every path (core D107); entries written before that core " +
+			"release may repeat one transition two or three times (same verb, states, actor and surface, within " +
+			"the same second): collapse those when counting.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
