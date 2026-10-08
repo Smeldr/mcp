@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.54.1] - 2026-10-08
+
+### Changed
+
+- `define_content_type`'s field description lists the role `channel` (A453): a string field with it routes the type's event-stream events to the channel its value names and to the topic `type:<type_name>`. Requires smeldr.dev/core v1.138.0 for the routing; an older core refuses the role.
+
 ## [1.54.0] - 2026-10-08
 
 ### Changed
