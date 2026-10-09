@@ -9,6 +9,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.55.2] - 2026-10-09
+
+### Behaviour change
+
+- **An identifier tool given both `id` and `slug` with different values is refused (A458, D97).** `update_`, `get_`, `publish_`, `schedule_`, `archive_` and `delete_{type}` return -32602 ("give id or slug, not two different identifiers") instead of silently acting on the `id`. The same value in both is accepted.
+
+### Fixed
+
+- `update_{type}(id: ...)` is accepted. `id` is the alias of `slug` that every identifier tool already read, but update_'s unknown-parameter check refused it. The schema is unchanged: `slug` stays the declared parameter, and the description names `id` as the alias.
+
 ## [1.55.1] - 2026-10-09
 
 ### Changed

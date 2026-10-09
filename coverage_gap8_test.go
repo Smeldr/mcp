@@ -805,31 +805,38 @@ func TestNavTools_DBClose_Errors(t *testing.T) {
 // identArg helper
 // ---------------------------------------------------------------------------
 
-// TestIdentArg verifies that identArg prefers "id", falls back to "slug",
-// and returns ok=false when neither key is present or both values are empty.
+// TestIdentArg verifies that identArg takes "id" or "slug", refuses two
+// different values, and refuses neither (an empty or non-string value counts
+// as absent).
 func TestIdentArg(t *testing.T) {
 	cases := []struct {
-		name   string
-		args   map[string]any
-		wantID string
-		wantOK bool
+		name    string
+		args    map[string]any
+		wantID  string
+		wantErr string // "" = no error
 	}{
-		{"id present", map[string]any{"id": "abc"}, "abc", true},
-		{"slug present", map[string]any{"slug": "abc"}, "abc", true},
-		{"id wins over slug", map[string]any{"id": "i", "slug": "s"}, "i", true},
-		{"neither present", map[string]any{}, "", false},
-		{"id empty string", map[string]any{"id": ""}, "", false},
-		{"slug empty string", map[string]any{"slug": ""}, "", false},
-		{"both empty", map[string]any{"id": "", "slug": ""}, "", false},
-		{"non-string id", map[string]any{"id": 42}, "", false},
-		{"non-string id valid slug", map[string]any{"id": 42, "slug": "s"}, "s", true},
+		{"id present", map[string]any{"id": "abc"}, "abc", ""},
+		{"slug present", map[string]any{"slug": "abc"}, "abc", ""},
+		{"both equal", map[string]any{"id": "s", "slug": "s"}, "s", ""},
+		{"both different", map[string]any{"id": "i", "slug": "s"}, "", "not two different identifiers"},
+		{"neither present", map[string]any{}, "", "id (or slug) required"},
+		{"id empty string", map[string]any{"id": ""}, "", "id (or slug) required"},
+		{"slug empty string", map[string]any{"slug": ""}, "", "id (or slug) required"},
+		{"both empty", map[string]any{"id": "", "slug": ""}, "", "id (or slug) required"},
+		{"non-string id", map[string]any{"id": 42}, "", "id (or slug) required"},
+		{"non-string id valid slug", map[string]any{"id": 42, "slug": "s"}, "s", ""},
+		{"empty id valid slug", map[string]any{"id": "", "slug": "s"}, "s", ""},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, ok := identArg(tc.args)
-			if ok != tc.wantOK || got != tc.wantID {
-				t.Errorf("identArg(%v) = (%q, %v); want (%q, %v)",
-					tc.args, got, ok, tc.wantID, tc.wantOK)
+			got, rpcErr := identArg(tc.args)
+			switch {
+			case tc.wantErr == "":
+				if rpcErr != nil || got != tc.wantID {
+					t.Errorf("identArg(%v) = (%q, %v); want %q", tc.args, got, rpcErr, tc.wantID)
+				}
+			case rpcErr == nil || rpcErr.Code != -32602 || !strings.Contains(rpcErr.Message, tc.wantErr):
+				t.Errorf("identArg(%v) error = %v; want -32602 %q", tc.args, rpcErr, tc.wantErr)
 			}
 		})
 	}

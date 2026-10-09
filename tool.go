@@ -319,6 +319,9 @@ func (s *Server) validateKnownArgs(name string, args map[string]any) *jsonRPCErr
 	}
 	props, _ := def.InputSchema["properties"].(map[string]any)
 	for key := range args {
+		if key == "id" && strings.HasPrefix(name, "update_") {
+			continue // the identifier alias of "slug", read by identArg like on every other identifier tool
+		}
 		if _, known := props[key]; !known {
 			if strings.HasPrefix(name, "update_") && strings.EqualFold(key, "status") {
 				return &jsonRPCError{Code: -32602, Message: "invalid params: status cannot be changed by an update; use transition_item (or the publish, schedule and archive tools)"}
@@ -770,9 +773,9 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		return toolResult(item), nil
 
 	case "update":
-		slug, ok := identArg(args)
-		if !ok {
-			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: id (or slug) required"}
+		slug, identErr := identArg(args)
+		if identErr != nil {
+			return nil, identErr
 		}
 		item, err := m.MCPUpdate(ctx, slug, updateFieldsOf(args))
 		if err != nil {
@@ -781,9 +784,9 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		return toolResult(item), nil
 
 	case "publish":
-		slug, ok := identArg(args)
-		if !ok {
-			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: id (or slug) required"}
+		slug, identErr := identArg(args)
+		if identErr != nil {
+			return nil, identErr
 		}
 		// Idempotency: avoid double AfterPublish fire and PublishedAt re-stamp
 		// when the item is already Published (Flag H).
@@ -802,9 +805,9 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		return toolResult(map[string]any{"slug": slug, "status": "published"}), nil
 
 	case "schedule":
-		slug, ok := identArg(args)
-		if !ok {
-			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: id (or slug) required"}
+		slug, identErr := identArg(args)
+		if identErr != nil {
+			return nil, identErr
 		}
 		atStr, ok := stringArg(args, "scheduled_at")
 		if !ok {
@@ -821,9 +824,9 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		return toolResult(map[string]any{"slug": slug, "status": "scheduled", "scheduled_at": atStr}), nil
 
 	case "archive":
-		slug, ok := identArg(args)
-		if !ok {
-			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: id (or slug) required"}
+		slug, identErr := identArg(args)
+		if identErr != nil {
+			return nil, identErr
 		}
 		reason := stringArgOr(args, "reason", "")
 		if err := m.MCPArchive(ctx, slug, reason); err != nil {
@@ -835,9 +838,9 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Editor, rs, smeldr.AuthTarget{TypeName: typeName}); rpcErr != nil {
 			return nil, rpcErr
 		}
-		slug, ok := identArg(args)
-		if !ok {
-			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: id (or slug) required"}
+		slug, identErr := identArg(args)
+		if identErr != nil {
+			return nil, identErr
 		}
 		if err := m.MCPDelete(ctx, slug); err != nil {
 			return nil, errorFor(err)
@@ -879,9 +882,9 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		if rpcErr := s.authoriseTool(ctx, p.Name, smeldr.Editor, rs, smeldr.AuthTarget{TypeName: gm.MCPMeta().TypeName}); rpcErr != nil {
 			return nil, rpcErr
 		}
-		slug, ok := identArg(args)
-		if !ok {
-			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: id (or slug) required"}
+		slug, identErr := identArg(args)
+		if identErr != nil {
+			return nil, identErr
 		}
 		item, err := gm.MCPGet(ctx, slug)
 		if err != nil {
@@ -979,18 +982,23 @@ func updateFieldsOf(args map[string]any) map[string]any {
 	return fields
 }
 
-// identArg returns the item identifier from args, accepting both "id" and
-// "slug" as keys. "id" is tried first; "slug" is the backwards-compatible
-// fallback. Returns ok=false when neither key is present or both values are
-// empty strings.
-func identArg(args map[string]any) (id string, ok bool) {
-	if v, ok := args["id"].(string); ok && v != "" {
-		return v, true
+// identArg returns the item identifier from args, accepting "slug" (the
+// parameter the schemas declare) and "id" (its alias); either may hold an ID
+// or a slug. A non-string or empty value counts as absent. Both given with
+// different values is refused with -32602 rather than acting on one of them,
+// and neither given is -32602 too.
+func identArg(args map[string]any) (string, *jsonRPCError) {
+	id, _ := args["id"].(string)
+	slug, _ := args["slug"].(string)
+	switch {
+	case id != "" && slug != "" && id != slug:
+		return "", &jsonRPCError{Code: -32602, Message: "invalid params: give id or slug, not two different identifiers"}
+	case id != "":
+		return id, nil
+	case slug != "":
+		return slug, nil
 	}
-	if v, ok := args["slug"].(string); ok && v != "" {
-		return v, true
-	}
-	return "", false
+	return "", &jsonRPCError{Code: -32602, Message: "invalid params: id (or slug) required"}
 }
 
 // tokenToolDefs returns the three Admin-only token management tool definitions

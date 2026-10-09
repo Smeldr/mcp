@@ -404,7 +404,7 @@ func mcpToolDefs(m smeldr.MCPModule) []mcpTool {
 		},
 		{
 			Name:        "update_" + typeSnake,
-			Description: "Partially update a " + meta.TypeName + " by id or slug. The status, slug and id are not changed by an update: a differing value is refused. Change the status with transition_item or the publish, schedule and archive tools.",
+			Description: "Partially update a " + meta.TypeName + " by id or slug. The status, slug and id are not changed by an update: a differing value is refused. Change the status with transition_item or the publish, schedule and archive tools. Name the item with slug (an ID or a slug); id is accepted as an alias, and two different values are refused.",
 			InputSchema: inputSchemaUpdate(schema),
 		},
 		{
