@@ -9,6 +9,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.55.1] - 2026-10-09
+
+### Changed
+
+- `update_{type}` no longer offers `status` or a `slug` field in its input schema, and a `status` (any case) is refused with -32602 naming the path that changes a status: `transition_item`, or the publish, schedule and archive tools (A457). Before, the tool advertised `status`, accepted it, dropped it and reported success. The tool's description says so too. Works with any core.
+- The item identifier (`slug` or `id`) is no longer passed to core as a field to write. That is required by smeldr.dev/core v1.139.1, which refuses an update that asks to change the slug or ID: without it, an update addressed by a Task's human ID would be refused. Release this before, or with, that core.
+
 ## [1.55.0] - 2026-10-09
 
 ### Added

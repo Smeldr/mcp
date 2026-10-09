@@ -320,6 +320,9 @@ func (s *Server) validateKnownArgs(name string, args map[string]any) *jsonRPCErr
 	props, _ := def.InputSchema["properties"].(map[string]any)
 	for key := range args {
 		if _, known := props[key]; !known {
+			if strings.HasPrefix(name, "update_") && strings.EqualFold(key, "status") {
+				return &jsonRPCError{Code: -32602, Message: "invalid params: status cannot be changed by an update; use transition_item (or the publish, schedule and archive tools)"}
+			}
 			return &jsonRPCError{Code: -32602, Message: "invalid params: unknown parameter: " + key}
 		}
 	}
@@ -771,7 +774,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		if !ok {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: id (or slug) required"}
 		}
-		item, err := m.MCPUpdate(ctx, slug, args)
+		item, err := m.MCPUpdate(ctx, slug, updateFieldsOf(args))
 		if err != nil {
 			return nil, errorFor(err)
 		}
@@ -959,6 +962,21 @@ func stringArg(args map[string]any, key string) (string, bool) {
 	}
 	s, ok := v.(string)
 	return s, ok && s != ""
+}
+
+// updateFieldsOf is the update tool's arguments without the item identifier
+// ("id" and "slug" name which item to update, they are not fields to write),
+// so core does not read the identifier as a request to change the slug or the
+// ID: a Task addressed by its human ID (T253) would otherwise be refused.
+func updateFieldsOf(args map[string]any) map[string]any {
+	fields := make(map[string]any, len(args))
+	for k, v := range args {
+		if k == "id" || k == "slug" {
+			continue
+		}
+		fields[k] = v
+	}
+	return fields
 }
 
 // identArg returns the item identifier from args, accepting both "id" and

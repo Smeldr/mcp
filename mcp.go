@@ -404,7 +404,7 @@ func mcpToolDefs(m smeldr.MCPModule) []mcpTool {
 		},
 		{
 			Name:        "update_" + typeSnake,
-			Description: "Partially update a " + meta.TypeName + " by id or slug.",
+			Description: "Partially update a " + meta.TypeName + " by id or slug. The status, slug and id are not changed by an update: a differing value is refused. Change the status with transition_item or the publish, schedule and archive tools.",
 			InputSchema: inputSchemaUpdate(schema),
 		},
 		{
@@ -536,6 +536,12 @@ func inputSchemaUpdate(fields []smeldr.MCPField) map[string]any {
 		"slug": map[string]any{"type": "string", "description": "Item ID or slug — both accepted."},
 	}
 	for _, f := range fields {
+		// An update never changes the status or the slug (core refuses a
+		// differing value), so the schema does not offer them; "slug" stays
+		// the item identifier above.
+		if f.JSONName == "status" || f.JSONName == "slug" {
+			continue
+		}
 		props[f.JSONName] = fieldToProp(f)
 	}
 	return map[string]any{
