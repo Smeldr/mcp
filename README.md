@@ -183,8 +183,8 @@ smeldr.MCP(smeldr.MCPRead, smeldr.MCPWrite)    // full access
 
 | MCP method                  | Requires   | Role required | What it does                                                  |
 |-----------------------------|------------|---------------|---------------------------------------------------------------|
-| `resources/list`            | MCPRead    | any           | List all Published items across all MCPRead modules           |
-| `resources/templates/list`  | MCPRead    | any           | Return the URI template for each MCPRead module               |
+| `resources/list`            | MCPRead    | any           | List all Published items across all MCPRead modules and public runtime-defined types |
+| `resources/templates/list`  | MCPRead    | any           | Return the URI template for each MCPRead module and public runtime-defined type |
 | `resources/read {uri}`      | MCPRead    | any           | Fetch a single Published item by URI                          |
 | `tools/call create_{type}`  | MCPWrite   | Author+       | Create a Draft item; returns the saved item as JSON           |
 | `tools/call update_{type}`  | MCPWrite   | Author+       | Partially update fields by slug; non-supplied fields retained |
@@ -202,6 +202,7 @@ uppercase letters treated as one word. `BlogPost` → `blog_post`,
 
 **Resource URI format:** `smeldr://{prefix}/{slug}` — for example,
 `smeldr://posts/hello-world` for a post at `/posts/hello-world`.
+A runtime-defined type with a URL prefix (`url_prefix` on `define_content_type`) is a resource the same way: its Published items are listed, readable and notified under `smeldr://{prefix}/{slug}` (v1.55.0). An admin-only runtime-defined type (no prefix, e.g. `task_plan`) is not a resource; read it with `get_content` and follow it on the event stream.
 Legacy `forge://` URIs are still accepted on `resources/read` and `resources/subscribe`
 during the deprecation window (T87 removes legacy accept).
 

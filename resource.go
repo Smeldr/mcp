@@ -45,7 +45,47 @@ func (s *Server) handleResourcesTemplatesList() any {
 			MimeType:    "application/json",
 		})
 	}
+	for _, d := range s.publicDynamicTypes() {
+		templates = append(templates, resourceTemplate{
+			URITemplate: "smeldr:/" + d.Prefix + "/{slug}",
+			Name:        d.Name + " by slug",
+			Description: "Retrieve a single published " + d.Name + " item (a runtime-defined type) by its slug.",
+			MimeType:    "application/json",
+		})
+	}
 	return map[string]any{"resourceTemplates": templates}
+}
+
+// publicDynamicTypes are the runtime-defined content types with a public URL
+// prefix, in registry order. They are resources like modules: their Published
+// items are listed, templated, readable and notified under
+// smeldr:/<prefix>/<slug>. A runtime-defined type without a prefix is
+// admin-only and is not a resource.
+func (s *Server) publicDynamicTypes() []*smeldr.TypeDescriptor {
+	reg := s.app.TypeRegistry()
+	if reg == nil {
+		return nil
+	}
+	var out []*smeldr.TypeDescriptor
+	for _, d := range reg.All() {
+		if d.Kind == "content" && d.Prefix != "" {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// dynamicTypeByPrefix is the public runtime-defined type whose prefix uri
+// starts with, and the slug after it; ok is false when none matches.
+func (s *Server) dynamicTypeByPrefix(uri string) (typeName, slug string, ok bool) {
+	for _, d := range s.publicDynamicTypes() {
+		after, found := strings.CutPrefix(uri, "smeldr:/"+d.Prefix+"/")
+		if !found || after == "" || strings.Contains(after, "/") {
+			continue
+		}
+		return d.Name, after, true
+	}
+	return "", "", false
 }
 
 // parseResourceURI resolves a smeldr:// URI to its module and slug.
@@ -79,7 +119,7 @@ func (s *Server) handleResourcesRead(ctx smeldr.Context, params json.RawMessage)
 
 	m, slug, ok := s.parseResourceURI(p.URI)
 	if !ok {
-		return nil, &jsonRPCError{Code: -32001, Message: "resource not found: " + p.URI}
+		return s.readDynamicResource(ctx, p.URI)
 	}
 
 	item, err := m.MCPGet(ctx, slug)
@@ -104,6 +144,31 @@ func (s *Server) handleResourcesRead(ctx smeldr.Context, params json.RawMessage)
 			MimeType: "application/json",
 			Text:     string(b),
 		}},
+	}, nil
+}
+
+// readDynamicResource is resources/read for a public runtime-defined type's
+// item: the same not-found answer as for a module when the URI matches no
+// type, the item does not exist, or it is not Published.
+func (s *Server) readDynamicResource(ctx smeldr.Context, uri string) (any, *jsonRPCError) {
+	typeName, slug, ok := s.dynamicTypeByPrefix(uri)
+	if !ok {
+		return nil, &jsonRPCError{Code: -32001, Message: "resource not found: " + uri}
+	}
+	repo, err := s.app.DynamicContentRepo(typeName)
+	if err != nil {
+		return nil, &jsonRPCError{Code: -32001, Message: "resource not found: " + uri}
+	}
+	node, err := repo.GetBySlug(ctx, slug)
+	if err != nil || node.Status != smeldr.Published {
+		return nil, &jsonRPCError{Code: -32001, Message: "resource not found: " + slug}
+	}
+	b, err := json.Marshal(node)
+	if err != nil {
+		return nil, &jsonRPCError{Code: -32001, Message: "internal error marshalling resource"}
+	}
+	return map[string]any{
+		"contents": []resourceContent{{URI: uri, MimeType: "application/json", Text: string(b)}},
 	}, nil
 }
 

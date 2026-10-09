@@ -240,7 +240,9 @@ func New(app *smeldr.App, opts ...ServerOption) *Server {
 	}
 	// Bridge app-level signals to resource-subscription notifications.
 	// For each delivery signal, find the module that owns the content type
-	// and construct the resource URI from the prefix and item slug.
+	// and construct the resource URI from the prefix and item slug; a
+	// runtime-defined type with a public prefix is a resource too, and an
+	// admin-only one (no prefix) is not.
 	subs := s.subscriptions
 	app.AddSignalListener(func(sig smeldr.LifecycleEvent, typeName string, item any) {
 		for _, m := range s.modules {
@@ -254,6 +256,13 @@ func New(app *smeldr.App, opts ...ServerOption) *Server {
 			uri := "smeldr:/" + m.MCPMeta().Prefix + "/" + slug
 			subs.Notify(uri)
 			return
+		}
+		node, ok := item.(*smeldr.DynamicNode)
+		if !ok || node.Slug == "" || app.TypeRegistry() == nil {
+			return
+		}
+		if d := app.TypeRegistry().Lookup(typeName); d != nil && d.Kind == "content" && d.Prefix != "" {
+			subs.Notify("smeldr:/" + d.Prefix + "/" + node.Slug)
 		}
 	})
 	defs := s.allToolDefs()
@@ -301,6 +310,27 @@ func (s *Server) allResources(ctx smeldr.Context) []mcpResource {
 			out = append(out, mcpResource{
 				URI:      "smeldr:/" + prefix + "/" + slug,
 				Name:     typeName + " — " + slug,
+				MimeType: "application/json",
+			})
+		}
+	}
+	for _, d := range s.publicDynamicTypes() {
+		repo, err := s.app.DynamicContentRepo(d.Name)
+		if err != nil {
+			continue
+		}
+		items, err := repo.List(ctx, smeldr.ListOptions{Status: []smeldr.Status{smeldr.Published}})
+		if err != nil {
+			continue
+		}
+		for _, item := range items {
+			slug, _ := item["Slug"].(string)
+			if slug == "" {
+				continue
+			}
+			out = append(out, mcpResource{
+				URI:      "smeldr:/" + d.Prefix + "/" + slug,
+				Name:     d.Name + " - " + slug,
 				MimeType: "application/json",
 			})
 		}

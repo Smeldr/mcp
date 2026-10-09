@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.55.0] - 2026-10-09
+
+### Added
+
+- Public runtime-defined types are MCP resources (A455). A type with a URL prefix has its Published items listed by `resources/list`, a template in `resources/templates/list`, and readable by `resources/read` under `smeldr://{prefix}/{slug}`, the same scheme and Published-only rule as a module. A subscriber to such an item is notified when it changes status. Admin-only runtime-defined types (no prefix, e.g. `task_plan`) are not resources. Works with smeldr.dev/core v1.137.0; a notification for a content edit needs smeldr.dev/core v1.139.0, which go.mod now pins.
+
 ## [1.54.1] - 2026-10-08
 
 ### Changed
