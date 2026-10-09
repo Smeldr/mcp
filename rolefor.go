@@ -7,7 +7,7 @@ import "smeldr.dev/core"
 // non-governance (RoleStore == nil) path.
 func roleFor(toolName string) smeldr.Role {
 	switch toolName {
-	case "define_content_type":
+	case "define_content_type", "redefine_content_type":
 		return smeldr.Admin
 	case "create_content", "update_content", "set_content_status", "schedule_content":
 		return smeldr.Editor

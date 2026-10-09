@@ -13,13 +13,14 @@ import (
 // [handleDynamicContentTool]. Used by [isDynamicContentTool] to intercept
 // these before the module-scoped tool dispatch.
 var dynamicToolSet = map[string]bool{
-	"define_content_type": true,
-	"create_content":      true,
-	"get_content":         true,
-	"list_content":        true,
-	"update_content":      true,
-	"set_content_status":  true,
-	"schedule_content":    true,
+	"define_content_type":   true,
+	"redefine_content_type": true,
+	"create_content":        true,
+	"get_content":           true,
+	"list_content":          true,
+	"update_content":        true,
+	"set_content_status":    true,
+	"schedule_content":      true,
 }
 
 // isDynamicContentTool reports whether name is one of the 6 generic dynamic
@@ -55,6 +56,27 @@ func dynamicContentToolDefs() []mcpTool {
 						"description": "Field definitions. Each object: {name, type (string|integer|boolean|array|object), " +
 							"required (bool), format (opt), role (opt: title|description|body|summary|og_image|channel)}. A string field with role channel routes the type's event-stream events to the channel its value names and to the topic type:<type_name>; without it they are a broadcast.",
 					},
+				},
+				"required": []string{"type_name", "fields"},
+			},
+		},
+		{
+			Name: "redefine_content_type",
+			Description: "Change the schema of an existing runtime content type, effective at once without a restart. Pass the full field list. " +
+				"Allowed: the label (omit to keep it), a field's role, format, description and relation, required becoming optional, new optional fields. " +
+				"Refused (nothing saved): removing a field, changing its type, making it required, a new required field, and any url_prefix change. " +
+				"The change applies to later writes; existing items are not revalidated. Requires the define-type operation (Admin by default).",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"type_name": map[string]any{"type": "string", "description": "The runtime content type to redefine."},
+					"label":     map[string]any{"type": "string", "description": "New human-readable label; omit to keep the stored one."},
+					"fields": map[string]any{
+						"type":        "array",
+						"items":       map[string]any{"type": "object"},
+						"description": "The full field list, as for define_content_type: each {name, type, required, format, role, description}.",
+					},
+					"reason": map[string]any{"type": "string", "description": "Optional reason, stored on the provenance record (at most 1000 characters). Never put a secret in it."},
 				},
 				"required": []string{"type_name", "fields"},
 			},
@@ -171,6 +193,38 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 			"type_name": desc.Name,
 			"prefix":    desc.Prefix,
 			"kind":      desc.Kind,
+		}), nil
+
+	case "redefine_content_type":
+		typeName, ok := stringArg(args, "type_name")
+		if !ok {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: type_name required"}
+		}
+		if args["fields"] == nil {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: fields required (the full list)"}
+		}
+		fieldsRaw, err := json.Marshal(args["fields"])
+		if err != nil {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: fields"}
+		}
+		label, _ := args["label"].(string)
+		reason, rpcErr := reasonArg(args)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
+		desc, err := s.app.RedefineContentTypeVia(ctx, "mcp", &smeldr.ContentTypeSchema{
+			TypeName: typeName,
+			Label:    label,
+			Fields:   json.RawMessage(fieldsRaw),
+		}, reason)
+		if err != nil {
+			return nil, errorFor(err)
+		}
+		return toolResult(map[string]any{
+			"type_name": desc.Name,
+			"label":     desc.Schema.Label,
+			"prefix":    desc.Prefix,
+			"fields":    json.RawMessage(desc.Schema.Fields),
 		}), nil
 
 	case "create_content":

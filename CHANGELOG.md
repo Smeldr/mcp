@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.56.0] - 2026-10-09
+
+### Added
+
+- `redefine_content_type(type_name, fields, label?, reason?)` (A459): change an existing runtime content type's schema, effective at once without a restart. Allowed: the label, a field's role, format, description and relation, required becoming optional, new optional fields. Refused with -32602 naming the field: removing a field, changing its type, making it required, a new required field, any url_prefix change. Gated by the `define-type` operation like `define_content_type` (Admin without governance). Requires smeldr.dev/core v1.140.0 (`RedefineContentTypeVia` and the policy row).
+
 ## [1.55.2] - 2026-10-09
 
 ### Behaviour change
