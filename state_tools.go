@@ -3,6 +3,7 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"smeldr.dev/core"
 )
@@ -27,7 +28,7 @@ func stateToolDefs() []mcpTool {
 			Description: "Move an item — dynamic content or a compiled type (e.g. Signal, " +
 				"Task, Decision) — to a new state. The transition is validated against the " +
 				"registered state flow, including any role requirement; returns an error if " +
-				"the transition is not permitted. Requires Editor role." + standingNote,
+				"the transition is not permitted. Requires Editor role." + standingNote + awaitsActionNote,
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -43,7 +44,10 @@ func stateToolDefs() []mcpTool {
 			Name: "get_valid_transitions",
 			Description: "List all legal target states for the item's current state — dynamic " +
 				"content or a compiled type. Uses the registered flow for the type, falling " +
-				"back to the default flow. Requires Author role.",
+				"back to the default flow. Returns current_state with awaits_action (whether that " +
+				"state is open, D109), and each transition's to_state with to_awaits_action: false " +
+				"means the transition closes the item. awaits_action is absent when it cannot be " +
+				"read (unknown). Requires Author role.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -56,7 +60,7 @@ func stateToolDefs() []mcpTool {
 		{
 			Name: "list_items_by_state",
 			Description: "List all items of a content type — dynamic or compiled — that are " +
-				"in the given state. Returns item slugs, IDs, and status. Requires Author role." + standingNote + stateSinceNote,
+				"in the given state. Returns item slugs, IDs, and status. Requires Author role." + standingNote + awaitsActionNote + stateSinceNote,
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -106,6 +110,7 @@ func stateToolDefs() []mcpTool {
 								"suppresses_signals": map[string]any{"type": "boolean"},
 								"locked":             map[string]any{"type": "boolean", "description": "Content edits are refused while an item is in this state (A306)."},
 								"standing":           map[string]any{"type": "string", "enum": []string{"holds"}, "description": "\"holds\" says an item in this state is in force (D100). Leave out for none."},
+								"awaits_action":      map[string]any{"type": "boolean", "description": "True when an item in this state waits for someone to act: \"open\" (D109). Leave out, or false, for closed; a state without it counts as closed."},
 							},
 							"required": []string{"name"},
 						},
@@ -165,7 +170,7 @@ func (s *Server) handleStateTool(ctx smeldr.Context, name string, args map[strin
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		return toolResult(s.withStandingResult(ctx, typeName, result)), nil
+		return toolResult(s.withResultFacts(ctx, typeName, result)), nil
 
 	case "get_valid_transitions":
 		typeName, ok := stringArg(args, "type_name")
@@ -186,16 +191,23 @@ func (s *Server) handleStateTool(ctx smeldr.Context, name string, args map[strin
 		}
 		transitions := make([]map[string]any, len(options))
 		for i, o := range options {
-			m := map[string]any{"to_state": o.ToState}
+			m := map[string]any{"to_state": o.ToState, "to_awaits_action": o.ToAwaitsAction}
 			if o.RequiredOperation != "" {
 				m["required_role"] = o.RequiredOperation
 			}
 			transitions[i] = m
 		}
-		return toolResult(map[string]any{
+		result := map[string]any{
 			"current_state":     currentStatus,
 			"valid_transitions": transitions,
-		}), nil
+		}
+		if open, found, err := smeldr.StatesAwaitingAction(ctx, s.app.Config().DB, typeName); err != nil {
+			slog.WarnContext(ctx, "mcp: awaits_action lookup failed, awaits_action left out of the result",
+				"type", typeName, "error", err)
+		} else if found {
+			result["awaits_action"] = open[currentStatus]
+		}
+		return toolResult(result), nil
 
 	case "list_items_by_state":
 		typeName, ok := stringArg(args, "type_name")
@@ -210,7 +222,7 @@ func (s *Server) handleStateTool(ctx smeldr.Context, name string, args map[strin
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
-		items = s.withStandingItems(ctx, typeName, items)
+		items = s.withItemFacts(ctx, typeName, items)
 		items = s.withStateSinceItems(ctx, typeName, items)
 		return toolResult(map[string]any{
 			"type_name": typeName,
@@ -286,6 +298,10 @@ func parseStates(raw []any) ([]smeldr.State, *jsonRPCError) {
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
+		awaits, rpcErr := strictBool(m, "awaits_action", i)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
 		out = append(out, smeldr.State{
 			Name:              n,
 			IsInitial:         boolField(m, "is_initial"),
@@ -293,6 +309,7 @@ func parseStates(raw []any) ([]smeldr.State, *jsonRPCError) {
 			SuppressesSignals: boolField(m, "suppresses_signals"),
 			Locked:            locked,
 			Standing:          smeldr.Standing(standing),
+			AwaitsAction:      awaits,
 		})
 	}
 	return out, nil

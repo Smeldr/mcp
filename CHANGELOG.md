@@ -9,6 +9,15 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.57.0] - 2026-10-10
+
+### Added
+
+- `awaits_action` on item reads (A462, core D109): `get_<type>`/`list_<type>`, `get_content`/`list_content`, `list_items_by_state` and `transition_item`'s result carry `awaits_action`, true when the item's state waits for someone to act ("open") and false when it is closed, as the type's flow declares, next to `standing`. It is present for every item of a type whose flow resolves; absent means unknown (the flow could not be read), never closed. Both keys come from one splice pass (`withItemFacts`).
+- `get_valid_transitions` returns `awaits_action` for the current state and `to_awaits_action` for each transition; false marks a transition that closes the item.
+- `define_state_flow` takes `awaits_action` (boolean) per state; a state without it is closed. A non-boolean value is -32602.
+- Requires smeldr.dev/core v1.141.0 (`StatesAwaitingAction`, `TransitionOption.ToAwaitsAction`, `State.AwaitsAction`).
+
 ## [1.56.0] - 2026-10-09
 
 ### Added

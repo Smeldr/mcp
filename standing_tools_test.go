@@ -259,11 +259,11 @@ func TestWithStandingItems_Edges(t *testing.T) {
 	seedDecision(t, db, "dec-e", "dec-e-slug", "ratified")
 	setStandingRow(t, db, "Decision", "dec-e", "holds")
 
-	if got := srv.withStandingItems(ctx, "Decision", nil); len(got) != 0 {
+	if got := srv.withItemFacts(ctx, "Decision", nil); len(got) != 0 {
 		t.Errorf("an empty page = %v", got)
 	}
 	in := []any{"not an object", map[string]any{"title": "no id"}, map[string]any{"ID": "dec-e"}, map[string]any{}}
-	out := srv.withStandingItems(ctx, "Decision", in)
+	out := srv.withItemFacts(ctx, "Decision", in)
 	if out[0] != "not an object" {
 		t.Errorf("a non-object was changed: %v", out[0])
 	}
@@ -284,7 +284,7 @@ func TestWithStandingItems_Edges(t *testing.T) {
 	}
 	// A result map without an id, and a nil DB server path, come back unchanged.
 	m := map[string]any{"status": "x"}
-	if got := srv.withStandingResult(ctx, "Decision", m); got["standing"] != nil {
+	if got := srv.withResultFacts(ctx, "Decision", m); got["standing"] != nil {
 		t.Errorf("a result with no id got a standing: %v", got)
 	}
 }

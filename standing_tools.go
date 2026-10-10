@@ -17,81 +17,121 @@ const standingNote = " For a type that has standing (D100) each item also carrie
 	"absent \"standing\" means either that the type has no standing or that the lookup failed " +
 	"(logged on the server): never conclude \"no standing\" from its absence alone."
 
-// withStanding adds the item's standing to one item of typeName. See
-// [Server.withStandingItems].
-func (s *Server) withStanding(ctx smeldr.Context, typeName string, item any) any {
-	return s.withStandingItems(ctx, typeName, []any{item})[0]
+// awaitsActionNote ends the description of every tool whose result carries an
+// item's awaits_action (D109).
+const awaitsActionNote = " Each item also carries \"awaits_action\": true when its state waits for " +
+	"someone to act (open, D109), false when it is closed, as the type's flow declares. An absent " +
+	"\"awaits_action\" means unknown (no flow could be read, logged on the server), never closed or open."
+
+// withItemFact adds the item's facts to one item of typeName. See
+// [Server.withItemFacts].
+func (s *Server) withItemFact(ctx smeldr.Context, typeName string, item any) any {
+	return s.withItemFacts(ctx, typeName, []any{item})[0]
 }
 
-// withStandingItems returns items with a "standing" key added to each item of a
-// type that has standing, from one tagged-state lookup and one standing query
-// for the whole page (core's TypeHasStanding and ItemStandings). The key is
-// spliced in after the item's own marshalled fields, so a compiled type's field
-// order is unchanged and it needs no Standing field of its own.
+// withItemFacts returns items with two keys spliced in after each item's own
+// marshalled fields, so a compiled type's field order is unchanged and it needs
+// no field of its own for them:
+//   - "standing" (D100) for a type that has standing, from one tagged-state
+//     lookup and one standing query for the whole page (core's TypeHasStanding
+//     and ItemStandings);
+//   - "awaits_action" (D109) for a type whose flow resolves, from one
+//     StatesAwaitingAction lookup for the page and each item's own status.
 //
-// A type without standing, or a page whose lookup fails, comes back unchanged:
-// the tool never fails because of standing (a lookup error is logged). An item
-// that is not a JSON object or has no ID is left as it is.
-func (s *Server) withStandingItems(ctx smeldr.Context, typeName string, items []any) []any {
+// Each is fail-open on its own: a failed lookup leaves that key out (logged),
+// the other is still added, and the tool never fails because of either. An
+// item that is not a JSON object or has no ID is left as it is.
+func (s *Server) withItemFacts(ctx smeldr.Context, typeName string, items []any) []any {
 	db := s.app.Config().DB
-	if db == nil || len(items) == 0 || !smeldr.TypeHasStanding(ctx, db, typeName) {
+	if db == nil || len(items) == 0 {
 		return items
 	}
+	hasStanding := smeldr.TypeHasStanding(ctx, db, typeName)
+	open, hasOpen, err := smeldr.StatesAwaitingAction(ctx, db, typeName)
+	if err != nil {
+		slog.WarnContext(ctx, "mcp: awaits_action lookup failed, awaits_action left out of the result",
+			"type", typeName, "error", err)
+		hasOpen = false
+	}
+	if !hasStanding && !hasOpen {
+		return items
+	}
+	type itemKey struct {
+		ID     string
+		Status string
+	}
 	raw := make([][]byte, len(items))
+	keys := make([]itemKey, len(items))
 	ids := make([]string, 0, len(items))
 	for i, it := range items {
 		b, err := json.Marshal(it)
 		if err != nil || len(b) < 2 || b[0] != '{' {
 			continue
 		}
-		var idv struct{ ID string }
-		if json.Unmarshal(b, &idv) != nil || idv.ID == "" {
+		if json.Unmarshal(b, &keys[i]) != nil || keys[i].ID == "" {
 			continue
 		}
 		raw[i] = b
-		ids = append(ids, idv.ID)
+		ids = append(ids, keys[i].ID)
 	}
-	standings, err := smeldr.ItemStandings(ctx, db, typeName, ids)
-	if err != nil {
-		slog.WarnContext(ctx, "mcp: standing lookup failed, standing left out of the result",
-			"type", typeName, "error", err)
-		return items
+	var standings map[string]smeldr.Standing
+	if hasStanding {
+		standings, err = smeldr.ItemStandings(ctx, db, typeName, ids)
+		if err != nil {
+			slog.WarnContext(ctx, "mcp: standing lookup failed, standing left out of the result",
+				"type", typeName, "error", err)
+			hasStanding = false
+		}
 	}
 	out := make([]any, len(items))
 	for i, it := range items {
 		out[i] = it
-		b := raw[i]
-		if b == nil {
+		if raw[i] == nil {
 			continue
 		}
-		var idv struct{ ID string }
-		_ = json.Unmarshal(b, &idv)
-		st, ok := standings[idv.ID]
-		if !ok {
-			continue
+		var kvs []jsonKV
+		if st, ok := standings[keys[i].ID]; hasStanding && ok {
+			kvs = append(kvs, jsonKV{"standing", string(st)})
 		}
-		out[i] = spliceJSONKeys(b, jsonKV{"standing", string(st)})
+		if hasOpen {
+			kvs = append(kvs, jsonKV{"awaits_action", open[keys[i].Status]})
+		}
+		if len(kvs) > 0 {
+			out[i] = spliceJSONKeys(raw[i], kvs...)
+		}
 	}
 	return out
 }
 
-// withStandingMaps is [Server.withStandingItems] for the []map[string]any a
+// withItemFactsMaps is [Server.withItemFacts] for the []map[string]any a
 // dynamic repository returns.
-func (s *Server) withStandingMaps(ctx smeldr.Context, typeName string, items []map[string]any) []any {
+func (s *Server) withItemFactsMaps(ctx smeldr.Context, typeName string, items []map[string]any) []any {
 	in := make([]any, len(items))
 	for i, it := range items {
 		in[i] = it
 	}
-	return s.withStandingItems(ctx, typeName, in)
+	return s.withItemFacts(ctx, typeName, in)
 }
 
-// withStandingResult adds "standing" to a result map that carries the item's
-// "id" (the transition_item result), for a type that has standing. Fail-open
-// like [Server.withStandingItems].
-func (s *Server) withStandingResult(ctx smeldr.Context, typeName string, result map[string]any) map[string]any {
+// withResultFacts adds "standing" and "awaits_action" to a result map that
+// carries the item's "id" and "status" (the transition_item result), each on
+// the same terms and fail-open like [Server.withItemFacts].
+func (s *Server) withResultFacts(ctx smeldr.Context, typeName string, result map[string]any) map[string]any {
 	db := s.app.Config().DB
 	id, _ := result["id"].(string)
-	if db == nil || id == "" || !smeldr.TypeHasStanding(ctx, db, typeName) {
+	if db == nil || id == "" {
+		return result
+	}
+	if status, ok := result["status"].(string); ok {
+		open, found, err := smeldr.StatesAwaitingAction(ctx, db, typeName)
+		if err != nil {
+			slog.WarnContext(ctx, "mcp: awaits_action lookup failed, awaits_action left out of the result",
+				"type", typeName, "error", err)
+		} else if found {
+			result["awaits_action"] = open[status]
+		}
+	}
+	if !smeldr.TypeHasStanding(ctx, db, typeName) {
 		return result
 	}
 	standings, err := smeldr.ItemStandings(ctx, db, typeName, []string{id})
