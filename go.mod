@@ -7,8 +7,8 @@ toolchain go1.26.9
 require (
 	github.com/jackc/pgx/v5 v5.9.2
 	modernc.org/sqlite v1.50.1
-	smeldr.dev/core v1.142.0
-	smeldr.dev/oauth v0.5.0
+	smeldr.dev/core v1.143.0
+	smeldr.dev/oauth v0.6.0
 )
 
 require (
@@ -27,3 +27,5 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
+
+retract v1.59.0 // Register panics at startup when the App has a method-qualified catch-all such as GET /

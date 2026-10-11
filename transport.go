@@ -130,27 +130,32 @@ func (s *Server) Handler() http.Handler {
 //	POST /mcp/message                          — SSE transport message endpoint
 //	GET  /.well-known/oauth-protected-resource — RFC 9728 metadata
 //
-// When [WithOAuth] was configured, Register also mounts:
+// When [WithOAuth] was configured, Register also mounts the oauth server's
+// routes, each with its method and full path ([oauthRoutes]):
 //
 //	GET  /.well-known/oauth-authorization-server  RFC 8414 metadata
-//	/oauth/                                       every route of the oauth server's handler
+//	GET  /oauth/authorize                         authorization form
+//	POST /oauth/authorize                         form submission
+//	POST /oauth/token                             code exchange and token refresh
+//	POST /oauth/revoke                            token revocation (RFC 7009)
+//	POST /oauth/register                          Dynamic Client Registration (RFC 7591)
 //
-// The /oauth/ prefix goes to the oauth server as a whole (authorize, token,
-// revoke, and register when its store implements oauth.RegistrationStore), so
-// the routes the App serves are always the routes the discovery document
-// advertises: the oauth server decides both, and a route oauth adds later
-// needs no change here. An unknown path under /oauth/ gets the oauth server's
-// 404, and a wrong method on one of its paths its 405.
+// POST /oauth/register is always mounted. When the oauth store does not
+// implement oauth.RegistrationStore, the oauth server answers it 404 and its
+// discovery document has no registration_endpoint, so routing and discovery
+// agree either way.
+//
+// Every pattern carries a method and a full path on purpose. A prefix such as
+// /oauth/ (mcp v1.59.0) conflicts in Go's ServeMux with an App catch-all such
+// as GET / and panics at startup; a method plus a full path conflicts with no
+// App pattern. An unknown path under /oauth/ is the App's own not-found.
 //
 // Middleware installed with [smeldr.App.Use] (body limits, rate limiting)
 // wraps every one of these routes, including the unauthenticated
 // POST /oauth/register.
 //
 // Register calls [Handler] once to obtain the mcp mux and then delegates
-// each route to it via [smeldr.App.Handle]. Go 1.22+ ServeMux priority rules
-// ensure existing Smeldr routes are never overwritten: an App route such as
-// GET /oauth/callback is more specific than the /oauth/ prefix and keeps
-// its own handler.
+// each route to it via [smeldr.App.Handle].
 func (s *Server) Register(app *smeldr.App) {
 	h := s.Handler()
 	app.Handle("GET /mcp", h)
@@ -159,8 +164,22 @@ func (s *Server) Register(app *smeldr.App) {
 	app.Handle("GET /.well-known/oauth-protected-resource", h)
 	if s.oauth != nil {
 		app.Handle("GET /.well-known/oauth-authorization-server", h)
-		app.Handle("/oauth/", h)
+		for _, p := range oauthRoutes {
+			app.Handle(p, h)
+		}
 	}
+}
+
+// oauthRoutes are the oauth server's routes that Register mounts, each with
+// its method and full path, so no App pattern can conflict with them. A route
+// oauth adds later must be added here: the discovery drift test fails until it
+// is.
+var oauthRoutes = []string{
+	"GET /oauth/authorize",
+	"POST /oauth/authorize",
+	"POST /oauth/token",
+	"POST /oauth/revoke",
+	"POST /oauth/register",
 }
 
 // sseHandler handles GET /mcp, upgrading the HTTP connection to a Server-Sent

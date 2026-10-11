@@ -9,6 +9,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [@@VERSION@@] - held
+
+**Do not use v1.59.0 with OAuth and a route such as `GET /`: it panics at startup.** v1.59.0 is retracted in this release, so `go get smeldr.dev/mcp@latest` skips it.
+
+### Fixed
+
+- **`Register` no longer conflicts with an App catch-all (A473).** v1.59.0 mounted the oauth routes as the prefix `/oauth/`, which Go's ServeMux reports as conflicting with a method-qualified App pattern with a more general path (`GET /`, `POST /`, `DELETE /`, `GET /{path...}`, `GET /{a}/{b}`) and panics at startup when OAuth is configured. `Register` now mounts each oauth route with its method and full path (`GET` and `POST /oauth/authorize`, `POST /oauth/token`, `POST /oauth/revoke`, `POST /oauth/register`), which conflicts with no App pattern. `POST /oauth/register` is always mounted; without an `oauth.RegistrationStore` the oauth server answers it 404 and discovery does not advertise it, so the two still agree.
+
+### Changed
+
+- An unknown path under `/oauth/`, and a wrong method on an oauth path, are answered by the App's own router again, as before v1.59.0.
+- Requires smeldr.dev/core v1.143.0 and smeldr.dev/oauth v0.6.0 (A473).
+- `retract v1.59.0` in go.mod.
+
 ## [1.59.0] - 2026-10-11
 
 ### Fixed

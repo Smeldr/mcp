@@ -127,9 +127,9 @@ func TestRegister_DiscoveryEndpointsAreServed(t *testing.T) {
 	}
 }
 
-// The /oauth/ prefix never shadows a more specific App route, and the routes
-// oauth serves without advertising them (revoke) are reached too.
-func TestRegister_OAuthPrefixKeepsAppRoutes(t *testing.T) {
+// An App route under /oauth/ keeps its handler, and the routes oauth serves
+// without advertising them (revoke) are reached too.
+func TestRegister_OAuthRoutesKeepAppRoutes(t *testing.T) {
 	h := registeredApp(t, sqliteStore(t), func(app *smeldr.App) {
 		app.Handle("GET /oauth/callback", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusTeapot)
@@ -149,7 +149,72 @@ func TestRegister_OAuthPrefixKeepsAppRoutes(t *testing.T) {
 	}
 	w = httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest(http.MethodDelete, "/oauth/token", nil))
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("DELETE /oauth/token = %d, want oauth's 405", w.Code)
+	if w.Code < 400 {
+		t.Errorf("DELETE /oauth/token = %d, want it refused", w.Code)
+	}
+}
+
+// Why Register's oauth patterns each carry a method and a full path: a conflict
+// matrix against Go's ServeMux, both registration orders (mcp-register-oauth-
+// routes-no-conflict, 2026-10-11). Do not "simplify" oauthRoutes to a prefix.
+//
+//	Our patterns                          Conflicts with App patterns
+//	/oauth/ (mcp v1.59.0)                 GET /, POST /, DELETE /, GET /{path...}, GET /{a}/{b}
+//	GET /oauth/ + POST /oauth/            /oauth/x, GET /{a}/{b}
+//	method + full path (oauthRoutes)      none
+//
+// The matrix also covered "/" and "GET /{slug}" (no conflict with oauthRoutes);
+// they are left out below only because smeldr.App.Handler registers those two
+// patterns itself, so an App cannot add them.
+//
+// Each App catch-all below is registered before and after Register: no panic,
+// the App's own handler still answers, and registration still reaches oauth.
+func TestRegister_NoConflictWithAppCatchAlls(t *testing.T) {
+	appPatterns := []struct{ pattern, method, path string }{
+		{"GET /", http.MethodGet, "/"},
+		{"POST /", http.MethodPost, "/"},
+		{"DELETE /", http.MethodDelete, "/"},
+		{"GET /{path...}", http.MethodGet, "/a/b/c"},
+		{"GET /{a}/{b}", http.MethodGet, "/x/y"},
+		{"/oauth/x", http.MethodGet, "/oauth/x"},
+	}
+	teapot := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusTeapot) })
+	for _, ap := range appPatterns {
+		for _, before := range []bool{true, false} {
+			name := ap.pattern + map[bool]string{true: " before", false: " after"}[before]
+			t.Run(name, func(t *testing.T) {
+				defer func() {
+					if r := recover(); r != nil {
+						t.Fatalf("Register panicked next to App pattern %q: %v", ap.pattern, r)
+					}
+				}()
+				app := newTestApp(t, smeldr.MCP(smeldr.MCPRead))
+				if before {
+					app.Handle(ap.pattern, teapot)
+				}
+				oauthSrv := oauth.New(oauth.Config{
+					Issuer:       "https://cms.example.com",
+					Resource:     "https://cms.example.com/mcp",
+					VerifyBearer: func(string) bool { return true },
+				}, sqliteStore(t))
+				New(app, WithOAuth(oauthSrv)).Register(app)
+				if !before {
+					app.Handle(ap.pattern, teapot)
+				}
+				h := app.Handler()
+
+				w := httptest.NewRecorder()
+				h.ServeHTTP(w, httptest.NewRequest(ap.method, ap.path, nil))
+				if w.Code != http.StatusTeapot {
+					t.Errorf("%s %s = %d, want the App's own 418", ap.method, ap.path, w.Code)
+				}
+				w = httptest.NewRecorder()
+				h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/oauth/register",
+					strings.NewReader(`{"redirect_uris":["https://client.example/cb"]}`)))
+				if w.Code != http.StatusCreated {
+					t.Errorf("POST /oauth/register = %d %s, want 201", w.Code, w.Body.String())
+				}
+			})
+		}
 	}
 }
