@@ -83,12 +83,13 @@ func (s *Server) ServeStdio(ctx context.Context, in io.Reader, out io.Writer) er
 //   - POST /mcp/message                            — JSON-RPC endpoint (MCP 2024-11-05 SSE transport)
 //   - GET  /.well-known/oauth-protected-resource   — RFC 9728 metadata (404 when OAuth not enabled)
 //
-// When [WithOAuth] is configured, additional OAuth 2.1 endpoints are mounted:
-//
-//   - GET  /.well-known/oauth-authorization-server — RFC 8414 metadata
-//   - GET  /oauth/authorize                        — authorization form
-//   - POST /oauth/authorize                        — form submission
-//   - POST /oauth/token                            — code exchange and token refresh
+// When [WithOAuth] is configured, every route of the oauth server's own
+// handler is served as well: GET /.well-known/oauth-authorization-server
+// (RFC 8414 metadata), GET and POST /oauth/authorize, POST /oauth/token,
+// POST /oauth/revoke, and POST /oauth/register (RFC 7591 Dynamic Client
+// Registration) when the oauth store implements oauth.RegistrationStore.
+// The oauth server decides which of its routes exist; the discovery document
+// advertises exactly those.
 //
 // Authentication when OAuth is enabled ([WithOAuth]):
 //   - All HTTP requests (GET /mcp and POST /mcp or /mcp/message) must carry a valid
@@ -131,18 +132,25 @@ func (s *Server) Handler() http.Handler {
 //
 // When [WithOAuth] was configured, Register also mounts:
 //
-//	GET  /.well-known/oauth-authorization-server — RFC 8414 metadata
-//	GET  /oauth/authorize                         — authorization form
-//	POST /oauth/authorize                         — form submission
-//	POST /oauth/token                             — code exchange and token refresh
-//	POST /oauth/revoke                            — token revocation (RFC 7009)
+//	GET  /.well-known/oauth-authorization-server  RFC 8414 metadata
+//	/oauth/                                       every route of the oauth server's handler
+//
+// The /oauth/ prefix goes to the oauth server as a whole (authorize, token,
+// revoke, and register when its store implements oauth.RegistrationStore), so
+// the routes the App serves are always the routes the discovery document
+// advertises: the oauth server decides both, and a route oauth adds later
+// needs no change here. An unknown path under /oauth/ gets the oauth server's
+// 404, and a wrong method on one of its paths its 405.
+//
+// Middleware installed with [smeldr.App.Use] (body limits, rate limiting)
+// wraps every one of these routes, including the unauthenticated
+// POST /oauth/register.
 //
 // Register calls [Handler] once to obtain the mcp mux and then delegates
 // each route to it via [smeldr.App.Handle]. Go 1.22+ ServeMux priority rules
-// ensure existing Smeldr routes are never overwritten.
-//
-// After Register returns, site-dev should update main.go to use this method
-// instead of five separate app.Handle calls.
+// ensure existing Smeldr routes are never overwritten: an App route such as
+// GET /oauth/callback is more specific than the /oauth/ prefix and keeps
+// its own handler.
 func (s *Server) Register(app *smeldr.App) {
 	h := s.Handler()
 	app.Handle("GET /mcp", h)
@@ -151,10 +159,7 @@ func (s *Server) Register(app *smeldr.App) {
 	app.Handle("GET /.well-known/oauth-protected-resource", h)
 	if s.oauth != nil {
 		app.Handle("GET /.well-known/oauth-authorization-server", h)
-		app.Handle("GET /oauth/authorize", h)
-		app.Handle("POST /oauth/authorize", h)
-		app.Handle("POST /oauth/token", h)
-		app.Handle("POST /oauth/revoke", h)
+		app.Handle("/oauth/", h)
 	}
 }
 

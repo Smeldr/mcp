@@ -147,6 +147,8 @@ func WithDynamicContent() ServerOption {
 //	GET  /oauth/authorize
 //	POST /oauth/authorize
 //	POST /oauth/token
+//	POST /oauth/revoke
+//	POST /oauth/register  (RFC 7591, when the oauth store implements oauth.RegistrationStore)
 //
 // Example:
 //

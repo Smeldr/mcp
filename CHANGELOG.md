@@ -9,6 +9,18 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [@@VERSION@@] - held
+
+### Fixed
+
+- **`Register` serves every oauth route, so discovery and routing agree (A470).** With oauth v0.5.0 and a store that implements `oauth.RegistrationStore` (`oauth.SQLiteStore` does), the discovery document advertised `registration_endpoint`, but `Register` copied oauth's routes by hand and never mounted `POST /oauth/register`, so the App answered 404 and an MCP client that registers itself (Dynamic Client Registration) could not connect. `Register` now hands the whole `/oauth/` prefix to the oauth server, which decides both its routes and its discovery entries, so a route oauth adds later needs no change here. A more specific App route under `/oauth/` keeps its own handler.
+
+### Changed
+
+- `POST /oauth/register` is now reachable through `Register` when the oauth store supports registration; it was 404 before. Middleware installed with `App.Use` (body limits, rate limiting) wraps it like every other route.
+- An unknown path under `/oauth/` now gets the oauth server's 404, and a wrong method on one of its paths (for example `DELETE /oauth/token`) its 405, where the App answered 404 before.
+- Requires smeldr.dev/oauth v0.5.0 (was v0.4.1).
+
 ## [1.58.0] - 2026-10-11
 
 ### Added
