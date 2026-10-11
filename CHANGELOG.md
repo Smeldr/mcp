@@ -9,7 +9,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [@@VERSION@@] - held
+## [1.59.1] - 2026-10-11
 
 **Do not use v1.59.0 with OAuth and a route such as `GET /`: it panics at startup.** v1.59.0 is retracted in this release, so `go get smeldr.dev/mcp@latest` skips it.
 
