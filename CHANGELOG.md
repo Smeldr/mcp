@@ -9,6 +9,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.58.0] - 2026-10-11
+
+### Added
+
+- `list_relations` (A464): every relation on the instance, paged, to build a snapshot of the whole graph. Params `kind`, `source_type`, `target_type`, `include_ended` (boolean), `as_of` (RFC3339), `limit` (default 50, capped at 500) and `offset`. Returns `{edges, total, count, limit, offset, as_of}`; each edge has the `get_relations` shape. Omit `as_of` on the first page and pass the returned one back, so all pages describe the graph at that moment; then follow the event stream's `relations` topic from `as_of` (add on `relation.asserted`, drop from the live set on `relation.ended`). `source_id`/`target_id` are the items' raw ID, the ID the item list tools return. Author role, operation `read`. Bad params are -32602.
+- Requires smeldr.dev/core v1.142.0 (`RelationStore.ListRelations`).
+
 ## [1.57.0] - 2026-10-10
 
 ### Added

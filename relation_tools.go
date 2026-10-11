@@ -12,7 +12,7 @@ import (
 //
 // Role assignment:
 //   - assert_relation, withdraw_relation, propose_relation, observe_relation,
-//     get_relations, list_relation_kinds — Author
+//     get_relations, list_relations, list_relation_kinds: Author
 //   - preview_impact — Editor (used before archive/delete editorial decisions)
 //   - upsert_relation_kind — Admin (manages the kind registry schema)
 func relationToolDefs() []mcpTool {
@@ -120,6 +120,7 @@ func relationToolDefs() []mcpTool {
 				"required": []string{"type_name", "id", "direction"},
 			},
 		},
+		listRelationsToolDef(),
 		{
 			Name: "preview_impact",
 			Description: "Return all source-side dependents of a target item without firing any signals. " +
@@ -168,7 +169,7 @@ func relationToolDefs() []mcpTool {
 func isRelationTool(name string) bool {
 	switch name {
 	case "assert_relation", "withdraw_relation", "propose_relation", "observe_relation", "get_relations",
-		"preview_impact", "upsert_relation_kind", "list_relation_kinds", "get_reachability":
+		"list_relations", "preview_impact", "upsert_relation_kind", "list_relation_kinds", "get_reachability":
 		return true
 	}
 	return false
@@ -325,6 +326,9 @@ func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[st
 			edgeMaps[i] = relationEdgeMap(e)
 		}
 		return toolResult(map[string]any{"edges": edgeMaps}), nil
+
+	case "list_relations":
+		return s.handleListRelations(ctx, args)
 
 	case "get_reachability":
 		return s.handleReachabilityTool(ctx, args)
