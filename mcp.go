@@ -344,7 +344,7 @@ func (s *Server) allResources(ctx smeldr.Context) []mcpResource {
 var slugOnlySchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
-		"slug": map[string]any{"type": "string", "description": "Item ID or slug — both accepted."},
+		"slug": map[string]any{"type": "string", "description": identifierDescription},
 	},
 	"required": []string{"slug"},
 }
@@ -355,7 +355,7 @@ var slugOnlySchema = map[string]any{
 var slugWithReasonSchema = map[string]any{
 	"type": "object",
 	"properties": map[string]any{
-		"slug":   map[string]any{"type": "string", "description": "Item ID or slug — both accepted."},
+		"slug":   map[string]any{"type": "string", "description": identifierDescription},
 		"reason": map[string]any{"type": "string", "description": "Optional one-line reason for the transition. Required if the target transition has RequiredReason set — omitting it then returns an error."},
 	},
 	"required": []string{"slug"},
@@ -389,6 +389,11 @@ func fieldToProp(f smeldr.MCPField) map[string]any {
 	if desc := fieldDescription(f); desc != "" {
 		prop["description"] = desc
 	}
+	// D110 7.1: a field still accepted but going away (the legacy human-ID
+	// fields) says so for clients that read JSON Schema's deprecated.
+	if f.Deprecated {
+		prop["deprecated"] = true
+	}
 	return prop
 }
 
@@ -401,7 +406,7 @@ func mcpToolDefs(m smeldr.MCPModule) []mcpTool {
 	return []mcpTool{
 		{
 			Name:        "create_" + typeSnake,
-			Description: "Create a new " + meta.TypeName + " content item.",
+			Description: createDescription(meta.TypeName),
 			InputSchema: inputSchema(schema),
 		},
 		{
@@ -420,7 +425,7 @@ func mcpToolDefs(m smeldr.MCPModule) []mcpTool {
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"slug":         map[string]any{"type": "string", "description": "Item ID or slug — both accepted."},
+					"slug":         map[string]any{"type": "string", "description": identifierDescription},
 					"scheduled_at": map[string]any{"type": "string", "format": "date-time"},
 					"reason":       map[string]any{"type": "string", "description": "Optional one-line reason for the transition. Required if the target transition has RequiredReason set — omitting it then returns an error."},
 				},
@@ -458,7 +463,7 @@ func mcpAdminReadToolDefs(m smeldr.MCPModule) []mcpTool {
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"slug": map[string]any{"type": "string", "description": "Item ID or slug — both accepted."},
+					"slug": map[string]any{"type": "string", "description": identifierDescription},
 				},
 				"required": []string{"slug"},
 			},
@@ -509,6 +514,7 @@ func mcpAdminReadToolDefs(m smeldr.MCPModule) []mcpTool {
 // Decision 27:
 //   - Both present: smeldr_description + " (" + smeldr_format + ")"
 //   - Only smeldr_format: "(" + smeldr_format + ")"
+//   - Only smeldr_description: smeldr_description
 //   - Neither: no description key emitted
 func inputSchema(fields []smeldr.MCPField) map[string]any {
 	props := make(map[string]any, len(fields))
@@ -535,7 +541,7 @@ func inputSchema(fields []smeldr.MCPField) map[string]any {
 // using the same priority rules as [inputSchema] (Decision 27).
 func inputSchemaUpdate(fields []smeldr.MCPField) map[string]any {
 	props := map[string]any{
-		"slug": map[string]any{"type": "string", "description": "Item ID or slug — both accepted."},
+		"slug": map[string]any{"type": "string", "description": identifierDescription},
 	}
 	for _, f := range fields {
 		// An update never changes the status or the slug (core refuses a
@@ -557,6 +563,7 @@ func inputSchemaUpdate(fields []smeldr.MCPField) map[string]any {
 // from its Format and Description hints (Decision 27):
 //   - Both non-empty: Description + " (" + Format + ")"
 //   - Only Format: "(" + Format + ")"
+//   - Only Description: Description
 //   - Neither: ""
 func fieldDescription(f smeldr.MCPField) string {
 	switch {
@@ -564,6 +571,10 @@ func fieldDescription(f smeldr.MCPField) string {
 		return f.Description + " (" + f.Format + ")"
 	case f.Format != "":
 		return "(" + f.Format + ")"
+	case f.Description != "":
+		// A description without a format (D110's deprecated fields, the
+		// SiteConfig fields) was dropped before.
+		return f.Description
 	default:
 		return ""
 	}
@@ -631,6 +642,9 @@ type jsonRPCResponse struct {
 type jsonRPCError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+	// Data is JSON-RPC's optional structured error detail, for a caller that
+	// can correct its call from it (D110's retired-field guidance).
+	Data map[string]any `json:"data,omitempty"`
 }
 
 // hasMCPOp reports whether m's Operations slice contains op.

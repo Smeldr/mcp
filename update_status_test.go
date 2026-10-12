@@ -24,7 +24,7 @@ func TestUpdateTool_SchemaOmitsStatusAndSlug(t *testing.T) {
 	if _, ok := up["status"]; ok {
 		t.Error("update_task offers status")
 	}
-	if slug, ok := up["slug"].(map[string]any); !ok || !strings.Contains(slug["description"].(string), "Item ID or slug") {
+	if slug, ok := up["slug"].(map[string]any); !ok || slug["description"] != identifierDescription {
 		t.Errorf("update_task slug = %v; want the identifier", up["slug"])
 	}
 	if _, ok := props("create_task")["status"]; !ok {

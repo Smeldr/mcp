@@ -43,13 +43,14 @@ func dynamicContentToolDefs() []mcpTool {
 	return []mcpTool{
 		{
 			Name:        "define_content_type",
-			Description: "Define a new runtime content type by providing its schema. type_name must be unique and lower_snake_case. fields is a JSON array of {name, type, required, format, role} objects. url_prefix sets the public URL prefix (e.g. \"/recipes\"); omit or leave empty for admin-only types. Requires Admin role.",
+			Description: "Define a new runtime content type by providing its schema. type_name must be unique and lower_snake_case. fields is a JSON array of {name, type, required, format, role} objects. url_prefix sets the public URL prefix (e.g. \"/recipes\"); omit or leave empty for admin-only types. A type without url_prefix is a record type: each item gets an address (D110) made of address_prefix and a number; the result returns the address_prefix that was set or proposed. Requires Admin role.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"type_name":  map[string]any{"type": "string", "description": "Unique snake_case type name, e.g. \"recipe\"."},
-					"label":      map[string]any{"type": "string", "description": "Human-readable label."},
-					"url_prefix": map[string]any{"type": "string", "description": "Public URL prefix, e.g. \"/recipes\". Must start with \"/\". Omit for admin-only types."},
+					"type_name":      map[string]any{"type": "string", "description": "Unique snake_case type name, e.g. \"recipe\"."},
+					"label":          map[string]any{"type": "string", "description": "Human-readable label."},
+					"url_prefix":     map[string]any{"type": "string", "description": "Public URL prefix, e.g. \"/recipes\". Must start with \"/\". Omit for admin-only types."},
+					"address_prefix": addressPrefixProp("Omit to let the server propose one from the type name."),
 					"fields": map[string]any{
 						"type":  "array",
 						"items": map[string]any{"type": "object"},
@@ -65,12 +66,13 @@ func dynamicContentToolDefs() []mcpTool {
 			Description: "Change the schema of an existing runtime content type, effective at once without a restart. Pass the full field list. " +
 				"Allowed: the label (omit to keep it), a field's role, format, description and relation, required becoming optional, new optional fields. " +
 				"Refused (nothing saved): removing a field, changing its type, making it required, a new required field, and any url_prefix change. " +
-				"The change applies to later writes; existing items are not revalidated. Requires the define-type operation (Admin by default).",
+				"The change applies to later writes; existing items are not revalidated. The result returns the type's address_prefix. Requires the define-type operation (Admin by default).",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"type_name": map[string]any{"type": "string", "description": "The runtime content type to redefine."},
-					"label":     map[string]any{"type": "string", "description": "New human-readable label; omit to keep the stored one."},
+					"type_name":      map[string]any{"type": "string", "description": "The runtime content type to redefine."},
+					"label":          map[string]any{"type": "string", "description": "New human-readable label; omit to keep the stored one."},
+					"address_prefix": addressPrefixProp("Omit to keep the current one."),
 					"fields": map[string]any{
 						"type":        "array",
 						"items":       map[string]any{"type": "object"},
@@ -83,7 +85,7 @@ func dynamicContentToolDefs() []mcpTool {
 		},
 		{
 			Name:        "create_content",
-			Description: "Create a Draft item of the given runtime content type. Returns the new item with its ID and slug. Requires Editor role.",
+			Description: "Create a Draft item of the given runtime content type. Returns the new item with its ID and slug. Requires Editor role. For a record type (no url_prefix): " + createAddressNote,
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -100,7 +102,7 @@ func dynamicContentToolDefs() []mcpTool {
 				"type": "object",
 				"properties": map[string]any{
 					"type_name": map[string]any{"type": "string"},
-					"slug":      map[string]any{"type": "string"},
+					"slug":      map[string]any{"type": "string", "description": "The item: " + identifierDescription},
 				},
 				"required": []string{"type_name", "slug"},
 			},
@@ -123,12 +125,12 @@ func dynamicContentToolDefs() []mcpTool {
 		},
 		{
 			Name:        "update_content",
-			Description: "Patch the fields of an existing content item by ID. Absent keys are preserved (partial update). Requires Editor role.",
+			Description: "Patch the fields of an existing content item, named by its ID, slug or address. Absent keys are preserved (partial update). Requires Editor role.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"type_name": map[string]any{"type": "string"},
-					"id":        map[string]any{"type": "string", "description": "Node ID."},
+					"id":        map[string]any{"type": "string", "description": "The item: " + identifierDescription},
 					"fields":    fieldsSchema,
 				},
 				"required": []string{"type_name", "id", "fields"},
@@ -141,7 +143,7 @@ func dynamicContentToolDefs() []mcpTool {
 				"type": "object",
 				"properties": map[string]any{
 					"type_name":    map[string]any{"type": "string", "description": "Registered content type name."},
-					"id":           map[string]any{"type": "string", "description": "Node ID."},
+					"id":           map[string]any{"type": "string", "description": "The item: " + identifierDescription},
 					"scheduled_at": map[string]any{"type": "string", "format": "date-time", "description": "RFC 3339 datetime for publication."},
 				},
 				"required": []string{"type_name", "id", "scheduled_at"},
@@ -154,7 +156,7 @@ func dynamicContentToolDefs() []mcpTool {
 				"type": "object",
 				"properties": map[string]any{
 					"type_name": map[string]any{"type": "string"},
-					"id":        map[string]any{"type": "string", "description": "Node ID."},
+					"id":        map[string]any{"type": "string", "description": "The item: " + identifierDescription},
 					"status":    statusEnum,
 					"reason":    map[string]any{"type": "string", "description": "Optional one-line reason for the transition. Required if the target transition has RequiredReason set — omitting it then returns an error."},
 				},
@@ -179,20 +181,23 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 			fieldsRaw = []byte("[]")
 		}
 		urlPrefix, _ := args["url_prefix"].(string)
+		addressPrefix, _ := args["address_prefix"].(string)
 		schema := &smeldr.ContentTypeSchema{
-			TypeName:  typeName,
-			Label:     label,
-			Fields:    json.RawMessage(fieldsRaw),
-			URLPrefix: urlPrefix,
+			TypeName:      typeName,
+			Label:         label,
+			Fields:        json.RawMessage(fieldsRaw),
+			URLPrefix:     urlPrefix,
+			AddressPrefix: addressPrefix,
 		}
 		desc, err := s.app.DefineContentType(ctx, schema)
 		if err != nil {
 			return nil, &jsonRPCError{Code: -32602, Message: err.Error()}
 		}
 		return toolResult(map[string]any{
-			"type_name": desc.Name,
-			"prefix":    desc.Prefix,
-			"kind":      desc.Kind,
+			"type_name":      desc.Name,
+			"prefix":         desc.Prefix,
+			"kind":           desc.Kind,
+			"address_prefix": desc.Schema.AddressPrefix,
 		}), nil
 
 	case "redefine_content_type":
@@ -208,23 +213,26 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: fields"}
 		}
 		label, _ := args["label"].(string)
+		addressPrefix, _ := args["address_prefix"].(string)
 		reason, rpcErr := reasonArg(args)
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
 		desc, err := s.app.RedefineContentTypeVia(ctx, "mcp", &smeldr.ContentTypeSchema{
-			TypeName: typeName,
-			Label:    label,
-			Fields:   json.RawMessage(fieldsRaw),
+			TypeName:      typeName,
+			Label:         label,
+			Fields:        json.RawMessage(fieldsRaw),
+			AddressPrefix: addressPrefix,
 		}, reason)
 		if err != nil {
 			return nil, errorFor(err)
 		}
 		return toolResult(map[string]any{
-			"type_name": desc.Name,
-			"label":     desc.Schema.Label,
-			"prefix":    desc.Prefix,
-			"fields":    json.RawMessage(desc.Schema.Fields),
+			"type_name":      desc.Name,
+			"label":          desc.Schema.Label,
+			"prefix":         desc.Prefix,
+			"fields":         json.RawMessage(desc.Schema.Fields),
+			"address_prefix": desc.Schema.AddressPrefix,
 		}), nil
 
 	case "create_content":
@@ -259,7 +267,7 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if err != nil {
 			return nil, &jsonRPCError{Code: -32602, Message: err.Error()}
 		}
-		node, err := repo.GetBySlug(ctx, slug)
+		node, err := repo.Resolve(ctx, slug)
 		if err != nil {
 			return nil, errorFor(err)
 		}
@@ -309,6 +317,9 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if err != nil {
 			return nil, &jsonRPCError{Code: -32602, Message: err.Error()}
 		}
+		if id, rpcErr = resolveDynamicID(ctx, repo, id); rpcErr != nil {
+			return nil, rpcErr
+		}
 		if err := repo.UpdateFieldsVia(ctx, "mcp", id, patch); err != nil {
 			return nil, errorFor(err)
 		}
@@ -341,6 +352,10 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if err != nil {
 			return nil, &jsonRPCError{Code: -32602, Message: err.Error()}
 		}
+		id, rpcErr := resolveDynamicID(ctx, repo, id)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
 		reason := stringArgOr(args, "reason", "")
 		if err := repo.SetStatusWithReason(ctx, id, st, reason); err != nil {
 			return nil, errorFor(err)
@@ -369,6 +384,10 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if err != nil {
 			return nil, &jsonRPCError{Code: -32602, Message: err.Error()}
 		}
+		id, rpcErr := resolveDynamicID(ctx, repo, id)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
 		if err := repo.ScheduleContent(ctx, id, scheduledAt); err != nil {
 			return nil, errorFor(err)
 		}
@@ -376,6 +395,16 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 	}
 
 	return nil, &jsonRPCError{Code: -32602, Message: "unknown dynamic tool: " + name}
+}
+
+// resolveDynamicID returns the ID of the item ident names (its address, slug
+// or ID, D110), through [smeldr.DynamicTypeRepo.Resolve].
+func resolveDynamicID(ctx smeldr.Context, repo *smeldr.DynamicTypeRepo, ident string) (string, *jsonRPCError) {
+	node, err := repo.Resolve(ctx, ident)
+	if err != nil {
+		return "", errorFor(err)
+	}
+	return node.ID, nil
 }
 
 // argsToFieldMap converts an args["fields"] value to map[string]any.

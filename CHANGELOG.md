@@ -9,6 +9,23 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **New `migrate_addresses` tool (A491).** The Admin tool runs core's `MigrateAddresses` over MCP, so an instance reached only by URL and token (a Cloud org) can be migrated. Under governance it needs the `administer` operation, whose policy row is seeded by smeldr.dev/core v1.145.0 (A490). It takes one optional input, `apply` (boolean). When `apply` is omitted or false, the tool does a dry run: the same code runs in one transaction and is rolled back, so the report shows what an apply would do and nothing is written. A non-boolean `apply` is refused. The tool returns core's `AddressMigrationReport` unchanged (`dry_run`, `duration_ms`, `types`, `rewritten`, `left_alone`). The tool description tells the caller to keep the report with the deploy record, because the instance stores no copy. A second apply changes nothing.
+- **`define_content_type` and `redefine_content_type` accept `address_prefix` (A491).** The optional `address_prefix` is 2 to 4 capital letters, and both tools return `address_prefix`. On define, an empty value makes the server propose a prefix from the type name. On redefine, an empty value keeps the current prefix. A type with `url_prefix` is web content and has no address prefix. A malformed or already taken prefix is refused with core's error. The existing `prefix` result key (the tool prefix) is unchanged.
+- **`create_signal` returns the Signal's address (A491).** The result includes `address` (`S<n>`). The tool now inserts through core's `InsertSignal`, which allocates the address in the same transaction as the insert, so a failed insert takes no number. The slug format (`sender-signal_type-suffix`) is unchanged. `signal.created` is still sent only for a committed row.
+
+### Changed
+
+- **Tools describe the D110 calling convention (A491).** Every create tool for a record type ends its description with: the address is assigned by the server and returned in the result, do not send one, put your own numbering in `external_ref`. This covers the six orchestration types, `create_signal`, and `create_content` for a type without `url_prefix`. Identifier arguments on get, update, transition, standing, provenance and dynamic-content tools now read "ID, slug or address, all accepted." The four legacy fields (`decision_number`, `task_id`, `goal_id`, `amendment_number`) carry JSON Schema `deprecated: true` and core's "Deprecated (D110): ..." description.
+- **Records resolve by address, slug or ID (A491).** For dynamic types, `get_content`, `update_content`, `set_content_status`, `schedule_content`, `get_valid_transitions`, `get_item_standing` and `get_item_provenance` resolve a record through core's `DynamicTypeRepo.Resolve`. Before this change, `get_content` matched the slug only, and `update_content`, `set_content_status` and `schedule_content` matched the ID only.
+- **`get_goal_context` accepts an address (A491).** `goal_id` takes the Goal's address (`G12`), slug or ID. Until the D110 cut it also takes an old goal number. The argument name is unchanged.
+- **Retired legacy fields return guidance (A491).** When a create or update tool receives one of the four legacy field names and that field is no longer in the tool's schema, the call fails with JSON-RPC error -32602. The message is core's `RetiredFieldGuidance`, and the error `data` object holds `field`, `replacement` ("external_ref") and `decision` ("D110"). Before this change the error said "unknown parameter". Until the cut the four fields stay in the schema, so nothing changes now. JSON-RPC errors gain an optional `data` object for this.
+- Requires smeldr.dev/core v1.145.0.
+
+### Fixed
+
+- **`smeldr_description` shows in input schemas without `smeldr_format` (A491).** Before this change, a field's description was rendered only when the field also had a format. Description-only fields, such as the D110 legacy fields and the SiteConfig fields, showed no description at all.
 ## [1.59.1] - 2026-10-11
 
 **Do not use v1.59.0 with OAuth and a route such as `GET /`: it panics at startup.** v1.59.0 is retracted in this release, so `go get smeldr.dev/mcp@latest` skips it.

@@ -16,8 +16,8 @@ func orchestrationToolDefs() []mcpTool {
 		{
 			Name: "get_goal_context",
 			Description: "Retrieve a goal and all items linked to it via the relation graph " +
-				"(Decisions, Tasks, and other Goals). Provide a GoalID string " +
-				"such as \"T114\". Returns the goal and its linked items as structured " +
+				"(Decisions, Tasks, and other Goals). Name the goal by its address " +
+				"(for example G12), slug or ID. Returns the goal and its linked items as structured " +
 				"JSON. Requires the smeldr_goals table created by " +
 				"smeldr.CreateOrchestrationTables. Requires Author role.",
 			InputSchema: map[string]any{
@@ -25,7 +25,7 @@ func orchestrationToolDefs() []mcpTool {
 				"properties": map[string]any{
 					"goal_id": map[string]any{
 						"type":        "string",
-						"description": `GoalID of the goal to retrieve context for, e.g. "T114".`,
+						"description": "The Goal: its address (for example G12), slug or ID. Until the D110 cut, an old goal number also works.",
 					},
 				},
 				"required": []string{"goal_id"},

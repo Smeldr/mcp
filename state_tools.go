@@ -33,7 +33,7 @@ func stateToolDefs() []mcpTool {
 				"type": "object",
 				"properties": map[string]any{
 					"type_name": map[string]any{"type": "string", "description": "Registered content type name — dynamic (snake_case) or compiled (e.g. \"Signal\")."},
-					"slug":      map[string]any{"type": "string", "description": "Slug of the item to transition."},
+					"slug":      map[string]any{"type": "string", "description": "The item to transition: " + identifierDescription},
 					"to_state":  map[string]any{"type": "string", "description": "Target state name (e.g. \"published\", \"archived\")."},
 					"reason":    map[string]any{"type": "string", "description": "Optional one-line reason for the transition. Required if the target transition has RequiredReason set — omitting it then returns an error."},
 				},
@@ -52,7 +52,7 @@ func stateToolDefs() []mcpTool {
 				"type": "object",
 				"properties": map[string]any{
 					"type_name": map[string]any{"type": "string", "description": "Registered content type name — dynamic (snake_case) or compiled (e.g. \"Signal\")."},
-					"slug":      map[string]any{"type": "string", "description": "Slug of the item to inspect."},
+					"slug":      map[string]any{"type": "string", "description": "The item to inspect: " + identifierDescription},
 				},
 				"required": []string{"type_name", "slug"},
 			},
@@ -423,7 +423,7 @@ func (s *Server) itemCurrentStatus(ctx smeldr.Context, typeName, slug string) (s
 		if err != nil {
 			return "", &jsonRPCError{Code: -32602, Message: err.Error()}
 		}
-		node, err := repo.GetBySlug(ctx, slug)
+		node, err := repo.Resolve(ctx, slug)
 		if err != nil {
 			return "", errorFor(err)
 		}

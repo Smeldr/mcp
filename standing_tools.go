@@ -163,7 +163,7 @@ func standingToolDefs() []mcpTool {
 			"type": "object",
 			"properties": map[string]any{
 				"type_name": map[string]any{"type": "string", "description": "Registered content type name, dynamic (snake_case) or compiled (e.g. \"Decision\")."},
-				"slug":      map[string]any{"type": "string", "description": "Item ID or slug."},
+				"slug":      map[string]any{"type": "string", "description": identifierDescription},
 			},
 			"required": []string{"type_name", "slug"},
 		},
@@ -210,7 +210,7 @@ func (s *Server) itemID(ctx smeldr.Context, typeName, slug string) (string, *jso
 		if err != nil {
 			return "", &jsonRPCError{Code: -32602, Message: err.Error()}
 		}
-		node, err := repo.GetBySlug(ctx, slug)
+		node, err := repo.Resolve(ctx, slug)
 		if err != nil {
 			return "", errorFor(err)
 		}

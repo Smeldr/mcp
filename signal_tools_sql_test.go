@@ -147,11 +147,15 @@ func TestCreateSignal_PlaceholdersAreNumbered(t *testing.T) {
 	if insert == nil {
 		t.Fatal("no INSERT was issued")
 	}
-	if strings.Contains(insert.query, "?") || !strings.Contains(insert.query, "$1, $2, 'pending', $3") || !strings.Contains(insert.query, "$12)") {
-		t.Errorf("INSERT = %q, want $1..$12 around the literal 'pending'", insert.query)
+	// The INSERT is core's InsertSignal now (D110: it also writes the address).
+	if strings.Contains(insert.query, "?") || !strings.Contains(insert.query, "$19)") {
+		t.Errorf("INSERT = %q, want numbered placeholders $1..$19", insert.query)
 	}
-	if len(insert.args) != 12 {
-		t.Errorf("%d arguments, want 12", len(insert.args))
+	if len(insert.args) != 19 {
+		t.Errorf("%d arguments, want 19", len(insert.args))
+	}
+	if insert.args[2] != "pending" {
+		t.Errorf("status argument = %v, want pending", insert.args[2])
 	}
 }
 

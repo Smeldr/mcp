@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
-	"time"
 
 	"smeldr.dev/core"
 )
@@ -32,7 +31,8 @@ func signalToolDefs() []mcpTool {
 				"status 'pending'. Used to record pilot-to-architect or " +
 				"architect-to-pilot hand-offs, or — when receiver is omitted or " +
 				"empty — a broadcast to every subscriber. Requires the smeldr_signals " +
-				"table created by smeldr.CreateOrchestrationTables. Requires Author role.",
+				"table created by smeldr.CreateOrchestrationTables. Requires Author role. " +
+				createAddressNote,
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -109,30 +109,35 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		subjectID := stringArgOr(args, "subject_id", "")
 
 		id := smeldr.NewID()
-		slug := signalSlug(sender, signalType, id)
-		now := time.Now().UTC()
+		sig := smeldr.Signal{
+			Sender:      sender,
+			Receiver:    receiver,
+			SignalType:  signalType,
+			Message:     message,
+			TaskRef:     taskRef,
+			Sequence:    sequence,
+			SubjectType: subjectType,
+			SubjectID:   subjectID,
+		}
+		sig.ID = id
+		// mcp's own slug format, not InsertSignal's default (the ID).
+		sig.Slug = signalSlug(sender, signalType, id)
 
-		_, err := db.ExecContext(ctx,
-			`INSERT INTO smeldr_signals
-				(id, slug, status, created_at, updated_at, sender, receiver, signal_type, message, task_ref, sequence,
-				 subject_type, subject_id)
-			VALUES
-				($1, $2, 'pending', $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-			id, slug, now, now, sender, receiver, signalType, message, taskRef, sequence, subjectType, subjectID,
-		)
-		if err != nil {
-			slog.ErrorContext(ctx, "mcp: create_signal: db exec failed", "error", err)
+		// InsertSignal takes the Signal's address (D110) in the same
+		// transaction as the INSERT, so a failed insert takes no number.
+		if err := smeldr.InsertSignal(ctx, db, &sig); err != nil {
+			slog.ErrorContext(ctx, "mcp: create_signal: insert failed", "error", err)
 			return nil, &jsonRPCError{Code: -32603, Message: "internal error: " + err.Error()}
 		}
-		// This raw INSERT bypasses Module[Signal].MCPCreate entirely, so no
-		// lifecycle hook fires on its own — App.NotifySignalCreated (core
-		// v1.74.0+) restores the webhook/event-stream notification a
-		// generic Module[T] create would have produced automatically.
-		s.app.NotifySignalCreated(ctx, id, slug)
+		// InsertSignal announces nothing, and this path bypasses
+		// Module[Signal].MCPCreate, so App.NotifySignalCreated sends the
+		// webhook/event-stream notification, only for a committed row.
+		s.app.NotifySignalCreated(ctx, sig.ID, sig.Slug)
 		return toolResult(map[string]any{
-			"id":     id,
-			"slug":   slug,
-			"status": "pending",
+			"id":      sig.ID,
+			"slug":    sig.Slug,
+			"status":  "pending",
+			"address": sig.Address,
 		}), nil
 
 	case "list_signals":

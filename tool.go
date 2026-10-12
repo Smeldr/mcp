@@ -258,6 +258,9 @@ func (s *Server) legacyRoleFor(name string) smeldr.Role {
 	if s.app.Config().DB != nil && isProvenanceTool(name) {
 		return smeldr.Editor
 	}
+	if s.app.Config().DB != nil && isAddressTool(name) {
+		return smeldr.Admin
+	}
 	if s.app.Config().DB != nil && isStateTool(name) {
 		switch name {
 		case "define_state_flow":
@@ -325,6 +328,13 @@ func (s *Server) validateKnownArgs(name string, args map[string]any) *jsonRPCErr
 		if _, known := props[key]; !known {
 			if strings.HasPrefix(name, "update_") && strings.EqualFold(key, "status") {
 				return &jsonRPCError{Code: -32602, Message: "invalid params: status cannot be changed by an update; use transition_item (or the publish, schedule and archive tools)"}
+			}
+			// A D110 legacy human-ID field gets core's guidance instead of a
+			// bare refusal. Until the cut the four fields are still in the
+			// schema and never reach this branch; the cut removes them, and
+			// this becomes active with no change here.
+			if msg, data, retired := smeldr.RetiredFieldGuidance(key); retired {
+				return &jsonRPCError{Code: -32602, Message: "invalid params: " + msg, Data: data}
 			}
 			return &jsonRPCError{Code: -32602, Message: "invalid params: unknown parameter: " + key}
 		}
@@ -415,6 +425,7 @@ func (s *Server) allToolDefs() []mcpTool {
 		tools = append(tools, sweepRunToolDefs()...)
 		tools = append(tools, stewardshipToolDefs()...)
 		tools = append(tools, checkToolDefs()...)
+		tools = append(tools, addressToolDefs()...)
 	}
 	return dedupeToolsByName(tools)
 }
@@ -620,6 +631,15 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return nil, rpcErr
 		}
 		return s.handleProvenanceTool(ctx, coalesceArgs(p.Arguments))
+	}
+
+	// Address migration tool (D110). Gated on DB presence; Admin, and under
+	// governance core's "administer" row for migrate_addresses.
+	if s.app.Config().DB != nil && isAddressTool(p.Name) {
+		if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
+			return nil, rpcErr
+		}
+		return s.handleAddressTool(ctx, coalesceArgs(p.Arguments))
 	}
 
 	// Signal protocol tools. Gated on DB presence (same guard as state tools).

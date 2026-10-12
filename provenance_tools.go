@@ -61,7 +61,7 @@ func provenanceToolDefs() []mcpTool {
 			"type": "object",
 			"properties": map[string]any{
 				"type_name": map[string]any{"type": "string", "description": "Registered content type name, dynamic (snake_case) or compiled (e.g. \"Decision\")."},
-				"slug":      map[string]any{"type": "string", "description": "Item ID or slug."},
+				"slug":      map[string]any{"type": "string", "description": identifierDescription},
 				"limit":     map[string]any{"type": "number", "description": "Page size: default 50, at most 500."},
 				"offset":    map[string]any{"type": "number", "description": "Entries to skip, newest first. Default 0."},
 				"view":      map[string]any{"type": "string", "enum": []string{"members", "gated"}, "description": "members (default): the actor on every entry. gated: the actor only on a gated transition."},
