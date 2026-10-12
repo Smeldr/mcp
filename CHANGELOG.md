@@ -9,6 +9,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.60.0] - 2026-10-12
+
 ### Added
 
 - **New `migrate_addresses` tool (A491).** The Admin tool runs core's `MigrateAddresses` over MCP, so an instance reached only by URL and token (a Cloud org) can be migrated. Under governance it needs the `administer` operation, whose policy row is seeded by smeldr.dev/core v1.145.0 (A490). It takes one optional input, `apply` (boolean). When `apply` is omitted or false, the tool does a dry run: the same code runs in one transaction and is rolled back, so the report shows what an apply would do and nothing is written. A non-boolean `apply` is refused. The tool returns core's `AddressMigrationReport` unchanged (`dry_run`, `duration_ms`, `types`, `rewritten`, `left_alone`). The tool description tells the caller to keep the report with the deploy record, because the instance stores no copy. A second apply changes nothing.
