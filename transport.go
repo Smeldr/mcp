@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"smeldr.dev/core"
 	"smeldr.dev/oauth"
@@ -277,7 +278,7 @@ func (s *Server) messageHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		at, err := s.oauth.ValidateAccessToken(r.Context(), token)
 		if err == nil {
-			smeldrCtx = smeldr.NewContextWithUser(smeldr.User{
+			smeldrCtx = newRequestContext(r, smeldr.User{
 				ID:    at.ClientID,
 				Roles: []smeldr.Role{oauthScopeToRole(at.Scope)},
 			})
@@ -288,7 +289,7 @@ func (s *Server) messageHandler(w http.ResponseWriter, r *http.Request) {
 				s.writeOAuthChallenge(w)
 				return
 			}
-			smeldrCtx = smeldr.NewContextWithUser(user)
+			smeldrCtx = newRequestContext(r, user)
 		} else {
 			s.writeOAuthChallenge(w)
 			return
@@ -300,10 +301,10 @@ func (s *Server) messageHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		smeldrCtx = smeldr.NewContextWithUser(user)
+		smeldrCtx = newRequestContext(r, user)
 	} else {
 		// No authentication configured: treat caller as GuestUser.
-		smeldrCtx = smeldr.NewContextWithUser(smeldr.GuestUser)
+		smeldrCtx = newRequestContext(r, smeldr.GuestUser)
 	}
 
 	// Body limit: protect against large payloads.
@@ -336,6 +337,34 @@ func (s *Server) messageHandler(w http.ResponseWriter, r *http.Request) {
 		w.Write(b) //nolint:errcheck
 	}
 }
+
+// requestContext is the per-call Context of an HTTP message: the caller's
+// user, with the live request, so its URL (session_id) reaches
+// resources/subscribe and resources/unsubscribe, and its values reach every
+// call. A client that disconnects does not cancel the call: several writes
+// are more than one statement (a create and its provenance, a transition and
+// its Signal), and stopping between them would leave one without the other.
+// Response stays the discarding recorder; messageHandler writes the reply.
+type requestContext struct {
+	smeldr.Context
+	base context.Context
+	req  *http.Request
+}
+
+// newRequestContext is the Context of one HTTP message from r for user.
+func newRequestContext(r *http.Request, user smeldr.User) smeldr.Context {
+	return requestContext{
+		Context: smeldr.NewContextWithUser(user),
+		base:    context.WithoutCancel(r.Context()),
+		req:     r,
+	}
+}
+
+func (c requestContext) Request() *http.Request      { return c.req }
+func (c requestContext) Deadline() (time.Time, bool) { return c.base.Deadline() }
+func (c requestContext) Done() <-chan struct{}       { return c.base.Done() }
+func (c requestContext) Err() error                  { return c.base.Err() }
+func (c requestContext) Value(key any) any           { return c.base.Value(key) }
 
 // — OAuth helpers —————————————————————————————————————————————————————————
 

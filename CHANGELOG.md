@@ -9,6 +9,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`resources/subscribe` and `resources/unsubscribe` over HTTP now act on the session named by `session_id` (A504).** Before this fix, every HTTP message ran with a synthetic request, so the handlers never saw `session_id`. Nothing was registered, yet the reply was `{}`, so the client believed it was subscribed. Now each HTTP message runs with the live request, its URL and its values, so a subscription is registered for the SSE session that `GET /mcp` announced, and `notifications/resources/updated` arrives on that stream. A client that disconnects does not cancel its call. This is deliberate: several writes span more than one statement (a create and its provenance, a transition and its Signal). Over stdio there is no session, so subscribe remains a no-op.
+- Not yet: notifications are sent to every subscriber of a URI without a read check, and any caller who knows a `session_id` can subscribe that session. Both belong to the core Task `core-subscriptions-and-stream-read-rules`.
+
 ## [1.61.1] - 2026-10-15
 
 ### Changed

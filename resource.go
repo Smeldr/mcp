@@ -224,7 +224,8 @@ func (s *Server) handleResourceMethod(ctx smeldr.Context, req jsonRPCRequest) (j
 // handleResourcesSubscribe registers a subscription for the given URI on behalf
 // of the calling SSE session. The session ID is read from the request's
 // session_id query parameter. No-ops silently when the subscriptions registry
-// is nil or no session_id is present.
+// is nil or no session_id is present. Only the HTTP (SSE) transport carries a
+// session; over stdio this is always a no-op.
 func (s *Server) handleResourcesSubscribe(ctx smeldr.Context, params json.RawMessage) (any, *jsonRPCError) {
 	var p struct {
 		URI string `json:"uri"`
