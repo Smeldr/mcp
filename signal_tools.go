@@ -107,6 +107,21 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		sequence := intArgOr(args, "sequence", 0)
 		subjectType := stringArgOr(args, "subject_type", "")
 		subjectID := stringArgOr(args, "subject_id", "")
+		// The subject is stored by its ID when the caller may read it (per-item
+		// read rules, answer 3): a slug or an address hides the Signal from
+		// scoped readers. A subject the caller may not read, or that does not
+		// exist, is kept as given, so the row and the response are the same for
+		// both and nothing about the subject is revealed.
+		if subjectType != "" && subjectID != "" {
+			id, err := s.app.ResolveReadableID(ctx, subjectType, subjectID)
+			switch {
+			case err == nil:
+				subjectID = id
+			case errors.Is(err, smeldr.ErrNotFound), errors.Is(err, smeldr.ErrBadRequest):
+			default:
+				return nil, errorFor(err)
+			}
+		}
 
 		id := smeldr.NewID()
 		sig := smeldr.Signal{
@@ -170,6 +185,13 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		if sender != "" {
 			whereArgs = append(whereArgs, sender)
 			where += fmt.Sprintf(` AND sender = $%d`, len(whereArgs))
+		}
+
+		// A caller who cannot read everything: every matching row is read and
+		// filtered before the page and the total are cut (binding A), so neither
+		// reveals a Signal the caller may not read.
+		if scope, ok := smeldr.ReadScopeFrom(ctx); ok && !scope.All() {
+			return s.listReadableSignals(ctx, scope, where, whereArgs, limit, offset)
 		}
 
 		// total is the real count of every row matching the filters, before
@@ -250,6 +272,63 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		return toolResult(map[string]any{"signals": signals, "count": len(signals), "total": total}), nil
 	}
 	return nil, &jsonRPCError{Code: -32602, Message: "unknown signal tool: " + name}
+}
+
+// listReadableSignals is list_signals for a scoped caller: the rows matching
+// where, newest first, keeping a Signal only when the caller may read it and,
+// for a system Signal, its subject too, then the page and the total of that
+// set.
+func (s *Server) listReadableSignals(ctx smeldr.Context, scope *smeldr.ReadScope, where string, whereArgs []any, limit, offset int) (any, *jsonRPCError) {
+	rows, err := s.app.Config().DB.QueryContext(ctx, `SELECT id, slug, status, created_at, updated_at, sender, receiver,
+		        signal_type, message, task_ref, sequence,
+		        subject_type, subject_id, from_state, to_state, required_role
+		FROM smeldr_signals`+where+` ORDER BY created_at DESC, id DESC`, whereArgs...)
+	if err != nil {
+		if isMissingTable(err) {
+			return toolResult(map[string]any{"signals": []map[string]any{}, "count": 0, "total": 0}), nil
+		}
+		return nil, &jsonRPCError{Code: -32603, Message: "internal error: " + err.Error()}
+	}
+	defer rows.Close()
+	var all []map[string]any
+	for rows.Next() {
+		var (
+			id, slug, status, sender, recv, sigType, message, taskRef string
+			createdAt, updatedAt                                      string
+			sequence                                                  int
+			subjectType, subjectID, fromState, toState, requiredRole  string
+		)
+		if err := rows.Scan(&id, &slug, &status, &createdAt, &updatedAt,
+			&sender, &recv, &sigType, &message, &taskRef, &sequence,
+			&subjectType, &subjectID, &fromState, &toState, &requiredRole); err != nil {
+			return nil, &jsonRPCError{Code: -32603, Message: "internal error: " + err.Error()}
+		}
+		if !scope.Readable("Signal", id) || (subjectType != "" && !scope.Readable(subjectType, subjectID)) {
+			continue
+		}
+		m := map[string]any{
+			"id": id, "slug": slug, "status": status, "created_at": createdAt, "updated_at": updatedAt,
+			"sender": sender, "receiver": recv, "signal_type": sigType, "message": message,
+			"task_ref": taskRef, "sequence": sequence,
+		}
+		if subjectType != "" {
+			m["subject_type"] = subjectType
+			m["subject_id"] = subjectID
+			m["from_state"] = fromState
+			m["to_state"] = toState
+			m["required_role"] = requiredRole
+		}
+		all = append(all, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, &jsonRPCError{Code: -32603, Message: "internal error: " + err.Error()}
+	}
+	start := min(offset, len(all))
+	page := all[start:min(start+limit, len(all))]
+	if page == nil {
+		page = []map[string]any{}
+	}
+	return toolResult(map[string]any{"signals": page, "count": len(page), "total": len(all)}), nil
 }
 
 // isMissingTable reports whether err says a table does not exist, on SQLite ("no such

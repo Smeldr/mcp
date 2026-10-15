@@ -174,6 +174,17 @@ func (s *Server) handleDelegateTool(ctx smeldr.Context, rs *smeldr.RoleStore, na
 			"accepts a static-scope role, since a delegation must never be wider than the one item it names"}
 	}
 
+	// The read check on the target comes first, before any pattern resolution
+	// (binding from core-read-scope): an item the delegator may not read is not
+	// found, exactly as a missing one. The resolved ID is then what the
+	// operation check and the stored pattern both use, so a slug or an address
+	// can no longer be checked as one thing and stored as another.
+	resolvedID, err := s.app.ResolveReadableID(ctx, typeArg, idArg)
+	if err != nil {
+		return nil, errorFor(err)
+	}
+	idArg = resolvedID
+
 	target := smeldr.AuthTarget{TypeName: typeArg, ID: idArg}
 	for _, op := range roleDef.Operations {
 		granted, err := rs.Authorized(ctx, ctx.User().ID, op, target)
@@ -241,11 +252,14 @@ func (s *Server) handleWithdrawDelegationTool(ctx smeldr.Context, rs *smeldr.Rol
 	if err != nil {
 		return nil, errorFor(err)
 	}
+	// A grant the caller did not create is answered like a missing one: its
+	// existence, and whether it is standing or a delegation, is not the
+	// caller's to learn.
+	if grant.Grantor == "" || grant.Grantor != ctx.User().ID {
+		return nil, errorFor(smeldr.ErrNotFound)
+	}
 	if grant.ExpiresAt == nil {
 		return nil, &jsonRPCError{Code: -32001, Message: "forbidden: grant " + grantID + " is a standing grant, not a delegation — use revoke_grant (Admin) instead"}
-	}
-	if grant.Grantor == "" || grant.Grantor != ctx.User().ID {
-		return nil, &jsonRPCError{Code: -32001, Message: "forbidden: only the member who created this delegation can withdraw it"}
 	}
 
 	revokeRS := rs.WithAudit(ctx.User().ID, s.app.GovernanceAuditStore())

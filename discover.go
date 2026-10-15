@@ -1,5 +1,7 @@
 package mcp
 
+import smeldr "smeldr.dev/core"
+
 // discoverToolDef returns the definition for the list_type_tools meta-tool.
 func discoverToolDef() mcpTool {
 	return mcpTool{
@@ -36,7 +38,7 @@ func (s *Server) handleDiscoverTool(args map[string]any) (any, *jsonRPCError) {
 
 	m, ok := s.moduleForType(typeSnake)
 	if !ok {
-		return nil, &jsonRPCError{Code: -32001, Message: "not found: no compiled type " + typeSnake}
+		return nil, errorFor(smeldr.ErrNotFound)
 	}
 
 	var names []string

@@ -103,7 +103,8 @@ func TestAccessTools_ReasonStoredAndListed(t *testing.T) {
 	if _, rpcErr := callGrantTool(t, srv, ctx, "revoke_grant", map[string]any{"id": gs[0].ID, "reason": "rotation over"}); rpcErr != nil {
 		t.Fatalf("revoke_grant: %v", rpcErr.Message)
 	}
-	page, err := srv.app.ItemProvenance(context.Background(), "RoleGrant", gs[0].ID, smeldr.ProvenanceMembers, 0, 0)
+	// The admin context: under governance a context with no user reads nothing.
+	page, err := srv.app.ItemProvenance(ctx, "RoleGrant", gs[0].ID, smeldr.ProvenanceMembers, 0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

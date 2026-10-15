@@ -201,8 +201,8 @@ func TestEdgeTools_AddSection_UnknownParent(t *testing.T) {
 	if rpcErr == nil {
 		t.Fatal("expected error for unknown parent, got nil")
 	}
-	if rpcErr.Code != -32602 {
-		t.Errorf("error code = %d, want -32602", rpcErr.Code)
+	if rpcErr.Code != -32000 {
+		t.Errorf("error code = %d, want -32000", rpcErr.Code)
 	}
 }
 

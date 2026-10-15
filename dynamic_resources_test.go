@@ -86,7 +86,7 @@ func TestDynamicResources_ListTemplatesRead(t *testing.T) {
 		t.Errorf("content = %s", text)
 	}
 	for _, uri := range []string{"smeldr://recipes/" + draft.Slug, "smeldr://recipes/nope", "smeldr://recipes/a/b", "smeldr://notes/" + hidden.Slug} {
-		if _, rpcErr := read(uri); rpcErr == nil || rpcErr.Code != -32001 {
+		if _, rpcErr := read(uri); rpcErr == nil || rpcErr.Code != -32000 || rpcErr.Message != "not found" {
 			t.Errorf("read %s = %v; want not found", uri, rpcErr)
 		}
 	}

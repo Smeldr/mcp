@@ -147,7 +147,7 @@ func (s *Server) handleRedirectTool(ctx smeldr.Context, name string, args map[st
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: from must start with /"}
 		}
 		if _, found := store.Get(from); !found {
-			return nil, &jsonRPCError{Code: -32001, Message: "not found"}
+			return nil, errorFor(smeldr.ErrNotFound)
 		}
 		if err := store.Remove(ctx, db, from); err != nil {
 			return nil, errorFor(err)

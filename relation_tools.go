@@ -181,6 +181,22 @@ func isAdminRelationTool(name string) bool { return name == "upsert_relation_kin
 // isEditorRelationTool reports whether name requires Editor role.
 func isEditorRelationTool(name string) bool { return name == "preview_impact" }
 
+// relationEndsReadable is the read check on a relation write's two ends
+// (binding C of the per-item read rules): for a caller who cannot read
+// everything, an end it may not read answers not found before the write. A
+// missing end is not readable either, so a hidden and a missing end answer
+// the same, and the write reveals nothing about either.
+func relationEndsReadable(ctx smeldr.Context, sourceType, sourceID, targetType, targetID string) *jsonRPCError {
+	scope, ok := smeldr.ReadScopeFrom(ctx)
+	if !ok || scope.All() {
+		return nil
+	}
+	if !scope.Readable(sourceType, sourceID) || !scope.Readable(targetType, targetID) {
+		return errorFor(smeldr.ErrNotFound)
+	}
+	return nil
+}
+
 // handleRelationTool dispatches the seven relation management tools. Called only
 // when s.relationStore is non-nil and the caller holds the appropriate role
 // (checked by the caller).
@@ -209,6 +225,9 @@ func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[st
 		}
 		confidence := floatPtrArg(args, "confidence")
 		attrs := objectArgJSON(args, "attributes")
+		if rpcErr := relationEndsReadable(ctx, sourceType, sourceID, targetType, targetID); rpcErr != nil {
+			return nil, rpcErr
+		}
 		edge, err := s.relationStore.MCPAssertRelation(ctx,
 			sourceType, sourceID, targetType, targetID, kind,
 			confidence, nil, nil, attrs,
@@ -255,6 +274,9 @@ func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[st
 		}
 		confidence := floatPtrArg(args, "confidence")
 		attrs := objectArgJSON(args, "attributes")
+		if rpcErr := relationEndsReadable(ctx, sourceType, sourceID, targetType, targetID); rpcErr != nil {
+			return nil, rpcErr
+		}
 		edge, err := s.relationStore.MCPProposeRelation(ctx,
 			sourceType, sourceID, targetType, targetID, kind,
 			confidence, nil, nil, attrs,
@@ -287,6 +309,9 @@ func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[st
 		}
 		confidence := floatPtrArg(args, "confidence")
 		attrs := objectArgJSON(args, "attributes")
+		if rpcErr := relationEndsReadable(ctx, sourceType, sourceID, targetType, targetID); rpcErr != nil {
+			return nil, rpcErr
+		}
 		edge, err := s.relationStore.MCPObserveRelation(ctx,
 			sourceType, sourceID, targetType, targetID, kind,
 			confidence, nil, nil, attrs,
@@ -312,7 +337,7 @@ func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[st
 		kindFilter := stringArgOr(args, "kind", "")
 		edgeClass := stringArgOr(args, "edge_class", "")
 		edges, err := s.relationStore.MCPGetRelations(ctx, typeName, id, direction, kindFilter)
-		if errors.Is(err, smeldr.ErrInternal) {
+		if errors.Is(err, smeldr.ErrInternal) || errors.Is(err, smeldr.ErrNotFound) {
 			return nil, errorFor(err)
 		}
 		if err != nil {

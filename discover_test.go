@@ -82,8 +82,8 @@ func TestListTypeTools(t *testing.T) {
 		if rpcErr == nil {
 			t.Fatal("expected rpcErr for unknown type; got nil")
 		}
-		if rpcErr.Code != -32001 {
-			t.Errorf("rpcErr.Code = %d; want -32001", rpcErr.Code)
+		if rpcErr.Code != -32000 {
+			t.Errorf("rpcErr.Code = %d; want -32000", rpcErr.Code)
 		}
 	})
 

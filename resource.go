@@ -107,14 +107,15 @@ func (s *Server) parseResourceURI(uri string) (smeldr.MCPModule, string, bool) {
 }
 
 // handleResourcesRead returns the JSON content of a single Published item
-// identified by its smeldr:// URI. Returns a -32001 error if the URI is
-// malformed, the item does not exist, or the item is not Published.
+// identified by its smeldr:// URI. A malformed request is -32602; an item that
+// does not exist, is not Published, or may not be read by the caller is the one
+// not-found answer, -32000 "not found", naming nothing.
 func (s *Server) handleResourcesRead(ctx smeldr.Context, params json.RawMessage) (any, *jsonRPCError) {
 	var p struct {
 		URI string `json:"uri"`
 	}
 	if err := json.Unmarshal(params, &p); err != nil || p.URI == "" {
-		return nil, &jsonRPCError{Code: -32001, Message: "invalid params: uri required"}
+		return nil, &jsonRPCError{Code: -32602, Message: "invalid params: uri required"}
 	}
 
 	m, slug, ok := s.parseResourceURI(p.URI)
@@ -124,18 +125,18 @@ func (s *Server) handleResourcesRead(ctx smeldr.Context, params json.RawMessage)
 
 	item, err := m.MCPGet(ctx, slug)
 	if err != nil {
-		return nil, &jsonRPCError{Code: -32001, Message: "resource not found: " + slug}
+		return nil, errorFor(smeldr.ErrNotFound)
 	}
 
 	// Callers are responsible for lifecycle enforcement. We enforce Published here.
 	type statuser interface{ GetStatus() smeldr.Status }
 	if st, ok := item.(statuser); !ok || st.GetStatus() != smeldr.Published {
-		return nil, &jsonRPCError{Code: -32001, Message: "resource not found: " + slug}
+		return nil, errorFor(smeldr.ErrNotFound)
 	}
 
 	b, err := json.Marshal(item)
 	if err != nil {
-		return nil, &jsonRPCError{Code: -32001, Message: "internal error marshalling resource"}
+		return nil, &jsonRPCError{Code: -32603, Message: "internal error marshalling resource"}
 	}
 
 	return map[string]any{
@@ -153,19 +154,19 @@ func (s *Server) handleResourcesRead(ctx smeldr.Context, params json.RawMessage)
 func (s *Server) readDynamicResource(ctx smeldr.Context, uri string) (any, *jsonRPCError) {
 	typeName, slug, ok := s.dynamicTypeByPrefix(uri)
 	if !ok {
-		return nil, &jsonRPCError{Code: -32001, Message: "resource not found: " + uri}
+		return nil, errorFor(smeldr.ErrNotFound)
 	}
 	repo, err := s.app.DynamicContentRepo(typeName)
 	if err != nil {
-		return nil, &jsonRPCError{Code: -32001, Message: "resource not found: " + uri}
+		return nil, errorFor(smeldr.ErrNotFound)
 	}
 	node, err := repo.GetBySlug(ctx, slug)
 	if err != nil || node.Status != smeldr.Published {
-		return nil, &jsonRPCError{Code: -32001, Message: "resource not found: " + slug}
+		return nil, errorFor(smeldr.ErrNotFound)
 	}
 	b, err := json.Marshal(node)
 	if err != nil {
-		return nil, &jsonRPCError{Code: -32001, Message: "internal error marshalling resource"}
+		return nil, &jsonRPCError{Code: -32603, Message: "internal error marshalling resource"}
 	}
 	return map[string]any{
 		"contents": []resourceContent{{URI: uri, MimeType: "application/json", Text: string(b)}},
@@ -176,6 +177,15 @@ func (s *Server) readDynamicResource(ctx smeldr.Context, uri string) (any, *json
 // Returns (response, true) when the method is handled, (zero, false) otherwise.
 // This allows the main handle switch in mcp.go to delegate cleanly.
 func (s *Server) handleResourceMethod(ctx smeldr.Context, req jsonRPCRequest) (jsonRPCResponse, bool) {
+	// Under governance a resource read applies the caller's read scope, loaded
+	// once and attached, as tools/call does.
+	if (req.Method == "resources/list" || req.Method == "resources/read") && s.app.RoleStore() != nil {
+		scope, err := s.app.ReadScope(ctx)
+		if err != nil {
+			return jsonRPCResponse{JSONRPC: "2.0", ID: req.ID, Error: errorFor(err)}, true
+		}
+		ctx = smeldr.WithReadScope(ctx, scope).(smeldr.Context)
+	}
 	switch req.Method {
 	case "resources/list":
 		return jsonRPCResponse{

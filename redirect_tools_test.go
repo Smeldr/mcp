@@ -210,8 +210,8 @@ func TestRedirectTools_DeleteNotFound(t *testing.T) {
 	if rpcErr == nil {
 		t.Fatal("expected error for deleting nonexistent redirect")
 	}
-	if rpcErr.Code != -32001 {
-		t.Errorf("expected -32001 not-found, got %d", rpcErr.Code)
+	if rpcErr.Code != -32000 {
+		t.Errorf("expected -32000 not-found, got %d", rpcErr.Code)
 	}
 }
 

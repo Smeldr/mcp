@@ -258,8 +258,8 @@ func TestResourcesRead_DraftItem(t *testing.T) {
 	if rpcErr == nil {
 		t.Fatalf("expected error for draft item, got result: %v", result)
 	}
-	if rpcErr.Code != -32001 {
-		t.Errorf("error code = %d, want -32001", rpcErr.Code)
+	if rpcErr.Code != -32000 {
+		t.Errorf("error code = %d, want -32000", rpcErr.Code)
 	}
 }
 

@@ -50,6 +50,28 @@ func (s *Server) handleStewardshipTool(ctx smeldr.Context, name string) (any, *j
 	if err != nil {
 		return nil, errorFor(err)
 	}
+	// Items the caller may not read are left out (per-item read rules).
+	if scope, ok := smeldr.ReadScopeFrom(ctx); ok && !scope.All() {
+		decisions := inbox.Decisions[:0:0]
+		for _, d := range inbox.Decisions {
+			if scope.Readable("Decision", d.ID) {
+				decisions = append(decisions, d)
+			}
+		}
+		rules := inbox.Rules[:0:0]
+		for _, r := range inbox.Rules {
+			if scope.Readable("Rule", r.ID) {
+				rules = append(rules, r)
+			}
+		}
+		stubs := inbox.Stubs[:0:0]
+		for _, st := range inbox.Stubs {
+			if scope.Readable("AuthorityStub", st.ID) {
+				stubs = append(stubs, st)
+			}
+		}
+		inbox.Decisions, inbox.Rules, inbox.Stubs = decisions, rules, stubs
+	}
 	return toolResult(map[string]any{
 		"rule_types": inbox.RuleTypes,
 		"decisions":  inbox.Decisions,

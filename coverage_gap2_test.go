@@ -428,8 +428,8 @@ func TestRedirectTool_DeleteRedirect_NotFound(t *testing.T) {
 	_, rpcErr := srv.handleRedirectTool(newAdminCtx(), "delete_redirect", map[string]any{
 		"from": "/does-not-exist",
 	})
-	if rpcErr == nil || rpcErr.Code != -32001 {
-		t.Errorf("not found delete: expected -32001, got %v", rpcErr)
+	if rpcErr == nil || rpcErr.Code != -32000 {
+		t.Errorf("not found delete: expected -32000, got %v", rpcErr)
 	}
 }
 

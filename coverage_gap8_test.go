@@ -214,8 +214,8 @@ func TestResourcesRead_MCPGetError(t *testing.T) {
 
 	params, _ := json.Marshal(map[string]string{"uri": "smeldr://posts/nonexistent-slug-xyz"})
 	_, rpcErr := srv.handleResourcesRead(newTestCtx(), params)
-	if rpcErr == nil || rpcErr.Code != -32001 {
-		t.Errorf("want -32001 for nonexistent resource, got %v", rpcErr)
+	if rpcErr == nil || rpcErr.Code != -32000 {
+		t.Errorf("want -32000 for nonexistent resource, got %v", rpcErr)
 	}
 }
 

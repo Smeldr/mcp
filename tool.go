@@ -135,27 +135,115 @@ func (s *Server) authoriseTool(ctx smeldr.Context, toolName string, legacyRole s
 		}
 		return &jsonRPCError{Code: -32001, Message: "forbidden"}
 	}
-	if ctx.User().ID == "" {
-		return &jsonRPCError{Code: -32001, Message: "forbidden"}
+	requiredOp, rpcErr := s.toolOp(ctx, toolName, rs)
+	if rpcErr != nil {
+		return rpcErr
 	}
-	requiredOp, found, err := rs.ToolPolicy(ctx, toolName)
-	if err != nil {
-		return &jsonRPCError{Code: -32001, Message: "forbidden"}
-	}
-	if !found {
-		requiredOp, found = s.deriveToolPolicy(toolName)
-		if !found {
+	// A read tool on a type is gated on the read scope attached to the call:
+	// the caller may read at least one item of the type, and is then filtered
+	// per item by core. A per-item reader thus gets past the floor.
+	if requiredOp == "read" && target.TypeName != "" && target.ID == "" {
+		if scope, ok := smeldr.ReadScopeFrom(ctx); ok {
+			if scope.TypeReadable(target.TypeName) {
+				return nil
+			}
 			return &jsonRPCError{Code: -32001, Message: "forbidden"}
 		}
 	}
-	// TODO(T49-scope): AuthTarget has no item ID here — the tool gate applies at the
-	// content-type level. Static/dynamic scope grants that reference a specific item ID
-	// won't apply until slug→ID resolution is added (same limitation as the HTTP gate).
 	ok, err := rs.Authorized(ctx, ctx.User().ID, requiredOp, target)
 	if err != nil || !ok {
 		return &jsonRPCError{Code: -32001, Message: "forbidden"}
 	}
 	return nil
+}
+
+// toolOp is the operation word toolName requires under governance: its
+// smeldr_tool_policies row, else the derivation of [Server.deriveToolPolicy].
+// A caller with no token ID, a lookup failure and an unknown tool all fail
+// closed.
+func (s *Server) toolOp(ctx smeldr.Context, toolName string, rs *smeldr.RoleStore) (string, *jsonRPCError) {
+	if ctx.User().ID == "" {
+		return "", &jsonRPCError{Code: -32001, Message: "forbidden"}
+	}
+	requiredOp, found, err := rs.ToolPolicy(ctx, toolName)
+	if err != nil {
+		return "", &jsonRPCError{Code: -32001, Message: "forbidden"}
+	}
+	if !found {
+		requiredOp, found = s.deriveToolPolicy(toolName)
+		if !found {
+			return "", &jsonRPCError{Code: -32001, Message: "forbidden"}
+		}
+	}
+	return requiredOp, nil
+}
+
+// authoriseRead is [Server.authoriseTool] for a tool family whose read tools
+// name the type they read in an argument ([readTypeFor]): a read tool with a
+// type is gated on that type through the attached read scope; any other tool
+// of the family keeps the type-less target, as before.
+func (s *Server) authoriseRead(ctx smeldr.Context, toolName string, rs *smeldr.RoleStore, args map[string]any) *jsonRPCError {
+	return s.authoriseTool(ctx, toolName, s.legacyRoleFor(toolName), rs, smeldr.AuthTarget{TypeName: readTypeFor(toolName, args)})
+}
+
+// authoriseState gates the state tools. transition_item under governance needs
+// read access to the type (forbidden otherwise), then resolves the item under
+// the caller's read scope, so an item the caller may not read is not found,
+// exactly as a missing one, and is then gated on the tool's operation for that
+// one item, so an item-scoped grant of that operation passes. Every other state tool is gated as [Server.authoriseRead].
+func (s *Server) authoriseState(ctx smeldr.Context, toolName string, rs *smeldr.RoleStore, args map[string]any) *jsonRPCError {
+	if toolName != "transition_item" || rs == nil {
+		return s.authoriseRead(ctx, toolName, rs, args)
+	}
+	requiredOp, rpcErr := s.toolOp(ctx, toolName, rs)
+	if rpcErr != nil {
+		return rpcErr
+	}
+	typeName, _ := args["type_name"].(string)
+	ident, _ := args["slug"].(string)
+	if typeName == "" || ident == "" {
+		return nil // the handler answers the missing argument
+	}
+	// The floor first: a caller who may read nothing of the type is forbidden,
+	// which says nothing about any one item.
+	if scope, ok := smeldr.ReadScopeFrom(ctx); ok && !scope.TypeReadable(typeName) {
+		return &jsonRPCError{Code: -32001, Message: "forbidden"}
+	}
+	id, err := s.app.ResolveReadableID(ctx, typeName, ident)
+	if err != nil {
+		return errorFor(err)
+	}
+	ok, err := rs.Authorized(ctx, ctx.User().ID, requiredOp, smeldr.AuthTarget{TypeName: typeName, ID: id})
+	if err != nil || !ok {
+		return &jsonRPCError{Code: -32001, Message: "forbidden"}
+	}
+	return nil
+}
+
+// readTypeFor is the type a read tool reads, from its arguments, or "" for a
+// tool that is not a read of one type (its gate then needs a grant as before).
+func readTypeFor(toolName string, args map[string]any) string {
+	str := func(key string) string { v, _ := args[key].(string); return v }
+	switch toolName {
+	case "get_relations", "get_reachability", "get_valid_transitions", "list_items_by_state", "get_item_standing", "get_item_provenance":
+		return str("type_name")
+	case "preview_impact":
+		return str("target_type")
+	case "list_relations":
+		if t := str("source_type"); t != "" {
+			return t
+		}
+		return str("target_type")
+	case "delegate_item":
+		return str("type")
+	case "get_goal_context":
+		return "Goal"
+	case "list_signals":
+		return "Signal"
+	case "get_check_status":
+		return str("subject_type")
+	}
+	return ""
 }
 
 // errorFor maps a smeldr error to a JSON-RPC error:
@@ -487,6 +575,17 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	}
 
 	rs := s.app.RoleStore()
+	// Per-item read rules: under governance the caller's read scope is loaded
+	// once per call and attached, so every core read within the call shares it
+	// (a module without its own RoleStore is filtered too). A load failure is an
+	// internal error, never a not-found.
+	if rs != nil {
+		scope, err := s.app.ReadScope(ctx)
+		if err != nil {
+			return nil, errorFor(err)
+		}
+		ctx = smeldr.WithReadScope(ctx, scope).(smeldr.Context)
+	}
 
 	// Token management tools require Admin role and are dispatched before
 	// module-scoped tool authorisation.
@@ -514,10 +613,10 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			}
 			return s.handleGrantTool(ctx, rs, p.Name, coalesceArgs(p.Arguments))
 		case "delegate_item":
-			// Coarse floor gate only (seedToolPolicies: "read", every real
-			// role holds it) — the real per-item, per-operation check is
+			// Coarse floor gate only (seedToolPolicies: "read"), on the target's
+			// type through the read scope; the real per-item, per-operation check is
 			// inside handleDelegateTool itself, against the actual target.
-			if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
+			if rpcErr := s.authoriseRead(ctx, p.Name, rs, p.Arguments); rpcErr != nil {
 				return nil, rpcErr
 			}
 			return s.handleDelegateTool(ctx, rs, p.Name, coalesceArgs(p.Arguments))
@@ -567,6 +666,9 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
 			return nil, rpcErr
 		}
+		if rpcErr := s.previewReadable(ctx, coalesceArgs(p.Arguments)); rpcErr != nil {
+			return nil, rpcErr
+		}
 		return s.handlePreviewTool(s.app, p.Name, coalesceArgs(p.Arguments))
 	}
 
@@ -601,7 +703,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// Editor (preview_impact), Admin (upsert_relation_kind). Dispatched before
 	// module-scoped tool authorisation.
 	if s.relationStore != nil && isRelationTool(p.Name) {
-		if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
+		if rpcErr := s.authoriseRead(ctx, p.Name, rs, p.Arguments); rpcErr != nil {
 			return nil, rpcErr
 		}
 		return s.handleRelationTool(ctx, p.Name, coalesceArgs(p.Arguments))
@@ -611,7 +713,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// Roles: define_state_flow requires Admin; transition_item requires Editor;
 	// get_valid_transitions and list_items_by_state require Author.
 	if s.app.Config().DB != nil && isStateTool(p.Name) {
-		if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
+		if rpcErr := s.authoriseState(ctx, p.Name, rs, p.Arguments); rpcErr != nil {
 			return nil, rpcErr
 		}
 		return s.handleStateTool(ctx, p.Name, coalesceArgs(p.Arguments))
@@ -619,7 +721,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 
 	// Standing read tool (get_item_standing). Gated on DB presence; Editor.
 	if s.app.Config().DB != nil && isStandingTool(p.Name) {
-		if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
+		if rpcErr := s.authoriseRead(ctx, p.Name, rs, p.Arguments); rpcErr != nil {
 			return nil, rpcErr
 		}
 		return s.handleStandingTool(ctx, p.Name, coalesceArgs(p.Arguments))
@@ -627,7 +729,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 
 	// Item provenance read tool (get_item_provenance). Gated on DB presence; Editor.
 	if s.app.Config().DB != nil && isProvenanceTool(p.Name) {
-		if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
+		if rpcErr := s.authoriseRead(ctx, p.Name, rs, p.Arguments); rpcErr != nil {
 			return nil, rpcErr
 		}
 		return s.handleProvenanceTool(ctx, coalesceArgs(p.Arguments))
@@ -645,7 +747,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// Signal protocol tools. Gated on DB presence (same guard as state tools).
 	// Both tools require Author role.
 	if s.app.Config().DB != nil && isSignalTool(p.Name) {
-		if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
+		if rpcErr := s.authoriseRead(ctx, p.Name, rs, p.Arguments); rpcErr != nil {
 			return nil, rpcErr
 		}
 		return s.handleSignalTool(ctx, p.Name, coalesceArgs(p.Arguments))
@@ -663,7 +765,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// Orchestration tools (get_goal_context). Gated on DB presence (same guard
 	// as state and signal tools). Requires Author role.
 	if s.app.Config().DB != nil && isOrchestrationTool(p.Name) {
-		if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
+		if rpcErr := s.authoriseRead(ctx, p.Name, rs, p.Arguments); rpcErr != nil {
 			return nil, rpcErr
 		}
 		return s.handleOrchestrationTool(ctx, p.Name, coalesceArgs(p.Arguments))
@@ -681,7 +783,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// Check status tool. Gated on DB presence (same guard as state, signal,
 	// sweep-run, orchestration, and stewardship tools). Requires Author role.
 	if s.app.Config().DB != nil && isCheckTool(p.Name) {
-		if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
+		if rpcErr := s.authoriseRead(ctx, p.Name, rs, p.Arguments); rpcErr != nil {
 			return nil, rpcErr
 		}
 		return s.handleCheckTool(ctx, p.Name, coalesceArgs(p.Arguments))
@@ -774,6 +876,9 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	var typeName string
 	if m != nil {
 		typeName = m.MCPMeta().TypeName
+	} else if lm, listOK := s.moduleForAdminList(typeSnake); op == "list" && listOK {
+		// list_* names the type in its plural: the read floor still needs it.
+		typeName = lm.MCPMeta().TypeName
 	}
 	if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{TypeName: typeName}); rpcErr != nil {
 		return nil, rpcErr
@@ -1267,7 +1372,7 @@ func (s *Server) handleNavTool(ctx smeldr.Context, name string, args map[string]
 		// Fetch the existing item and apply the caller's fields as an overlay.
 		existing, exists := s.navTree.Get(id)
 		if !exists {
-			return nil, &jsonRPCError{Code: -32001, Message: "not found"}
+			return nil, errorFor(smeldr.ErrNotFound)
 		}
 		if sv, ok := args["label"].(string); ok {
 			existing.Label = sv

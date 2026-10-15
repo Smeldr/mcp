@@ -552,8 +552,8 @@ func TestHandleResourcesRead_EmptyURI(t *testing.T) {
 	srv, _ := newReadOnlyTestApp(t)
 	params, _ := json.Marshal(map[string]string{"uri": ""})
 	_, rpcErr := srv.handleResourcesRead(newTestCtx(), params)
-	if rpcErr == nil || rpcErr.Code != -32001 {
-		t.Errorf("empty URI: expected -32001, got %v", rpcErr)
+	if rpcErr == nil || rpcErr.Code != -32602 {
+		t.Errorf("empty URI: expected -32602, got %v", rpcErr)
 	}
 }
 
@@ -562,8 +562,8 @@ func TestHandleResourcesRead_UnknownModule(t *testing.T) {
 	// URI with a prefix not matching any registered module.
 	params, _ := json.Marshal(map[string]string{"uri": "smeldr:/unknown_prefix/some-slug"})
 	_, rpcErr := srv.handleResourcesRead(newTestCtx(), params)
-	if rpcErr == nil || rpcErr.Code != -32001 {
-		t.Errorf("unknown module URI: expected -32001, got %v", rpcErr)
+	if rpcErr == nil || rpcErr.Code != -32000 {
+		t.Errorf("unknown module URI: expected -32000, got %v", rpcErr)
 	}
 }
 
@@ -572,8 +572,8 @@ func TestHandleResourcesRead_SlugNotFound(t *testing.T) {
 	// Valid prefix (posts) but nonexistent slug → MCPGet fails.
 	params, _ := json.Marshal(map[string]string{"uri": "smeldr:/posts/nonexistent-slug-xyz"})
 	_, rpcErr := srv.handleResourcesRead(newTestCtx(), params)
-	if rpcErr == nil || rpcErr.Code != -32001 {
-		t.Errorf("nonexistent slug: expected -32001, got %v", rpcErr)
+	if rpcErr == nil || rpcErr.Code != -32000 {
+		t.Errorf("nonexistent slug: expected -32000, got %v", rpcErr)
 	}
 }
 

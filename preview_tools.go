@@ -34,6 +34,34 @@ func previewToolDefs() []mcpTool {
 // isPreviewTool reports whether name is the preview URL tool.
 func isPreviewTool(name string) bool { return name == "create_preview_url" }
 
+// previewReadable is create_preview_url's read check: a preview opens a draft
+// over HTTP, so for a caller who cannot read everything the item must be one
+// it may read, resolved through its module under the call's read scope. An
+// item it may not read, a missing one, and a prefix with no compiled module
+// (a dynamic type's) answer not found alike. A reader of everything, and an
+// App without governance, are unchanged.
+func (s *Server) previewReadable(ctx smeldr.Context, args map[string]any) *jsonRPCError {
+	scope, ok := smeldr.ReadScopeFrom(ctx)
+	if !ok || scope.All() {
+		return nil
+	}
+	prefix, _ := args["prefix"].(string)
+	slug, _ := args["slug"].(string)
+	prefix, slug = strings.TrimSpace(prefix), strings.TrimSpace(slug)
+	if prefix == "" || slug == "" {
+		return nil // the handler answers the missing argument
+	}
+	for _, m := range s.modules {
+		if m.MCPMeta().Prefix == prefix {
+			if _, err := m.MCPGet(ctx, slug); err != nil {
+				return errorFor(err)
+			}
+			return nil
+		}
+	}
+	return errorFor(smeldr.ErrNotFound)
+}
+
 // handlePreviewTool executes the create_preview_url tool.
 // Requires Admin role (verified by the caller in tool.go before dispatch).
 // app is the smeldr.App passed to [New]; it carries BaseURL and GeneratePreviewToken.

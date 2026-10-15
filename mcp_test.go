@@ -314,8 +314,8 @@ func TestMCPResourcesRead_draft(t *testing.T) {
 	if rpcErr == nil {
 		t.Fatal("expected error for Draft item, got nil")
 	}
-	if rpcErr.Code != -32001 {
-		t.Errorf("error code = %d, want -32001", rpcErr.Code)
+	if rpcErr.Code != -32000 {
+		t.Errorf("error code = %d, want -32000", rpcErr.Code)
 	}
 }
 

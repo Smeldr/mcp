@@ -171,6 +171,18 @@ read.
 
 ---
 
+## Per-item read rules (v1.61.0)
+
+Under governance every tool and resource call applies the caller's per-item read scope (smeldr.dev/core's `ReadScope`):
+- **One scope per call.** It is loaded once per `tools/call`, `resources/list` and `resources/read` and attached, so every core read in the call shares it. A failure to load it is -32603.
+- **Read floors on the type.** A read tool that names a type passes when the caller may read at least one item of it, and core then filters per item. So a `scoped-reader` or `domain-reader` grant works over MCP.
+- **Hidden equals missing.** An item the caller may not read answers -32000 "not found", exactly as a missing one, with no name in the message. Lists, totals, edges and rings count readable items only.
+- **Writes check what they name.** Relation writes, `delegate_item`, `create_preview_url` and `create_signal`'s subject are resolved under the caller's scope.
+
+Without governance nothing changes. See core's REFERENCE ("Per-item read rules") for the full rules.
+
+---
+
 ## MCPRead vs MCPWrite
 
 Register each module with the operations you want:

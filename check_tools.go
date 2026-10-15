@@ -64,8 +64,23 @@ func (s *Server) handleCheckTool(ctx smeldr.Context, name string, args map[strin
 	if err != nil {
 		return nil, errorFor(err)
 	}
-	if !found {
+	scope, scoped := smeldr.ReadScopeFrom(ctx)
+	scoped = scoped && !scope.All()
+	// A subject the caller may not read is answered like a subject with no
+	// check, after the same query, so a hidden and a missing subject look alike.
+	if !found || (scoped && !scope.Readable(subjectType, subjectID)) {
 		return toolResult(map[string]any{"subject_type": subjectType, "subject_id": subjectID, "found": false}), nil
+	}
+	if scoped && record.MatchType != "" && !scope.Readable(record.MatchType, record.MatchID) {
+		// The matched item is another item: left out when it is hidden, and so
+		// is the sentence, which names it.
+		return toolResult(map[string]any{
+			"found":        true,
+			"subject_type": record.SubjectType,
+			"subject_id":   record.SubjectID,
+			"rule_type":    record.RuleType,
+			"ran_at":       record.RanAt.UTC().Format("2006-01-02T15:04:05Z"),
+		}), nil
 	}
 	return toolResult(map[string]any{
 		"found":        true,

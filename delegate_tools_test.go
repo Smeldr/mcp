@@ -39,6 +39,26 @@ func (d *mcpExecFailDB) ExecContext(ctx context.Context, q string, args ...any) 
 // reaching the actual delegator-caps-delegate logic these tests exist to
 // exercise. Real callers hold Author/Editor/Admin (or similar) in addition
 // to whatever narrow scoped authority they delegate from — this mirrors
+// newDelegateTestApp is newGrantTestApp with the orchestration types
+// registered and Decisions d1 and d2 stored under those IDs: since core
+// v1.146.0 (A494) a static grant pattern must name a record of a registered
+// type, and it is stored as type:<ID>, so "Decision:d1" stays "Decision:d1".
+func newDelegateTestApp(t *testing.T) (*smeldr.App, *sql.DB, *smeldr.RoleStore) {
+	t.Helper()
+	app, db, store := newGrantTestApp(t)
+	if err := smeldr.CreateOrchestrationTables(db); err != nil {
+		t.Fatalf("CreateOrchestrationTables: %v", err)
+	}
+	smeldr.RegisterOrchestrationTypes(app, db)
+	repo := smeldr.NewSQLRepo[*smeldr.Decision](db, smeldr.Table("smeldr_decisions"))
+	for _, id := range []string{"d1", "d2"} {
+		if err := repo.Save(context.Background(), &smeldr.Decision{Node: smeldr.Node{ID: id, Slug: id}}); err != nil {
+			t.Fatalf("seed Decision %s: %v", id, err)
+		}
+	}
+	return app, db, store
+}
+
 // that shape rather than testing an unrealistic bare grant.
 func grantCtx(t *testing.T, store *smeldr.RoleStore, uid, roleName string, scopeStatic ...string) smeldr.Context {
 	t.Helper()
@@ -79,7 +99,7 @@ func createTestDelegation(t *testing.T, srv *Server, store *smeldr.RoleStore, de
 // — tools/list presence —————————————————————————————————————————————————
 
 func TestDelegateTools_Presence(t *testing.T) {
-	app, _, _ := newGrantTestApp(t)
+	app, _, _ := newDelegateTestApp(t)
 	srv := New(app)
 	result := srv.handleToolsList(newAdminCtx())
 	tools := result.(map[string]any)["tools"].([]mcpTool)
@@ -107,7 +127,7 @@ func TestDelegateTools_Absence(t *testing.T) {
 }
 
 func TestWithdrawDelegationTool_Presence(t *testing.T) {
-	app, _, _ := newGrantTestApp(t)
+	app, _, _ := newDelegateTestApp(t)
 	srv := New(app)
 	result := srv.handleToolsList(newAdminCtx())
 	tools := result.(map[string]any)["tools"].([]mcpTool)
@@ -120,7 +140,7 @@ func TestWithdrawDelegationTool_Presence(t *testing.T) {
 }
 
 func TestListRolesTool_Presence(t *testing.T) {
-	app, _, _ := newGrantTestApp(t)
+	app, _, _ := newDelegateTestApp(t)
 	srv := New(app)
 	result := srv.handleToolsList(newAdminCtx())
 	tools := result.(map[string]any)["tools"].([]mcpTool)
@@ -135,7 +155,7 @@ func TestListRolesTool_Presence(t *testing.T) {
 // — delegate_item —————————————————————————————————————————————————————————
 
 func TestHandleDelegateTool_Success(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	ctx := context.Background()
 	if err := store.DefineRole(ctx, smeldr.RoleDefinition{
@@ -189,7 +209,7 @@ func TestHandleDelegateTool_Success(t *testing.T) {
 // the check must loop over every operation the role actually carries, not
 // just the one named.
 func TestHandleDelegateTool_DeniesWhenDelegatorLacksOneOfRolesOperations(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	if err := store.DefineRole(context.Background(), smeldr.RoleDefinition{
 		Name: "read-only-role", Operations: []string{"read"}, ScopeMode: smeldr.ScopeGlobal,
@@ -234,7 +254,7 @@ func TestHandleDelegateTool_DeniesWhenDelegatorLacksOneOfRolesOperations(t *test
 }
 
 func TestHandleDelegateTool_OperationNotInRoleRejected(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	if err := store.DefineRole(context.Background(), smeldr.RoleDefinition{
 		Name: "narrow-role", Operations: []string{"approve"}, ScopeMode: smeldr.ScopeGlobal,
@@ -256,7 +276,7 @@ func TestHandleDelegateTool_OperationNotInRoleRejected(t *testing.T) {
 }
 
 func TestHandleDelegateTool_RefusesGlobalScopeRole(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	if err := store.DefineRole(context.Background(), smeldr.RoleDefinition{
 		Name: "global-role", Operations: []string{"approve"}, ScopeMode: smeldr.ScopeGlobal,
@@ -285,7 +305,7 @@ func TestHandleDelegateTool_RefusesGlobalScopeRole(t *testing.T) {
 }
 
 func TestHandleDelegateTool_RefusesDynamicScopeRole(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	if err := store.DefineRole(context.Background(), smeldr.RoleDefinition{
 		Name: "dynamic-role", Operations: []string{"approve"}, ScopeMode: smeldr.ScopeDynamic,
@@ -308,7 +328,7 @@ func TestHandleDelegateTool_RefusesDynamicScopeRole(t *testing.T) {
 }
 
 func TestHandleDelegateTool_ItemApproverScopesToTargetItemOnly(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	if err := smeldr.RegisterItemApproverRole(context.Background(), store); err != nil {
 		t.Fatalf("RegisterItemApproverRole: %v", err)
@@ -343,7 +363,7 @@ func TestHandleDelegateTool_ItemApproverScopesToTargetItemOnly(t *testing.T) {
 // response must describe that stored row's real ExpiresAt, not the second
 // call's own (different) request.
 func TestHandleDelegateTool_RepeatSameItem_ReportsStoredExpiry(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	if err := smeldr.RegisterItemApproverRole(context.Background(), store); err != nil {
 		t.Fatalf("RegisterItemApproverRole: %v", err)
@@ -383,7 +403,7 @@ func TestHandleDelegateTool_RepeatSameItem_ReportsStoredExpiry(t *testing.T) {
 // underlying delegation is NOT lost: Grant already committed before the
 // read-back's own query fails.
 func TestHandleDelegateTool_ReadBackError(t *testing.T) {
-	app, db, store := newGrantTestApp(t)
+	app, db, store := newDelegateTestApp(t)
 	srv := New(app)
 	if err := smeldr.RegisterItemApproverRole(context.Background(), store); err != nil {
 		t.Fatalf("RegisterItemApproverRole: %v", err)
@@ -414,7 +434,7 @@ func TestHandleDelegateTool_ReadBackError(t *testing.T) {
 }
 
 func TestHandleDelegateTool_UnknownRole(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	delegatorCtx := grantAdminCtx(t, store, "delegator")
 
@@ -431,7 +451,7 @@ func TestHandleDelegateTool_UnknownRole(t *testing.T) {
 }
 
 func TestHandleDelegateTool_CustomExpiry(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	if err := store.DefineRole(context.Background(), smeldr.RoleDefinition{
 		Name: "steward", Operations: []string{"approve"}, ScopeMode: smeldr.ScopeStatic,
@@ -463,7 +483,7 @@ func TestHandleDelegateTool_CustomExpiry(t *testing.T) {
 }
 
 func TestHandleDelegateTool_RejectsExpiryOver90(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	delegatorCtx := grantAdminCtx(t, store, "delegator")
 
@@ -477,7 +497,7 @@ func TestHandleDelegateTool_RejectsExpiryOver90(t *testing.T) {
 }
 
 func TestHandleDelegateTool_RejectsExpiryUnder1(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	delegatorCtx := grantAdminCtx(t, store, "delegator")
 
@@ -491,7 +511,7 @@ func TestHandleDelegateTool_RejectsExpiryUnder1(t *testing.T) {
 }
 
 func TestHandleDelegateTool_MissingRequiredParams(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	delegatorCtx := grantAdminCtx(t, store, "delegator")
 
@@ -514,7 +534,7 @@ func TestHandleDelegateTool_MissingRequiredParams(t *testing.T) {
 }
 
 func TestDelegateTools_ForbiddenWithoutAnyGrant(t *testing.T) {
-	app, _, _ := newGrantTestApp(t)
+	app, _, _ := newDelegateTestApp(t)
 	srv := New(app)
 	ctx := smeldr.NewTestContext(smeldr.User{ID: "no-grants-at-all"})
 
@@ -528,7 +548,7 @@ func TestDelegateTools_ForbiddenWithoutAnyGrant(t *testing.T) {
 }
 
 func TestDelegateTools_AuditRecordsWritten(t *testing.T) {
-	app, db, store := newGrantTestApp(t)
+	app, db, store := newDelegateTestApp(t)
 	srv := New(app)
 	if err := store.DefineRole(context.Background(), smeldr.RoleDefinition{
 		Name: "steward", Operations: []string{"approve"}, ScopeMode: smeldr.ScopeStatic,
@@ -559,7 +579,7 @@ func TestDelegateTools_AuditRecordsWritten(t *testing.T) {
 }
 
 func TestHandleDelegateTool_UnknownName(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	_, rpcErr := srv.handleDelegateTool(grantAdminCtx(t, store, "actor"), store, "not_a_delegate_tool", map[string]any{})
 	if rpcErr == nil || rpcErr.Code != -32602 {
@@ -568,7 +588,7 @@ func TestHandleDelegateTool_UnknownName(t *testing.T) {
 }
 
 func TestHandleDelegateTool_DBErrorAfterClose(t *testing.T) {
-	app, db, store := newGrantTestApp(t)
+	app, db, store := newDelegateTestApp(t)
 	srv := New(app)
 	if err := store.DefineRole(context.Background(), smeldr.RoleDefinition{
 		Name: "steward", Operations: []string{"approve"}, ScopeMode: smeldr.ScopeGlobal,
@@ -590,7 +610,7 @@ func TestHandleDelegateTool_DBErrorAfterClose(t *testing.T) {
 // — withdraw_delegation ——————————————————————————————————————————————————
 
 func TestHandleWithdrawDelegationTool_Success(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	grantID := createTestDelegation(t, srv, store, "delegator", "delegate-user")
 	delegatorCtx := smeldr.NewTestContext(smeldr.User{ID: "delegator"})
@@ -614,7 +634,7 @@ func TestHandleWithdrawDelegationTool_Success(t *testing.T) {
 }
 
 func TestHandleWithdrawDelegationTool_AuditRecordWritten(t *testing.T) {
-	app, db, store := newGrantTestApp(t)
+	app, db, store := newDelegateTestApp(t)
 	srv := New(app)
 	grantID := createTestDelegation(t, srv, store, "delegator", "delegate-user")
 	delegatorCtx := smeldr.NewTestContext(smeldr.User{ID: "delegator"})
@@ -636,15 +656,16 @@ func TestHandleWithdrawDelegationTool_AuditRecordWritten(t *testing.T) {
 }
 
 func TestHandleWithdrawDelegationTool_DeniesNonGrantor(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	grantID := createTestDelegation(t, srv, store, "delegator", "delegate-user")
 	// A different actor, holding the floor gate but not the grantor identity.
 	otherCtx := grantCtx(t, store, "someone-else", "item-approver", "Decision:d2")
 
 	_, rpcErr := callGrantTool(t, srv, otherCtx, "withdraw_delegation", map[string]any{"grant_id": grantID})
-	if rpcErr == nil || rpcErr.Code != -32001 {
-		t.Fatalf("expected -32001 (not the grantor), got %v", rpcErr)
+	// Not the grantor: answered like a missing grant (per-item read rules).
+	if rpcErr == nil || rpcErr.Code != -32000 || rpcErr.Message != "not found" {
+		t.Fatalf("expected -32000 not found (not the grantor), got %v", rpcErr)
 	}
 
 	grants, err := store.ListGrants(context.Background(), "delegate-user")
@@ -657,7 +678,7 @@ func TestHandleWithdrawDelegationTool_DeniesNonGrantor(t *testing.T) {
 }
 
 func TestHandleWithdrawDelegationTool_DeniesStandingGrant(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	// A standing (non-expiring) grant made directly via grant_role, not
 	// delegate_item.
@@ -677,7 +698,7 @@ func TestHandleWithdrawDelegationTool_DeniesStandingGrant(t *testing.T) {
 }
 
 func TestHandleWithdrawDelegationTool_NotFound(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	if _, err := store.Grant(context.Background(), smeldr.RoleGrant{TokenID: "delegator", RoleName: "author"}); err != nil {
 		t.Fatalf("Grant author: %v", err)
@@ -691,7 +712,7 @@ func TestHandleWithdrawDelegationTool_NotFound(t *testing.T) {
 }
 
 func TestHandleWithdrawDelegationTool_MissingGrantID(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	if _, err := store.Grant(context.Background(), smeldr.RoleGrant{TokenID: "delegator", RoleName: "author"}); err != nil {
 		t.Fatalf("Grant author: %v", err)
@@ -705,7 +726,7 @@ func TestHandleWithdrawDelegationTool_MissingGrantID(t *testing.T) {
 }
 
 func TestHandleWithdrawDelegationTool_ForbiddenWithoutAnyGrant(t *testing.T) {
-	app, _, _ := newGrantTestApp(t)
+	app, _, _ := newDelegateTestApp(t)
 	srv := New(app)
 	ctx := smeldr.NewTestContext(smeldr.User{ID: "no-grants-at-all"})
 
@@ -716,7 +737,7 @@ func TestHandleWithdrawDelegationTool_ForbiddenWithoutAnyGrant(t *testing.T) {
 }
 
 func TestHandleWithdrawDelegationTool_UnknownName(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	_, rpcErr := srv.handleWithdrawDelegationTool(grantAdminCtx(t, store, "actor"), store, "not_a_withdraw_tool", map[string]any{})
 	if rpcErr == nil || rpcErr.Code != -32602 {
@@ -725,7 +746,7 @@ func TestHandleWithdrawDelegationTool_UnknownName(t *testing.T) {
 }
 
 func TestHandleWithdrawDelegationTool_DBErrorOnLookup(t *testing.T) {
-	app, db, _ := newGrantTestApp(t)
+	app, db, _ := newDelegateTestApp(t)
 	srv := New(app)
 	// Targets only GetGrant's own query, same failOn as the delegate_item
 	// read-back test above.
@@ -740,7 +761,7 @@ func TestHandleWithdrawDelegationTool_DBErrorOnLookup(t *testing.T) {
 }
 
 func TestHandleWithdrawDelegationTool_RevokeError(t *testing.T) {
-	app, db, store := newGrantTestApp(t)
+	app, db, store := newDelegateTestApp(t)
 	srv := New(app)
 	grantID := createTestDelegation(t, srv, store, "delegator", "delegate-user")
 	delegatorCtx := smeldr.NewTestContext(smeldr.User{ID: "delegator"})
@@ -765,7 +786,7 @@ func TestHandleWithdrawDelegationTool_RevokeError(t *testing.T) {
 // — list_roles ————————————————————————————————————————————————————————————
 
 func TestListRolesTool_Success(t *testing.T) {
-	app, _, store := newGrantTestApp(t)
+	app, _, store := newDelegateTestApp(t)
 	srv := New(app)
 	if _, err := store.Grant(context.Background(), smeldr.RoleGrant{TokenID: "caller", RoleName: "author"}); err != nil {
 		t.Fatalf("Grant author: %v", err)
@@ -797,7 +818,7 @@ func TestListRolesTool_Success(t *testing.T) {
 }
 
 func TestListRolesTool_ForbiddenWithoutAnyGrant(t *testing.T) {
-	app, _, _ := newGrantTestApp(t)
+	app, _, _ := newDelegateTestApp(t)
 	srv := New(app)
 	ctx := smeldr.NewTestContext(smeldr.User{ID: "no-grants-at-all"})
 
@@ -808,7 +829,7 @@ func TestListRolesTool_ForbiddenWithoutAnyGrant(t *testing.T) {
 }
 
 func TestListRolesTool_DBError(t *testing.T) {
-	app, db, _ := newGrantTestApp(t)
+	app, db, _ := newDelegateTestApp(t)
 	srv := New(app)
 	wrapped := &mcpQueryFailDB{DB: db, failOn: "FROM smeldr_roles"}
 	failingStore := smeldr.NewRoleStore(wrapped)

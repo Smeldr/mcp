@@ -216,8 +216,8 @@ func TestNavTools_UpdateNavItem_notFound(t *testing.T) {
 		"id":    "does-not-exist",
 		"label": "Ghost",
 	})
-	if rpcErr == nil || rpcErr.Code != -32001 {
-		t.Errorf("expected -32001 for not found, got %v", rpcErr)
+	if rpcErr == nil || rpcErr.Code != -32000 {
+		t.Errorf("expected -32000 for not found, got %v", rpcErr)
 	}
 }
 

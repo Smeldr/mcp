@@ -92,7 +92,7 @@ func (s *Server) resolveParentType(ctx smeldr.Context, id string) (string, *json
 			return p.BlockParentTypeName(), nil
 		}
 	}
-	return "", &jsonRPCError{Code: -32602, Message: "parent not found: " + id}
+	return "", errorFor(smeldr.ErrNotFound)
 }
 
 // addEdge appends child_id under parent_id with the given edge role. The

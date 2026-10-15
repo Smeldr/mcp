@@ -291,14 +291,16 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if sv, ok := stringArg(args, "status"); ok {
 			opts.Status = []smeldr.Status{smeldr.Status(sv)}
 		}
-		items, err := repo.List(ctx, opts)
+		// The page and the total hold only what the caller may read; the total
+		// counts every matching item, not the page.
+		items, total, err := repo.ListPage(ctx, opts)
 		if err != nil {
 			return nil, errorFor(err)
 		}
 		if items == nil {
 			items = []map[string]any{}
 		}
-		return toolResult(map[string]any{"items": s.withItemFactsMaps(ctx, typeName, items), "total": len(items)}), nil
+		return toolResult(map[string]any{"items": s.withItemFactsMaps(ctx, typeName, items), "total": total}), nil
 
 	case "update_content":
 		typeName, ok := stringArg(args, "type_name")
@@ -360,7 +362,7 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if err := repo.SetStatusWithReason(ctx, id, st, reason); err != nil {
 			return nil, errorFor(err)
 		}
-		go s.app.RefreshContentIndex(context.Background(), typeName)
+		go s.app.RefreshContentIndex(smeldr.TrustedRead(context.Background()), typeName) // a trusted rebuild of the public index
 		return toolResult(map[string]any{"id": id, "status": statusStr}), nil
 
 	case "schedule_content":
