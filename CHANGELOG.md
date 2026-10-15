@@ -9,6 +9,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.61.0] - 2026-10-15
+
 ### Changed
 
 - **Every tool applies the caller's per-item read rules (A500).** Under governance the caller's read scope is loaded once per `tools/call`, `resources/list` and `resources/read`, and attached, so every core read in that call shares it. A failure to load it returns -32603, never not found. Without governance nothing changes.
