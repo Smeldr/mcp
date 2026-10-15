@@ -247,7 +247,9 @@ Published, or Archived.
 so the list tool is `list_blog_posts` and the get tool is `get_blog_post`.
 
 **Return value:** the full struct including all `smeldr.Node` fields (`Status`, `PublishedAt`,
-`ScheduledAt`, `CreatedAt`, `UpdatedAt`, `Slug`, `ID`).
+`ScheduledAt`, `CreatedAt`, `UpdatedAt`, `Slug`, `ID`). The orchestration and authority types
+whose flows have no published or scheduled state (Goal, Signal, Task, Decision, Amendment, Rule,
+AuthorityStub) leave out `PublishedAt` and `ScheduledAt`, since smeldr.dev/core v1.153.0 (D114).
 
 ---
 

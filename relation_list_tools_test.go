@@ -9,8 +9,9 @@ import (
 )
 
 // assertTaskRelation asserts a depends_on-style edge directly on the store.
-func assertTaskRelation(t *testing.T, store *smeldr.RelationStore, kind, src, tgt string) smeldr.RelationEdge {
+func assertTaskRelation(t *testing.T, srv *Server, store *smeldr.RelationStore, kind, src, tgt string) smeldr.RelationEdge {
 	t.Helper()
+	seedItems(t, srv, "post:"+src, "post:"+tgt)
 	e, err := store.MCPAssertRelation(newAuthorCtx(), "post", src, "post", tgt, kind, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("assert %s %s->%s: %v", kind, src, tgt, err)
@@ -27,7 +28,7 @@ func TestListRelations_PagesAtAsOf(t *testing.T) {
 	ctx := newAuthorCtx()
 	var ids []string
 	for _, src := range []string{"p1", "p2", "p3", "p4", "p5"} {
-		ids = append(ids, assertTaskRelation(t, store, "cites", src, "root").ID)
+		ids = append(ids, assertTaskRelation(t, srv, store, "cites", src, "root").ID)
 	}
 
 	res, rpcErr := callTool(t, srv, ctx, "list_relations", map[string]any{"limit": 2})
@@ -40,7 +41,7 @@ func TestListRelations_PagesAtAsOf(t *testing.T) {
 		t.Fatalf("first page = %v", first)
 	}
 	time.Sleep(5 * time.Millisecond)
-	assertTaskRelation(t, store, "cites", "late", "root")
+	assertTaskRelation(t, srv, store, "cites", "late", "root")
 	if err := store.Withdraw(context.Background(), ids[4], "between pages"); err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +115,7 @@ func TestListRelations_IDsJoinToListedItems(t *testing.T) {
 		}
 		created = append(created, unwrapToolResult(t, res)["ID"].(string))
 	}
-	if _, rpcErr := callTool(t, srv, admin, "assert_relation", map[string]any{
+	if _, rpcErr := callSeeded(t, srv, admin, "assert_relation", map[string]any{
 		"source_type": "Decision", "source_id": created[1], "target_type": "Decision", "target_id": created[0], "relation_kind": "supersedes",
 	}); rpcErr != nil {
 		t.Fatalf("assert_relation: %v", rpcErr.Message)

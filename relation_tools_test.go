@@ -1,8 +1,12 @@
 package mcp
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
+	"strings"
 	"testing"
+	"time"
 
 	"smeldr.dev/core"
 
@@ -24,6 +28,12 @@ func newRelationServer(t *testing.T) (*Server, *smeldr.RelationStore) {
 	if err := smeldr.CreateRelationTables(db); err != nil {
 		t.Fatalf("CreateRelationTables: %v", err)
 	}
+	if err := smeldr.CreateBlockTables(db); err != nil {
+		t.Fatalf("CreateBlockTables: %v", err)
+	}
+	if err := smeldr.CreateSchemaTable(db); err != nil {
+		t.Fatalf("CreateSchemaTable: %v", err)
+	}
 	store, err := smeldr.NewRelationStore(db)
 	if err != nil {
 		t.Fatalf("NewRelationStore: %v", err)
@@ -33,8 +43,35 @@ func newRelationServer(t *testing.T) (*Server, *smeldr.RelationStore) {
 		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
 		DB:      db,
 	}).Relations(store)
+	app.ServeDynamicContent()
 	srv := New(app)
 	return srv, store
+}
+
+// seedItems makes each "type:id" a real item, a web content row whose ID and
+// slug are id, defining the type on first use: a relation write needs two
+// existing ends (core v1.153.0, D113 point 3).
+func seedItems(t *testing.T, srv *Server, refs ...string) {
+	t.Helper()
+	ctx := context.Background()
+	for _, ref := range refs {
+		typeName, id, _ := strings.Cut(ref, ":")
+		if srv.app.TypeRegistry().Lookup(typeName) == nil {
+			if _, err := srv.app.DefineContentType(ctx, &smeldr.ContentTypeSchema{
+				TypeName: typeName, URLPrefix: "/" + typeName + "s",
+				Fields: json.RawMessage(`[{"Name":"Title","Type":"string","Role":"title"}]`),
+			}); err != nil {
+				t.Fatalf("DefineContentType %s: %v", typeName, err)
+			}
+		}
+		now := time.Now().UTC()
+		if _, err := srv.app.Config().DB.ExecContext(ctx,
+			`INSERT INTO smeldr_dynamic_content (id, slug, type_name, status, fields, created_at, updated_at)
+			 VALUES ($1, $2, $3, 'draft', '{"Title":"x"}', $4, $5) ON CONFLICT (id) DO NOTHING`,
+			id, id, typeName, now, now); err != nil {
+			t.Fatalf("seed %s: %v", ref, err)
+		}
+	}
 }
 
 // seedRelationKind registers a test kind directly via the store.
@@ -116,7 +153,7 @@ func TestRelationTools_AssertRelation(t *testing.T) {
 	seedRelationKind(t, store, "cites")
 	ctx := newAuthorCtx()
 
-	res, rpcErr := callTool(t, srv, ctx, "assert_relation", map[string]any{
+	res, rpcErr := callSeeded(t, srv, ctx, "assert_relation", map[string]any{
 		"source_type":   "post",
 		"source_id":     "post-1",
 		"target_type":   "source",
@@ -164,7 +201,7 @@ func TestRelationTools_AssertRelation_UnknownKind(t *testing.T) {
 	srv, _ := newRelationServer(t)
 	ctx := newAuthorCtx()
 
-	_, rpcErr := callTool(t, srv, ctx, "assert_relation", map[string]any{
+	_, rpcErr := callSeeded(t, srv, ctx, "assert_relation", map[string]any{
 		"source_type":   "post",
 		"source_id":     "post-1",
 		"target_type":   "source",
@@ -185,7 +222,7 @@ func TestRelationTools_ProposeRelation(t *testing.T) {
 	seedRelationKind(t, store, "tagged_with")
 	ctx := newAuthorCtx()
 
-	res, rpcErr := callTool(t, srv, ctx, "propose_relation", map[string]any{
+	res, rpcErr := callSeeded(t, srv, ctx, "propose_relation", map[string]any{
 		"source_type":   "post",
 		"source_id":     "post-2",
 		"target_type":   "tag",
@@ -207,7 +244,7 @@ func TestRelationTools_ObserveRelation(t *testing.T) {
 	seedRelationKind(t, store, "tagged_with")
 	ctx := newAuthorCtx()
 
-	res, rpcErr := callTool(t, srv, ctx, "observe_relation", map[string]any{
+	res, rpcErr := callSeeded(t, srv, ctx, "observe_relation", map[string]any{
 		"source_type":   "post",
 		"source_id":     "post-3",
 		"target_type":   "tag",
@@ -228,7 +265,7 @@ func TestRelationTools_ObserveRelation_MissingArgs(t *testing.T) {
 	srv, _ := newRelationServer(t)
 	ctx := newAuthorCtx()
 
-	_, rpcErr := callTool(t, srv, ctx, "observe_relation", map[string]any{
+	_, rpcErr := callSeeded(t, srv, ctx, "observe_relation", map[string]any{
 		"source_id": "x", "target_type": "t", "target_id": "y", "relation_kind": "k",
 	})
 	if rpcErr == nil {
@@ -243,7 +280,7 @@ func TestRelationTools_ObserveRelation_UnknownKind(t *testing.T) {
 	srv, _ := newRelationServer(t)
 	ctx := newAuthorCtx()
 
-	_, rpcErr := callTool(t, srv, ctx, "observe_relation", map[string]any{
+	_, rpcErr := callSeeded(t, srv, ctx, "observe_relation", map[string]any{
 		"source_type":   "post",
 		"source_id":     "post-3",
 		"target_type":   "tag",
@@ -264,7 +301,7 @@ func TestRelationTools_GetRelations_DirectionSource(t *testing.T) {
 	authorCtx := newAuthorCtx()
 
 	// Assert an edge so there is data to query.
-	if _, rpcErr := callTool(t, srv, authorCtx, "assert_relation", map[string]any{
+	if _, rpcErr := callSeeded(t, srv, authorCtx, "assert_relation", map[string]any{
 		"source_type": "post", "source_id": "p1",
 		"target_type": "source", "target_id": "s1",
 		"relation_kind": "cites",
@@ -310,17 +347,17 @@ func TestRelationTools_GetRelations_EdgeClassFilter(t *testing.T) {
 	ctx := newAuthorCtx()
 
 	// Create one asserted, one inferred, and one observed edge.
-	callTool(t, srv, ctx, "assert_relation", map[string]any{
+	callSeeded(t, srv, ctx, "assert_relation", map[string]any{
 		"source_type": "post", "source_id": "p1",
 		"target_type": "source", "target_id": "s1",
 		"relation_kind": "cites",
 	})
-	callTool(t, srv, ctx, "propose_relation", map[string]any{
+	callSeeded(t, srv, ctx, "propose_relation", map[string]any{
 		"source_type": "post", "source_id": "p1",
 		"target_type": "source", "target_id": "s2",
 		"relation_kind": "cites",
 	})
-	callTool(t, srv, ctx, "observe_relation", map[string]any{
+	callSeeded(t, srv, ctx, "observe_relation", map[string]any{
 		"source_type": "post", "source_id": "p1",
 		"target_type": "source", "target_id": "s3",
 		"relation_kind": "cites",
@@ -373,7 +410,7 @@ func TestRelationTools_PreviewImpact(t *testing.T) {
 	authorCtx := newAuthorCtx()
 	editorCtx := newEditorCtx()
 
-	callTool(t, srv, authorCtx, "assert_relation", map[string]any{
+	callSeeded(t, srv, authorCtx, "assert_relation", map[string]any{
 		"source_type": "post", "source_id": "p1",
 		"target_type": "source", "target_id": "s1",
 		"relation_kind": "cites",
@@ -608,4 +645,18 @@ func TestRelationTools_RelationToolDefs_AllPresent(t *testing.T) {
 			t.Errorf("tool def %q missing", expected)
 		}
 	}
+}
+
+// callSeeded is callTool for a relation write whose ends the test means to
+// exist: it makes both ends real items first (seedItems).
+func callSeeded(t *testing.T, srv *Server, ctx smeldr.Context, name string, args map[string]any) (any, *jsonRPCError) {
+	t.Helper()
+	st, _ := args["source_type"].(string)
+	sid, _ := args["source_id"].(string)
+	tt, _ := args["target_type"].(string)
+	tid, _ := args["target_id"].(string)
+	if st != "" && sid != "" && tt != "" && tid != "" {
+		seedItems(t, srv, st+":"+sid, tt+":"+tid)
+	}
+	return callTool(t, srv, ctx, name, args)
 }

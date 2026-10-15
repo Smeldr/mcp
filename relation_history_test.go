@@ -15,7 +15,7 @@ func TestRelationTools_WithdrawRelation(t *testing.T) {
 	seedRelationKind(t, store, "cites")
 	ctx := newAuthorCtx()
 
-	res, rpcErr := callTool(t, srv, ctx, "assert_relation", map[string]any{
+	res, rpcErr := callSeeded(t, srv, ctx, "assert_relation", map[string]any{
 		"source_type": "post", "source_id": "post-1", "target_type": "source", "target_id": "source-1", "relation_kind": "cites",
 	})
 	if rpcErr != nil {

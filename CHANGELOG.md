@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **`list_signals` returns `created_at` and `updated_at` as RFC3339 (A506).** The tool read both columns as stored text, so on SQLite they came back in Go's `time.Time.String` form (`2026-10-15 20:23:08.072349009 +0000 UTC`), unlike every other record's times. Both the unscoped and the scoped path now read the stored value with smeldr.dev/core's `ParseTimestamp` and return it as RFC3339Nano (`2026-10-15T20:23:08.072349009Z`), the form `get_signal` already used (D114 point 4). Postgres already returned this form. A stored value that cannot be read is returned as stored and logged; it never fails the list. The order is unchanged.
+- **With smeldr.dev/core v1.153.0, relation writes need two existing ends.** `assert_relation`, `propose_relation` and `observe_relation` to an end that does not exist, or that the caller may not read, now answer not found (-32000) from core (D113 point 3); an end given by slug or address is stored by ID. The orchestration types' `get_`/`list_` results no longer carry `PublishedAt` and `ScheduledAt` (D114 point 2). This module's own code is unchanged for both; its tests now create real items for relation ends.
+- Requires smeldr.dev/core v1.153.0.
+
 ## [1.61.2] - 2026-10-15
 
 ### Fixed

@@ -24,7 +24,7 @@ func seedFan(t *testing.T, srv *Server, store *smeldr.RelationStore, n int) {
 	seedRelationKind(t, store, "cites")
 	for i := 0; i < n; i++ {
 		for _, e := range [][2]string{{"a", fmt.Sprintf("c%02d", i)}, {fmt.Sprintf("c%02d", i), fmt.Sprintf("g%02d", i)}} {
-			if _, rpcErr := callTool(t, srv, newAuthorCtx(), "assert_relation", map[string]any{
+			if _, rpcErr := callSeeded(t, srv, newAuthorCtx(), "assert_relation", map[string]any{
 				"source_type": "post", "source_id": e[0], "target_type": "post", "target_id": e[1], "relation_kind": "cites",
 			}); rpcErr != nil {
 				t.Fatalf("assert %v: %v", e, rpcErr.Message)
@@ -37,7 +37,7 @@ func TestGetReachability_ItemsRingSizesAndPaging(t *testing.T) {
 	srv, store := newRelationServer(t)
 	seedRelationKind(t, store, "cites")
 	for _, e := range [][2]string{{"a", "b"}, {"a", "c"}, {"b", "d"}, {"c", "d"}, {"d", "e"}} {
-		if _, rpcErr := callTool(t, srv, newAuthorCtx(), "assert_relation", map[string]any{
+		if _, rpcErr := callSeeded(t, srv, newAuthorCtx(), "assert_relation", map[string]any{
 			"source_type": "post", "source_id": e[0], "target_type": "post", "target_id": e[1], "relation_kind": "cites",
 		}); rpcErr != nil {
 			t.Fatalf("assert: %v", rpcErr.Message)

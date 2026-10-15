@@ -16,11 +16,18 @@ func TestPG_GetReachability(t *testing.T) {
 	if err := smeldr.CreateRelationTables(db); err != nil {
 		t.Fatalf("CreateRelationTables: %v", err)
 	}
+	if err := smeldr.CreateBlockTables(db); err != nil {
+		t.Fatalf("CreateBlockTables: %v", err)
+	}
+	if err := smeldr.CreateSchemaTable(db); err != nil {
+		t.Fatalf("CreateSchemaTable: %v", err)
+	}
 	store, err := smeldr.NewRelationStore(db)
 	if err != nil {
 		t.Fatalf("NewRelationStore: %v", err)
 	}
 	app := smeldr.New(smeldr.Config{BaseURL: "http://localhost", Secret: []byte(tokenClassSecret), DB: db}).Relations(store)
+	app.ServeDynamicContent()
 	srv := New(app)
 
 	pairs, _ := json.Marshal([]map[string]string{{"source_type": "post", "target_type": "post"}})
@@ -29,7 +36,7 @@ func TestPG_GetReachability(t *testing.T) {
 	}
 	for i := 0; i < 6; i++ {
 		for _, e := range [][2]string{{"a", fmt.Sprintf("c%02d", i)}, {fmt.Sprintf("c%02d", i), fmt.Sprintf("g%02d", i)}} {
-			if _, rpcErr := callTool(t, srv, newAuthorCtx(), "assert_relation", map[string]any{
+			if _, rpcErr := callSeeded(t, srv, newAuthorCtx(), "assert_relation", map[string]any{
 				"source_type": "post", "source_id": e[0], "target_type": "post", "target_id": e[1], "relation_kind": "cites",
 			}); rpcErr != nil {
 				t.Fatalf("assert %v: %v", e, rpcErr.Message)

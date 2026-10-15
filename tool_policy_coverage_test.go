@@ -246,8 +246,11 @@ func TestAuthoriseTool_ObserveRelation_NoLongerForbidden(t *testing.T) {
 		"target_id":     "p2",
 		"relation_kind": "cites",
 	})
-	if rpcErr != nil {
-		t.Fatalf("observe_relation: unexpected error %+v (was -32001 forbidden before the fix)", rpcErr)
+	// The ends p1 and p2 do not exist, so since core v1.153.0 (D113) the call
+	// is not found (-32000). What this test pins is the authorization: it
+	// must not be forbidden (-32001).
+	if rpcErr != nil && rpcErr.Code == -32001 {
+		t.Fatalf("observe_relation: forbidden %+v (was -32001 forbidden before the fix)", rpcErr)
 	}
 }
 

@@ -3,10 +3,12 @@
 package mcp
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"smeldr.dev/core"
 )
@@ -240,8 +242,8 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 				"id":          id,
 				"slug":        slug,
 				"status":      status,
-				"created_at":  createdAt,
-				"updated_at":  updatedAt,
+				"created_at":  signalTime(ctx, createdAt),
+				"updated_at":  signalTime(ctx, updatedAt),
 				"sender":      sender,
 				"receiver":    recv,
 				"signal_type": sigType,
@@ -272,6 +274,20 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		return toolResult(map[string]any{"signals": signals, "count": len(signals), "total": total}), nil
 	}
 	return nil, &jsonRPCError{Code: -32602, Message: "unknown signal tool: " + name}
+}
+
+// signalTime returns a stored Signal time as RFC3339, like every other
+// record's times (D114 point 4): the column holds Go's time.String form on
+// SQLite and an RFC3339 form on Postgres, and smeldr.ParseTimestamp reads
+// both. A value it cannot read is returned as stored and logged, so one odd
+// row never fails the list.
+func signalTime(ctx context.Context, stored string) string {
+	t, err := smeldr.ParseTimestamp(stored)
+	if err != nil {
+		slog.WarnContext(ctx, "smeldr/mcp: list_signals: stored time not readable, returned as stored", "value", stored, "error", err)
+		return stored
+	}
+	return t.Format(time.RFC3339Nano)
 }
 
 // listReadableSignals is list_signals for a scoped caller: the rows matching
@@ -307,7 +323,7 @@ func (s *Server) listReadableSignals(ctx smeldr.Context, scope *smeldr.ReadScope
 			continue
 		}
 		m := map[string]any{
-			"id": id, "slug": slug, "status": status, "created_at": createdAt, "updated_at": updatedAt,
+			"id": id, "slug": slug, "status": status, "created_at": signalTime(ctx, createdAt), "updated_at": signalTime(ctx, updatedAt),
 			"sender": sender, "receiver": recv, "signal_type": sigType, "message": message,
 			"task_ref": taskRef, "sequence": sequence,
 		}
