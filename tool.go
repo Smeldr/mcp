@@ -190,7 +190,10 @@ func (s *Server) authoriseRead(ctx smeldr.Context, toolName string, rs *smeldr.R
 // read access to the type (forbidden otherwise), then resolves the item under
 // the caller's read scope, so an item the caller may not read is not found,
 // exactly as a missing one, and is then gated on the tool's operation for that
-// one item, so an item-scoped grant of that operation passes. Every other state tool is gated as [Server.authoriseRead].
+// one item, so an item-scoped grant of that operation passes, or on the
+// operation the requested transition itself requires on that item (a
+// delegated approver or reviewer). Every other state tool is gated as
+// [Server.authoriseRead].
 func (s *Server) authoriseState(ctx smeldr.Context, toolName string, rs *smeldr.RoleStore, args map[string]any) *jsonRPCError {
 	if toolName != "transition_item" || rs == nil {
 		return s.authoriseRead(ctx, toolName, rs, args)
@@ -213,11 +216,51 @@ func (s *Server) authoriseState(ctx smeldr.Context, toolName string, rs *smeldr.
 	if err != nil {
 		return errorFor(err)
 	}
-	ok, err := rs.Authorized(ctx, ctx.User().ID, requiredOp, smeldr.AuthTarget{TypeName: typeName, ID: id})
-	if err != nil || !ok {
+	target := smeldr.AuthTarget{TypeName: typeName, ID: id}
+	ok, err := rs.Authorized(ctx, ctx.User().ID, requiredOp, target)
+	if err != nil {
 		return &jsonRPCError{Code: -32001, Message: "forbidden"}
 	}
-	return nil
+	if ok {
+		return nil
+	}
+	// Without the tool's operation on the item, the caller may still hold the
+	// operation the requested transition itself requires on it (a delegated
+	// approver or reviewer). validateTransition then decides, as for anyone.
+	toState, _ := args["to_state"].(string)
+	op, rpcErr := s.transitionOperation(ctx, typeName, ident, toState)
+	if rpcErr != nil {
+		return rpcErr
+	}
+	if op != "" {
+		if ok, err := rs.Authorized(ctx, ctx.User().ID, op, target); err == nil && ok {
+			return nil
+		}
+	}
+	return &jsonRPCError{Code: -32001, Message: "forbidden"}
+}
+
+// transitionOperation is the operation the transition of the item ident to
+// toState requires, from the type's flow, or "" when there is no such
+// transition or it requires none. The item has already resolved as readable.
+func (s *Server) transitionOperation(ctx smeldr.Context, typeName, ident, toState string) (string, *jsonRPCError) {
+	if toState == "" {
+		return "", nil
+	}
+	status, rpcErr := s.itemCurrentStatus(ctx, typeName, ident)
+	if rpcErr != nil {
+		return "", rpcErr
+	}
+	options, err := s.app.ValidTransitions(ctx, typeName, status)
+	if err != nil {
+		return "", errorFor(err)
+	}
+	for _, o := range options {
+		if o.ToState == toState {
+			return o.RequiredOperation, nil
+		}
+	}
+	return "", nil
 }
 
 // readTypeFor is the type a read tool reads, from its arguments, or "" for a

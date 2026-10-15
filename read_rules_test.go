@@ -464,3 +464,92 @@ func mustJSON(t *testing.T, v any) string {
 	}
 	return string(b)
 }
+
+// A delegated approver or reviewer reads its one item and moves it through the
+// transition it was delegated for, and nothing more
+// (core-delegated-approvers-read-and-transition).
+func TestReadRules_DelegatesMoveTheirItem(t *testing.T) {
+	f := newReadRulesFixture(t)
+	ctx := context.Background()
+	if _, err := f.srv.app.DefineContentType(ctx, &smeldr.ContentTypeSchema{TypeName: "memo",
+		Fields: json.RawMessage(`[{"Name":"Title","Type":"string","Role":"title"}]`)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.srv.app.RegisterFlow(smeldr.StateFlow{
+		Name: "memo-flow", TypeName: "memo",
+		States: []smeldr.State{{Name: "draft", IsInitial: true}, {Name: "approved"}, {Name: "reviewed"}, {Name: "closed"}, {Name: "parked"}},
+		Transitions: []smeldr.Transition{
+			{From: "draft", To: "approved", RequiredOperation: "approve"},
+			{From: "draft", To: "reviewed", RequiredOperation: "review"},
+			{From: "draft", To: "closed", RequiredOperation: "manage"},
+			{From: "draft", To: "parked"},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := f.srv.app.DynamicContentRepo("memo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := smeldr.RegisterItemApproverRole(ctx, f.store); err != nil {
+		t.Fatal(err)
+	}
+	if err := smeldr.RegisterItemReviewerRole(ctx, f.store); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ role, token, to string }{
+		{"item-approver", "approver", "approved"},
+		{"item-reviewer", "reviewer", "reviewed"},
+	} {
+		t.Run(c.role, func(t *testing.T) {
+			trusted := smeldr.TrustedRead(ctx)
+			mine, err := repo.CreateDraft(trusted, map[string]any{"Title": "mine"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			other, err := repo.CreateDraft(trusted, map[string]any{"Title": "other"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.store.Grant(ctx, smeldr.RoleGrant{TokenID: c.token, RoleName: c.role, ScopeStatic: []string{"memo:" + mine.ID}}); err != nil {
+				t.Fatal(err)
+			}
+			who := smeldr.NewTestContext(smeldr.User{ID: c.token})
+			move := func(slug, to string) *jsonRPCError {
+				_, rpcErr := callTool(t, f.srv, who, "transition_item", map[string]any{"type_name": "memo", "slug": slug, "to_state": to})
+				return rpcErr
+			}
+			// It reads its item.
+			if _, rpcErr := callTool(t, f.srv, who, "get_content", map[string]any{"type_name": "memo", "slug": mine.Slug}); rpcErr != nil {
+				t.Errorf("get_content of its item: %v", rpcErr.Message)
+			}
+			// It may not use a transition it was not delegated for.
+			for _, to := range []string{"closed", "parked"} {
+				if rpcErr := move(mine.Slug, to); rpcErr == nil || rpcErr.Code != -32001 {
+					t.Errorf("%s on its item = %+v; want forbidden", to, rpcErr)
+				}
+			}
+			// Another item is not found, the same as a missing one.
+			sameNotFound(t, "transition_item on another item", move(other.Slug, c.to), move("no-such-memo", c.to))
+			// No target state, or one the flow does not have: no transition
+			// operation to hold, so forbidden.
+			for _, to := range []string{"", "nowhere"} {
+				if rpcErr := move(mine.Slug, to); rpcErr == nil || rpcErr.Code != -32001 {
+					t.Errorf("to_state %q on its item = %+v; want forbidden", to, rpcErr)
+				}
+			}
+			// A missing slug reaches the handler, which answers the argument.
+			if _, rpcErr := callTool(t, f.srv, who, "transition_item", map[string]any{"type_name": "memo", "to_state": c.to}); rpcErr == nil || rpcErr.Code != -32602 {
+				t.Errorf("missing slug = %+v; want -32602", rpcErr)
+			}
+			// A caller with no token ID is forbidden before any lookup.
+			if _, rpcErr := callTool(t, f.srv, smeldr.NewTestContext(smeldr.User{}), "transition_item", map[string]any{"type_name": "memo", "slug": mine.Slug, "to_state": c.to}); rpcErr == nil || rpcErr.Code != -32001 {
+				t.Errorf("no caller = %+v; want forbidden", rpcErr)
+			}
+			// It moves its item through the transition it was delegated for.
+			if rpcErr := move(mine.Slug, c.to); rpcErr != nil {
+				t.Errorf("%s on its item: %v", c.to, rpcErr.Message)
+			}
+		})
+	}
+}
