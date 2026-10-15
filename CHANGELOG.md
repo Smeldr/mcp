@@ -9,6 +9,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.61.1] - 2026-10-15
+
 ### Changed
 
 - **`transition_item` admits a delegate holding the requested transition's own operation (A502).** Under governance, after the item resolves as readable, the caller passes the floor when it holds `manage` on the item, or the operation that the requested transition itself requires on that item (its `RequiredOperation` from the type's flow). So a delegated approver or reviewer can move its item through the transition it was delegated for. A transition with no required operation, a target state the flow does not have, or a missing `to_state` still needs `manage`. The flow's own transition check still decides.
