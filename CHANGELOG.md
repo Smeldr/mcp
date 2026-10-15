@@ -9,6 +9,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.61.4] - 2026-10-16
+
 ### Changed
 
 - **With smeldr.dev/core v1.155.0, records carry a title and `amendment_type` is a closed list (D112, A509).** `create_decision`, `create_task`, `create_goal` and `create_amendment` return a `title_missing` or `title_too_long` warning when the title (an Amendment's `summary`) is missing or longer than 120 characters, and are refused after the instance's title cutover. `create_amendment` refuses an `amendment_type` outside feature, fix, docs, chore, test, ci, refactor, release, and the tool schema advertises the list as `enum`. `pilot` is deprecated: not stored, a `deprecated_field` warning when sent. This module's own code is unchanged; it passes core's results through. Its tests now send a listed `amendment_type` and accept a `Deprecated (D112):` description.
