@@ -26,7 +26,7 @@ func TestAmendmentAmends_ThroughTheTools(t *testing.T) {
 	srv.app.Handler() // wires the relation store into the modules, as a running server does at startup
 
 	res, rpcErr := callTool(t, srv, admin, "create_amendment", map[string]any{
-		"amendment_number": "A9001", "summary": "changes D7", "amends": "7",
+		"amendment_number": "A9001", "summary": "changes D7", "amends": "7", "amendment_type": "fix",
 	})
 	if rpcErr != nil {
 		t.Fatalf("create_amendment: %v", rpcErr.Message)
@@ -54,7 +54,7 @@ func TestAmendmentAmends_ThroughTheTools(t *testing.T) {
 		t.Fatalf("edges = %v, want one amends edge", edges)
 	}
 
-	if _, rpcErr := callTool(t, srv, admin, "create_amendment", map[string]any{"amendment_number": "A9002", "amends": "D404"}); rpcErr == nil {
+	if _, rpcErr := callTool(t, srv, admin, "create_amendment", map[string]any{"amendment_number": "A9002", "amends": "D404", "amendment_type": "fix"}); rpcErr == nil {
 		t.Error("an Amendment naming no Decision must be refused")
 	}
 	_, rpcErr = callTool(t, srv, admin, "update_amendment", map[string]any{"slug": created["Slug"], "amends": "D1"})

@@ -209,7 +209,8 @@ func TestToolsList_AddressConvention(t *testing.T) {
 			if !strings.HasPrefix(name, "create_") && !strings.HasPrefix(name, "update_") {
 				t.Errorf("%s.%s is deprecated outside a create or update tool", name, key)
 			}
-			if d, _ := pm["description"].(string); !strings.HasPrefix(d, "Deprecated (D110):") {
+			// D110 retires the legacy human-ID fields, D112 the Amendment's pilot.
+			if d, _ := pm["description"].(string); !strings.HasPrefix(d, "Deprecated (D110):") && !strings.HasPrefix(d, "Deprecated (D112):") {
 				t.Errorf("%s.%s description = %q", name, key, pm["description"])
 			}
 		}
