@@ -73,9 +73,9 @@ func TestGetReachability_ItemsRingSizesAndPaging(t *testing.T) {
 	if pg["total"].(float64) != 4 || pg["count"].(float64) != 1 {
 		t.Errorf("page = %v", pg)
 	}
-	empty, _ := reachCall(t, srv, newAuthorCtx(), map[string]any{"type_name": "post", "id": "nobody", "depth": 2})
-	if empty["total"].(float64) != 0 || len(empty["items"].([]any)) != 0 || len(empty["ring_sizes"].([]any)) != 2 {
-		t.Errorf("an isolated node = %v, want an honest empty walk with two empty rings", empty)
+	// An ident that names no item is an error, never an empty walk (T875).
+	if _, rpcErr := reachCall(t, srv, newAuthorCtx(), map[string]any{"type_name": "post", "id": "nobody", "depth": 2}); rpcErr == nil {
+		t.Error("an unknown item answered instead of erroring")
 	}
 }
 

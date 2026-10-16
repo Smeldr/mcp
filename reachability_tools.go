@@ -27,7 +27,7 @@ func reachabilityToolDefs() []mcpTool {
 			"type": "object",
 			"properties": map[string]any{
 				"type_name": map[string]any{"type": "string", "description": "Content type of the anchor item."},
-				"id":        map[string]any{"type": "string", "description": "ID of the anchor item."},
+				"id":        map[string]any{"type": "string", "description": "The anchor item: its address, slug or ID."},
 				"kind":      map[string]any{"type": "string", "description": "Only walk this relation kind. Omit for all kinds."},
 				"direction": map[string]any{"type": "string", "enum": []string{"incoming", "outgoing", "both"}, "description": "Which edges to walk from each item. Default both."},
 				"depth":     map[string]any{"type": "number", "description": "How many hops, 1 to 10. Default 1."},
@@ -86,6 +86,10 @@ func (s *Server) handleReachabilityTool(ctx smeldr.Context, args map[string]any)
 	}
 	kind := stringArgOr(args, "kind", "")
 
+	id, rpcErr := s.resolveRelationEnd(ctx, typeName, id)
+	if rpcErr != nil {
+		return nil, rpcErr
+	}
 	res, err := s.relationStore.ReachabilityBounded(ctx, typeName, id, kind, direction, depth, maxItems)
 	if err != nil {
 		if errors.Is(err, smeldr.ErrBadRequest) {

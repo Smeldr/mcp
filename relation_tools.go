@@ -27,9 +27,9 @@ func relationToolDefs() []mcpTool {
 				"type": "object",
 				"properties": map[string]any{
 					"source_type":   map[string]any{"type": "string", "description": "Content type of the dependent item, e.g. \"post\"."},
-					"source_id":     map[string]any{"type": "string", "description": "ID of the dependent item."},
+					"source_id":     map[string]any{"type": "string", "description": "The dependent item: its address, slug or ID."},
 					"target_type":   map[string]any{"type": "string", "description": "Content type of the referenced item, e.g. \"source\"."},
-					"target_id":     map[string]any{"type": "string", "description": "ID of the referenced item."},
+					"target_id":     map[string]any{"type": "string", "description": "The referenced item: its address, slug or ID."},
 					"relation_kind": map[string]any{"type": "string", "description": "type_name of a registered relation kind, e.g. \"cites\"."},
 					"confidence":    map[string]any{"type": "number", "description": "Confidence score (0.0–1.0) for weighted kinds. Omit for unweighted kinds."},
 					"attributes":    map[string]any{"type": "object", "description": "Arbitrary edge-level metadata."},
@@ -62,9 +62,9 @@ func relationToolDefs() []mcpTool {
 				"type": "object",
 				"properties": map[string]any{
 					"source_type":   map[string]any{"type": "string", "description": "Content type of the dependent item."},
-					"source_id":     map[string]any{"type": "string", "description": "ID of the dependent item."},
+					"source_id":     map[string]any{"type": "string", "description": "The dependent item: its address, slug or ID."},
 					"target_type":   map[string]any{"type": "string", "description": "Content type of the referenced item."},
-					"target_id":     map[string]any{"type": "string", "description": "ID of the referenced item."},
+					"target_id":     map[string]any{"type": "string", "description": "The referenced item: its address, slug or ID."},
 					"relation_kind": map[string]any{"type": "string", "description": "type_name of a registered relation kind."},
 					"confidence":    map[string]any{"type": "number", "description": "Confidence score (0.0–1.0). Omit for unweighted kinds."},
 					"attributes":    map[string]any{"type": "object", "description": "Arbitrary edge-level metadata."},
@@ -82,9 +82,9 @@ func relationToolDefs() []mcpTool {
 				"type": "object",
 				"properties": map[string]any{
 					"source_type":   map[string]any{"type": "string", "description": "Content type of the dependent item."},
-					"source_id":     map[string]any{"type": "string", "description": "ID of the dependent item."},
+					"source_id":     map[string]any{"type": "string", "description": "The dependent item: its address, slug or ID."},
 					"target_type":   map[string]any{"type": "string", "description": "Content type of the referenced item."},
-					"target_id":     map[string]any{"type": "string", "description": "ID of the referenced item."},
+					"target_id":     map[string]any{"type": "string", "description": "The referenced item: its address, slug or ID."},
 					"relation_kind": map[string]any{"type": "string", "description": "type_name of a registered relation kind."},
 					"confidence":    map[string]any{"type": "number", "description": "Confidence score (0.0–1.0) for how reliable the witnessing system/integration is. Omit for unweighted kinds."},
 					"attributes":    map[string]any{"type": "object", "description": "Arbitrary edge-level metadata."},
@@ -104,7 +104,7 @@ func relationToolDefs() []mcpTool {
 				"type": "object",
 				"properties": map[string]any{
 					"type_name": map[string]any{"type": "string", "description": "Content type of the item to query."},
-					"id":        map[string]any{"type": "string", "description": "ID of the item to query."},
+					"id":        map[string]any{"type": "string", "description": "The item to query: its address, slug or ID."},
 					"direction": map[string]any{
 						"type":        "string",
 						"enum":        []string{"source", "target", "both"},
@@ -130,7 +130,7 @@ func relationToolDefs() []mcpTool {
 				"type": "object",
 				"properties": map[string]any{
 					"target_type": map[string]any{"type": "string", "description": "Content type of the item being evaluated."},
-					"target_id":   map[string]any{"type": "string", "description": "ID of the item being evaluated."},
+					"target_id":   map[string]any{"type": "string", "description": "The item being evaluated: its address, slug or ID."},
 				},
 				"required": []string{"target_type", "target_id"},
 			},
@@ -181,6 +181,24 @@ func isAdminRelationTool(name string) bool { return name == "upsert_relation_kin
 // isEditorRelationTool reports whether name requires Editor role.
 func isEditorRelationTool(name string) bool { return name == "preview_impact" }
 
+// resolveRelationEnd turns the ident of an item a relation tool names (an
+// address, a slug or an ID) into the item's ID, the way every other tool
+// does (T875). A name that resolves to nothing the caller may read is an
+// error (not found), never an empty answer. A type the App does not register
+// (an open end, such as an in_set member of a type core does not know) has no
+// address to resolve: its ident is used as given.
+func (s *Server) resolveRelationEnd(ctx smeldr.Context, typeName, ident string) (string, *jsonRPCError) {
+	reg := s.app.TypeRegistry()
+	if reg == nil || reg.Lookup(typeName) == nil {
+		return ident, nil
+	}
+	id, err := s.app.ResolveReadableID(ctx, typeName, ident)
+	if err != nil {
+		return "", errorFor(err)
+	}
+	return id, nil
+}
+
 // relationEndsReadable is the read check on a relation write's two ends
 // (binding C of the per-item read rules): for a caller who cannot read
 // everything, an end it may not read answers not found before the write. A
@@ -225,6 +243,13 @@ func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[st
 		}
 		confidence := floatPtrArg(args, "confidence")
 		attrs := objectArgJSON(args, "attributes")
+		var rpcErr *jsonRPCError
+		if sourceID, rpcErr = s.resolveRelationEnd(ctx, sourceType, sourceID); rpcErr != nil {
+			return nil, rpcErr
+		}
+		if targetID, rpcErr = s.resolveRelationEnd(ctx, targetType, targetID); rpcErr != nil {
+			return nil, rpcErr
+		}
 		if rpcErr := relationEndsReadable(ctx, sourceType, sourceID, targetType, targetID); rpcErr != nil {
 			return nil, rpcErr
 		}
@@ -274,6 +299,13 @@ func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[st
 		}
 		confidence := floatPtrArg(args, "confidence")
 		attrs := objectArgJSON(args, "attributes")
+		var rpcErr *jsonRPCError
+		if sourceID, rpcErr = s.resolveRelationEnd(ctx, sourceType, sourceID); rpcErr != nil {
+			return nil, rpcErr
+		}
+		if targetID, rpcErr = s.resolveRelationEnd(ctx, targetType, targetID); rpcErr != nil {
+			return nil, rpcErr
+		}
 		if rpcErr := relationEndsReadable(ctx, sourceType, sourceID, targetType, targetID); rpcErr != nil {
 			return nil, rpcErr
 		}
@@ -309,6 +341,13 @@ func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[st
 		}
 		confidence := floatPtrArg(args, "confidence")
 		attrs := objectArgJSON(args, "attributes")
+		var rpcErr *jsonRPCError
+		if sourceID, rpcErr = s.resolveRelationEnd(ctx, sourceType, sourceID); rpcErr != nil {
+			return nil, rpcErr
+		}
+		if targetID, rpcErr = s.resolveRelationEnd(ctx, targetType, targetID); rpcErr != nil {
+			return nil, rpcErr
+		}
 		if rpcErr := relationEndsReadable(ctx, sourceType, sourceID, targetType, targetID); rpcErr != nil {
 			return nil, rpcErr
 		}
@@ -336,6 +375,10 @@ func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[st
 		}
 		kindFilter := stringArgOr(args, "kind", "")
 		edgeClass := stringArgOr(args, "edge_class", "")
+		id, rpcErr := s.resolveRelationEnd(ctx, typeName, id)
+		if rpcErr != nil {
+			return nil, rpcErr
+		}
 		edges, err := s.relationStore.MCPGetRelations(ctx, typeName, id, direction, kindFilter)
 		if errors.Is(err, smeldr.ErrInternal) || errors.Is(err, smeldr.ErrNotFound) {
 			return nil, errorFor(err)
@@ -366,6 +409,10 @@ func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[st
 		targetID, ok := stringArg(args, "target_id")
 		if !ok {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: target_id required"}
+		}
+		targetID, rpcErr := s.resolveRelationEnd(ctx, targetType, targetID)
+		if rpcErr != nil {
+			return nil, rpcErr
 		}
 		edges, err := s.relationStore.MCPPreviewImpact(ctx, targetType, targetID)
 		if err != nil {

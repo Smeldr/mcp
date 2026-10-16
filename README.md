@@ -350,7 +350,7 @@ available — no additional server option is required.
 | `withdraw_relation` | Author+ | End a live asserted edge on purpose, with a reason. The row stays, ended with cause `withdrawn`; there is no delete tool. |
 | `propose_relation` | Author+ | Propose an inferred edge for human or agent review (`edge_class=inferred`). Promote it via `assert_relation`. |
 | `observe_relation` | Author+ | Record an edge a system directly witnessed (`edge_class=observed`), such as a webhook-reported fact. Each call inserts a new record. |
-| `get_relations` | Author+ | Query edges by source, target, or both. Optional `kind` and `edge_class` filters. |
+| `get_relations` | Author+ | Query edges by source, target, or both. Optional `kind` and `edge_class` filters. Like every relation tool, it names an item by address, slug or ID; one that resolves to nothing is not found. |
 | `list_relations` | Author+ | Every relation on the instance, paged and cut at `as_of`, for a whole-graph snapshot. Optional `kind`, `source_type`, `target_type`, `include_ended`, `limit`, `offset`. |
 | `preview_impact` | Editor+ | Return all source-side dependents of a target item without firing any signals. Use before archiving or deleting an item. |
 | `upsert_relation_kind` | Admin | Register or update a relation kind (idempotent on `type_name`). |

@@ -147,6 +147,10 @@ func TestReadRules_HiddenEqualsMissing(t *testing.T) {
 		{"get_valid_transitions", map[string]any{"type_name": "Task", "slug": hiddenSlug}, map[string]any{"type_name": "Task", "slug": "no-such-task"}},
 		{"get_item_standing", map[string]any{"type_name": "Task", "slug": hiddenSlug}, map[string]any{"type_name": "Task", "slug": "no-such-task"}},
 		{"transition_item", map[string]any{"type_name": "Task", "slug": hiddenSlug, "to_state": "active"}, map[string]any{"type_name": "Task", "slug": "no-such-task", "to_state": "active"}},
+		// The graph reads resolve their item first (T875): a hidden one is
+		// not found, like a missing one, not an empty answer.
+		{"get_relations", map[string]any{"type_name": "Task", "id": hiddenID, "direction": "both"}, map[string]any{"type_name": "Task", "id": "no-such-task", "direction": "both"}},
+		{"get_reachability", map[string]any{"type_name": "Task", "id": hiddenID}, map[string]any{"type_name": "Task", "id": "no-such-task"}},
 	}
 	for _, c := range cases {
 		f.db.reset()
@@ -158,11 +162,6 @@ func TestReadRules_HiddenEqualsMissing(t *testing.T) {
 		if strings.Join(hs, "\n") != strings.Join(ms, "\n") {
 			t.Errorf("%s: hidden ran\n  %s\nmissing ran\n  %s", c.tool, strings.Join(hs, "\n  "), strings.Join(ms, "\n  "))
 		}
-	}
-	// The graph reads leave a hidden item out: no edges, empty rings.
-	res, rpcErr := callTool(t, f.srv, f.reader, "get_relations", map[string]any{"type_name": "Task", "id": hiddenID, "direction": "both"})
-	if rpcErr != nil || len(unwrapToolResult(t, res)["edges"].([]any)) != 0 {
-		t.Errorf("get_relations of a hidden Task = %v %v; want no edges", res, rpcErr)
 	}
 	// A reader of everything sees the Task.
 	if _, rpcErr := callTool(t, f.srv, f.admin, "get_task", map[string]any{"slug": hiddenSlug}); rpcErr != nil {
