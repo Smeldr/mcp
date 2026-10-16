@@ -9,6 +9,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.63.1] - 2026-10-16
+
 ### Changed
 
 - **`create_signal` refuses a subject or `task_ref` that names no record you can read, with guidance (A522, D113).** Core now checks both under your read scope (a missing and a hidden record answer alike), stores the subject as its ID and `task_ref` as the Task's address, and relates them with `about` edges. A refusal is invalid params (-32602) whose message says how to name the record, for example `send a Task's address (T273), slug or ID in task_ref, and name any other record in subject_type and subject_id`. Before, an unresolvable subject was kept as given and a store refusal was reported as an internal error. mcp no longer resolves the subject itself.
