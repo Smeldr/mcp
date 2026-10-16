@@ -9,6 +9,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.62.0] - 2026-10-16
+
 ### Added
 
 - **`new_slug` gives an unpublished web-content item another slug (A511).** `update_<type>` for compiled web content (every type that has no address) and `update_content` for runtime-defined types accept `new_slug`. `slug` and `id` keep naming the item, so an argument never means two things. A draft reserves no URL since core v1.154.0, so publishing checks the slug and, when another item has published it, answers with a free one such as `/posts/about-2`. `new_slug` is how to take it. A published item keeps its URL, an invalid slug is refused, and a record type has no `new_slug`. `update_content` now needs `fields`, `new_slug` or both.
