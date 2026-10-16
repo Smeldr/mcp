@@ -2030,17 +2030,23 @@ func TestPreviewURL_SingleInstance(t *testing.T) {
 		smeldr.SingleInstance(),
 	))
 	// Normal module at /posts for the unchanged-path assertion.
+	postRepo := smeldr.NewMemoryRepo[*testMCPPost]()
 	app.Content(smeldr.NewModule(
 		(*testMCPPost)(nil),
 		smeldr.At("/posts"),
-		smeldr.Repo(smeldr.NewMemoryRepo[*testMCPPost]()),
+		smeldr.Repo(postRepo),
 		smeldr.MCP(smeldr.MCPRead, smeldr.MCPWrite),
 	))
+	// create_preview_url resolves the item (mcp v1.62.0), so both exist.
+	if err := repo.Save(context.Background(), &testSinglePage{Node: smeldr.Node{ID: smeldr.NewID(), Slug: "homepage", Status: smeldr.Draft}}); err != nil {
+		t.Fatal(err)
+	}
+	seedPost(t, postRepo, "my-draft", smeldr.Draft, "My Draft", "draft body content here")
 
 	srv := New(app)
 
 	t.Run("single_instance_no_slug_in_path", func(t *testing.T) {
-		result, rpcErr := srv.handlePreviewTool(app, "create_preview_url", map[string]any{
+		result, rpcErr := srv.handlePreviewTool(smeldr.NewTestContext(smeldr.User{ID: "admin", Roles: []smeldr.Role{smeldr.Admin}}), app, "create_preview_url", map[string]any{
 			"prefix": "/homepage",
 			"slug":   "homepage",
 		})
@@ -2062,7 +2068,7 @@ func TestPreviewURL_SingleInstance(t *testing.T) {
 	})
 
 	t.Run("normal_module_keeps_slug_in_path", func(t *testing.T) {
-		result, rpcErr := srv.handlePreviewTool(app, "create_preview_url", map[string]any{
+		result, rpcErr := srv.handlePreviewTool(smeldr.NewTestContext(smeldr.User{ID: "admin", Roles: []smeldr.Role{smeldr.Admin}}), app, "create_preview_url", map[string]any{
 			"prefix": "/posts",
 			"slug":   "my-draft",
 		})

@@ -462,7 +462,7 @@ func TestPreviewTool_UnknownName(t *testing.T) {
 		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
 	})
 	srv := New(app)
-	_, rpcErr := srv.handlePreviewTool(app, "unknown_preview_tool", map[string]any{})
+	_, rpcErr := srv.handlePreviewTool(smeldr.NewTestContext(smeldr.User{ID: "admin", Roles: []smeldr.Role{smeldr.Admin}}), app, "unknown_preview_tool", map[string]any{})
 	if rpcErr == nil || rpcErr.Code != -32601 {
 		t.Errorf("unknown preview tool: expected -32601, got %v", rpcErr)
 	}
@@ -475,7 +475,7 @@ func TestPreviewTool_MissingPrefix(t *testing.T) {
 		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
 	})
 	srv := New(app)
-	_, rpcErr := srv.handlePreviewTool(app, "create_preview_url", map[string]any{
+	_, rpcErr := srv.handlePreviewTool(smeldr.NewTestContext(smeldr.User{ID: "admin", Roles: []smeldr.Role{smeldr.Admin}}), app, "create_preview_url", map[string]any{
 		"slug": "my-post",
 	})
 	if rpcErr == nil || rpcErr.Code != -32602 {
@@ -490,7 +490,7 @@ func TestPreviewTool_MissingSlug(t *testing.T) {
 		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
 	})
 	srv := New(app)
-	_, rpcErr := srv.handlePreviewTool(app, "create_preview_url", map[string]any{
+	_, rpcErr := srv.handlePreviewTool(smeldr.NewTestContext(smeldr.User{ID: "admin", Roles: []smeldr.Role{smeldr.Admin}}), app, "create_preview_url", map[string]any{
 		"prefix": "/posts",
 	})
 	if rpcErr == nil || rpcErr.Code != -32602 {
@@ -505,7 +505,7 @@ func TestPreviewTool_PrefixNoLeadingSlash(t *testing.T) {
 		Secret:  []byte("test-secret-32-bytes-xxxxxxxxxxxx"),
 	})
 	srv := New(app)
-	_, rpcErr := srv.handlePreviewTool(app, "create_preview_url", map[string]any{
+	_, rpcErr := srv.handlePreviewTool(smeldr.NewTestContext(smeldr.User{ID: "admin", Roles: []smeldr.Role{smeldr.Admin}}), app, "create_preview_url", map[string]any{
 		"prefix": "posts",
 		"slug":   "my-post",
 	})

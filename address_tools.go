@@ -14,10 +14,12 @@ const createAddressNote = "The address (for example D110) is assigned by the ser
 	"Do not send one. To record your own numbering, use external_ref."
 
 // addressedCompiledTypes are the compiled types whose items get an address:
-// core's six orchestration types (RegisterOrchestrationTypes). Every other
+// core's six orchestration types (RegisterOrchestrationTypes) and, since core
+// v1.156.0, its two authority types (RegisterAuthorityTypes). Every other
 // compiled module is web content and has none.
 var addressedCompiledTypes = map[string]bool{
 	"Decision": true, "Amendment": true, "Task": true, "Goal": true, "Signal": true, "Run": true,
+	"Rule": true, "AuthorityStub": true,
 }
 
 // createDescription is the description of a generated create_{type} tool,

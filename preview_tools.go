@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 
 	"smeldr.dev/core"
@@ -22,7 +23,7 @@ func previewToolDefs() []mcpTool {
 					},
 					"slug": map[string]any{
 						"type":        "string",
-						"description": "Slug of the content item to preview, e.g. \"my-draft-post\".",
+						"description": "The content item to preview: " + identifierDescription + " When drafts share a slug, give the ID.",
 					},
 				},
 				"required": []string{"prefix", "slug"},
@@ -34,38 +35,19 @@ func previewToolDefs() []mcpTool {
 // isPreviewTool reports whether name is the preview URL tool.
 func isPreviewTool(name string) bool { return name == "create_preview_url" }
 
-// previewReadable is create_preview_url's read check: a preview opens a draft
-// over HTTP, so for a caller who cannot read everything the item must be one
-// it may read, resolved through its module under the call's read scope. An
-// item it may not read, a missing one, and a prefix with no compiled module
-// (a dynamic type's) answer not found alike. A reader of everything, and an
-// App without governance, are unchanged.
-func (s *Server) previewReadable(ctx smeldr.Context, args map[string]any) *jsonRPCError {
-	scope, ok := smeldr.ReadScopeFrom(ctx)
-	if !ok || scope.All() {
-		return nil
-	}
-	prefix, _ := args["prefix"].(string)
-	slug, _ := args["slug"].(string)
-	prefix, slug = strings.TrimSpace(prefix), strings.TrimSpace(slug)
-	if prefix == "" || slug == "" {
-		return nil // the handler answers the missing argument
-	}
-	for _, m := range s.modules {
-		if m.MCPMeta().Prefix == prefix {
-			if _, err := m.MCPGet(ctx, slug); err != nil {
-				return errorFor(err)
-			}
-			return nil
-		}
-	}
-	return errorFor(smeldr.ErrNotFound)
-}
-
 // handlePreviewTool executes the create_preview_url tool.
-// Requires Admin role (verified by the caller in tool.go before dispatch).
-// app is the smeldr.App passed to [New]; it carries BaseURL and GeneratePreviewToken.
-func (s *Server) handlePreviewTool(app *smeldr.App, name string, args map[string]any) (any, *jsonRPCError) {
+// Requires Editor role (verified by the caller in tool.go before dispatch).
+// app is the smeldr.App passed to [New]; it carries BaseURL and the preview
+// token functions.
+//
+// For a prefix with a compiled module the item is resolved under the call's
+// read scope (an item the caller may not read answers not found, as a missing
+// one; a slug that names more than one readable item asks for its ID), and the
+// token binds that item's ID (smeldr.App.GeneratePreviewTokenForID), so it
+// opens exactly that draft even when other drafts share its slug. The URL uses
+// the item's own slug. A prefix with no compiled module keeps a slug-only
+// token, and is not found for a scoped caller.
+func (s *Server) handlePreviewTool(ctx smeldr.Context, app *smeldr.App, name string, args map[string]any) (any, *jsonRPCError) {
 	if name != "create_preview_url" {
 		return nil, &jsonRPCError{Code: -32601, Message: "unknown preview tool: " + name}
 	}
@@ -86,17 +68,31 @@ func (s *Server) handlePreviewTool(app *smeldr.App, name string, args map[string
 		return nil, &jsonRPCError{Code: -32602, Message: "prefix must begin with /"}
 	}
 
-	token := app.GeneratePreviewToken(prefix, slug)
-
-	// For SingleInstance modules, the slug route does not exist — the item is
-	// served directly at /{prefix}. Build the URL without the slug segment.
-	isSingleInstance := false
+	var module smeldr.MCPModule
 	for _, m := range s.modules {
 		if m.MCPMeta().Prefix == prefix {
-			isSingleInstance = m.MCPMeta().SingleInstance
+			module = m
 			break
 		}
 	}
+	var token string
+	if module != nil {
+		item, err := module.MCPGet(ctx, slug)
+		if err != nil {
+			return nil, errorFor(err)
+		}
+		slug = slugOf(item)
+		token = app.GeneratePreviewTokenForID(prefix, slug, idOf(item))
+	} else {
+		if scope, ok := smeldr.ReadScopeFrom(ctx); ok && !scope.All() {
+			return nil, errorFor(smeldr.ErrNotFound)
+		}
+		token = app.GeneratePreviewToken(prefix, slug)
+	}
+
+	// For SingleInstance modules, the slug route does not exist — the item is
+	// served directly at /{prefix}. Build the URL without the slug segment.
+	isSingleInstance := module != nil && module.MCPMeta().SingleInstance
 
 	var previewURL string
 	if isSingleInstance {
@@ -106,4 +102,23 @@ func (s *Server) handlePreviewTool(app *smeldr.App, name string, args map[string
 	}
 
 	return toolResult(previewURL), nil
+}
+
+// idOf is the ID field of a content item (a struct embedding smeldr.Node), or
+// "" when it has none.
+func idOf(item any) string {
+	v := reflect.ValueOf(item)
+	for v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface {
+		if v.IsNil() {
+			return ""
+		}
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return ""
+	}
+	if f := v.FieldByName("ID"); f.IsValid() && f.Kind() == reflect.String {
+		return f.String()
+	}
+	return ""
 }

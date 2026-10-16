@@ -709,10 +709,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if rpcErr := s.previewReadable(ctx, coalesceArgs(p.Arguments)); rpcErr != nil {
-			return nil, rpcErr
-		}
-		return s.handlePreviewTool(s.app, p.Name, coalesceArgs(p.Arguments))
+		return s.handlePreviewTool(ctx, s.app, p.Name, coalesceArgs(p.Arguments))
 	}
 
 	// Upload token tool requires Author role and is dispatched before
@@ -1142,7 +1139,13 @@ func stringArg(args map[string]any, key string) (string, bool) {
 func updateFieldsOf(args map[string]any) map[string]any {
 	fields := make(map[string]any, len(args))
 	for k, v := range args {
-		if k == "id" || k == "slug" {
+		switch k {
+		case "id", "slug":
+			continue
+		case "new_slug":
+			// The item's new slug: core accepts it on unpublished web content
+			// and refuses it otherwise.
+			fields["slug"] = v
 			continue
 		}
 		fields[k] = v

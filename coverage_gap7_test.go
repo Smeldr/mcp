@@ -126,7 +126,8 @@ func TestHandleToolsCall_PreviewTool_AuthorDenied(t *testing.T) {
 // TestHandleToolsCall_PreviewTool_EditorSuccess verifies that an Editor can call
 // create_preview_url through handleToolsCall, covering line 219 of tool.go.
 func TestHandleToolsCall_PreviewTool_EditorSuccess(t *testing.T) {
-	app, _ := newWriteApp(t)
+	app, repo := newWriteApp(t)
+	seedPost(t, repo, "my-draft-post", smeldr.Draft, "My Draft Post", "draft body content here")
 	srv := New(app)
 	_, rpcErr := callTool(t, srv, newEditorCtx(), "create_preview_url", map[string]any{
 		"prefix": "/posts",

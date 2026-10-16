@@ -411,8 +411,8 @@ func mcpToolDefs(m smeldr.MCPModule) []mcpTool {
 		},
 		{
 			Name:        "update_" + typeSnake,
-			Description: "Partially update a " + meta.TypeName + " by id or slug. The status, slug and id are not changed by an update: a differing value is refused. Change the status with transition_item or the publish, schedule and archive tools. Name the item with slug (an ID or a slug); id is accepted as an alias, and two different values are refused.",
-			InputSchema: inputSchemaUpdate(schema),
+			Description: updateDescription(meta.TypeName),
+			InputSchema: updateSchemaFor(meta.TypeName, schema),
 		},
 		{
 			Name:        "publish_" + typeSnake,
@@ -533,6 +533,29 @@ func inputSchema(fields []smeldr.MCPField) map[string]any {
 		schema["required"] = required
 	}
 	return schema
+}
+
+// newSlugDescription is the description of new_slug, the argument that gives
+// an unpublished web-content item another slug (core v1.154.0, A507).
+const newSlugDescription = "The item's new slug, while it is not published: a draft reserves no URL, so publishing checks the slug and, when another item has published it, names a free one. Lowercase letters, digits and hyphens."
+
+// updateDescription is the description of a generated update_{type} tool.
+func updateDescription(typeName string) string {
+	d := "Partially update a " + typeName + " by id or slug. The status, slug and id are not changed by an update: a differing value is refused. Change the status with transition_item or the publish, schedule and archive tools. Name the item with slug (an ID or a slug); id is accepted as an alias, and two different values are refused."
+	if !addressedCompiledTypes[typeName] {
+		d += " While the item is not published, new_slug gives it another slug."
+	}
+	return d
+}
+
+// updateSchemaFor is [inputSchemaUpdate] for typeName, with new_slug for web
+// content (a record's slug is system-derived, so its schema has none).
+func updateSchemaFor(typeName string, fields []smeldr.MCPField) map[string]any {
+	s := inputSchemaUpdate(fields)
+	if !addressedCompiledTypes[typeName] {
+		s["properties"].(map[string]any)["new_slug"] = map[string]any{"type": "string", "description": newSlugDescription}
+	}
+	return s
 }
 
 // inputSchemaUpdate builds an update tool schema: adds a required "slug" field

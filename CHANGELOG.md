@@ -9,6 +9,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`new_slug` gives an unpublished web-content item another slug (A511).** `update_<type>` for compiled web content (every type that has no address) and `update_content` for runtime-defined types accept `new_slug`. `slug` and `id` keep naming the item, so an argument never means two things. A draft reserves no URL since core v1.154.0, so publishing checks the slug and, when another item has published it, answers with a free one such as `/posts/about-2`. `new_slug` is how to take it. A published item keeps its URL, an invalid slug is refused, and a record type has no `new_slug`. `update_content` now needs `fields`, `new_slug` or both.
+
+### Changed
+
+- **`create_preview_url` binds the preview to the item's ID (A511).** For a prefix with a compiled module the item is resolved under the caller's read scope and the token is made with core's `GeneratePreviewTokenForID`, so it opens exactly that draft even when other drafts share its slug. The URL uses the item's own slug. `slug` may be an ID, a slug or an address. When drafts share a slug, give the ID. Behaviour change: a missing or hidden item now answers not found for every caller, where a reader of everything used to get a URL that answered 404. A prefix with no compiled module keeps a slug-only token.
+- **`Rule` and `AuthorityStub` are listed as addressed types (A511).** Their create tool descriptions name the D110 address (core v1.156.0 gives them `U` and `B`), and their update tools offer no `new_slug`.
+- Requires smeldr.dev/core v1.156.0.
+
 ## [1.61.4] - 2026-10-16
 
 ### Changed

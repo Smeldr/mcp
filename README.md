@@ -178,6 +178,7 @@ Under governance every tool and resource call applies the caller's per-item read
 - **Read floors on the type.** A read tool that names a type passes when the caller may read at least one item of it, and core then filters per item. So a `scoped-reader` or `domain-reader` grant works over MCP.
 - **Hidden equals missing.** An item the caller may not read answers -32000 "not found", exactly as a missing one, with no name in the message. Lists, totals, edges and rings count readable items only.
 - **Writes check what they name.** Relation writes, `delegate_item`, `create_preview_url` and `create_signal`'s subject are resolved under the caller's scope.
+- **A draft's slug (v1.62.0).** `update_<type>` (web content) and `update_content` accept `new_slug` while the item is not published, so a publisher can take the free slug a publish conflict names. `create_preview_url` binds the preview to the item's ID, so it opens exactly that draft even when drafts share a slug.
 
 Without governance nothing changes. See core's REFERENCE ("Per-item read rules") for the full rules.
 

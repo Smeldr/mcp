@@ -125,15 +125,16 @@ func dynamicContentToolDefs() []mcpTool {
 		},
 		{
 			Name:        "update_content",
-			Description: "Patch the fields of an existing content item, named by its ID, slug or address. Absent keys are preserved (partial update). Requires Editor role.",
+			Description: "Patch the fields of an existing content item, named by its ID, slug or address. Absent keys are preserved (partial update). While a web-content item is not published, new_slug gives it another slug. Give fields, new_slug or both. Requires Editor role.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"type_name": map[string]any{"type": "string"},
 					"id":        map[string]any{"type": "string", "description": "The item: " + identifierDescription},
 					"fields":    fieldsSchema,
+					"new_slug":  map[string]any{"type": "string", "description": newSlugDescription},
 				},
-				"required": []string{"type_name", "id", "fields"},
+				"required": []string{"type_name", "id"},
 			},
 		},
 		{
@@ -311,9 +312,17 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if !ok {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: id required"}
 		}
-		patch, rpcErr := argsToFieldMap(args["fields"])
-		if rpcErr != nil {
-			return nil, rpcErr
+		newSlug, hasNewSlug := stringArg(args, "new_slug")
+		_, hasFields := args["fields"]
+		if !hasFields && !hasNewSlug {
+			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: fields or new_slug required"}
+		}
+		var patch map[string]any
+		var rpcErr *jsonRPCError
+		if hasFields {
+			if patch, rpcErr = argsToFieldMap(args["fields"]); rpcErr != nil {
+				return nil, rpcErr
+			}
 		}
 		repo, err := s.app.DynamicContentRepo(typeName)
 		if err != nil {
@@ -322,8 +331,15 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if id, rpcErr = resolveDynamicID(ctx, repo, id); rpcErr != nil {
 			return nil, rpcErr
 		}
-		if err := repo.UpdateFieldsVia(ctx, "mcp", id, patch); err != nil {
-			return nil, errorFor(err)
+		if hasNewSlug {
+			if err := repo.SetSlugVia(ctx, "mcp", id, newSlug); err != nil {
+				return nil, errorFor(err)
+			}
+		}
+		if len(patch) > 0 {
+			if err := repo.UpdateFieldsVia(ctx, "mcp", id, patch); err != nil {
+				return nil, errorFor(err)
+			}
 		}
 		node, err := repo.GetByID(ctx, id)
 		if err != nil {

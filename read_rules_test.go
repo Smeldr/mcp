@@ -391,17 +391,19 @@ func TestReadRules_WritesOnHiddenEnds(t *testing.T) {
 		t.Fatal(err)
 	}
 	scoped := smeldr.WithReadScope(f.reader, scope).(smeldr.Context)
-	sameNotFound(t, "create_preview_url",
-		f.srv.previewReadable(scoped, map[string]any{"prefix": "/tasks", "slug": f.hidden["Slug"]}),
-		f.srv.previewReadable(scoped, map[string]any{"prefix": "/tasks", "slug": "no-such-task"}))
-	if rpcErr := f.srv.previewReadable(scoped, map[string]any{"prefix": "/tasks", "slug": f.seen["Slug"]}); rpcErr != nil {
+	preview := func(ctx smeldr.Context, prefix, slug any) *jsonRPCError {
+		_, rpcErr := f.srv.handlePreviewTool(ctx, f.srv.app, "create_preview_url", map[string]any{"prefix": prefix, "slug": slug})
+		return rpcErr
+	}
+	sameNotFound(t, "create_preview_url", preview(scoped, "/tasks", f.hidden["Slug"]), preview(scoped, "/tasks", "no-such-task"))
+	if rpcErr := preview(scoped, "/tasks", f.seen["Slug"]); rpcErr != nil {
 		t.Errorf("preview of a readable Task: %v", rpcErr.Message)
 	}
-	if rpcErr := f.srv.previewReadable(scoped, map[string]any{"prefix": "/no-module", "slug": "x"}); rpcErr == nil || rpcErr.Code != -32000 {
+	if rpcErr := preview(scoped, "/no-module", "x"); rpcErr == nil || rpcErr.Code != -32000 {
 		t.Errorf("preview for a prefix with no module = %+v; want not found", rpcErr)
 	}
-	if rpcErr := f.srv.previewReadable(f.admin, map[string]any{"prefix": "/no-module", "slug": "x"}); rpcErr != nil {
-		t.Errorf("preview check with no scope attached: %v", rpcErr.Message)
+	if rpcErr := preview(f.admin, "/no-module", "x"); rpcErr != nil {
+		t.Errorf("preview with no scope attached: %v", rpcErr.Message)
 	}
 }
 
