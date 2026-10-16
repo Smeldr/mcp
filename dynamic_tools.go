@@ -194,12 +194,16 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if err != nil {
 			return nil, &jsonRPCError{Code: -32602, Message: err.Error()}
 		}
-		return toolResult(map[string]any{
+		result := map[string]any{
 			"type_name":      desc.Name,
 			"prefix":         desc.Prefix,
 			"kind":           desc.Kind,
 			"address_prefix": desc.Schema.AddressPrefix,
-		}), nil
+		}
+		if ws := smeldr.TitleFieldWarnings(desc.Schema); len(ws) > 0 {
+			result["warnings"] = ws
+		}
+		return toolResult(result), nil
 
 	case "redefine_content_type":
 		typeName, ok := stringArg(args, "type_name")
@@ -228,13 +232,17 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		return toolResult(map[string]any{
+		result := map[string]any{
 			"type_name":      desc.Name,
 			"label":          desc.Schema.Label,
 			"prefix":         desc.Prefix,
 			"fields":         json.RawMessage(desc.Schema.Fields),
 			"address_prefix": desc.Schema.AddressPrefix,
-		}), nil
+		}
+		if ws := smeldr.TitleFieldWarnings(desc.Schema); len(ws) > 0 {
+			result["warnings"] = ws
+		}
+		return toolResult(result), nil
 
 	case "create_content":
 		typeName, ok := stringArg(args, "type_name")
@@ -249,11 +257,11 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if err != nil {
 			return nil, &jsonRPCError{Code: -32602, Message: err.Error()}
 		}
-		node, err := repo.CreateDraftVia(ctx, "mcp", fields)
+		node, warnings, err := repo.CreateDraftWithWarnings(ctx, "mcp", fields)
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		return toolResult(node), nil
+		return toolResult(withWarnings(node, warnings)), nil
 
 	case "get_content":
 		typeName, ok := stringArg(args, "type_name")
@@ -336,8 +344,11 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 				return nil, errorFor(err)
 			}
 		}
+		// The fields a call saves may raise title or length warnings (D112,
+		// D114); a new_slug-only call saves none, so it has none.
+		var warnings []smeldr.CreateWarning
 		if len(patch) > 0 {
-			if err := repo.UpdateFieldsVia(ctx, "mcp", id, patch); err != nil {
+			if warnings, err = repo.UpdateFieldsWithWarnings(ctx, "mcp", id, patch); err != nil {
 				return nil, errorFor(err)
 			}
 		}
@@ -345,7 +356,7 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		return toolResult(node), nil
+		return toolResult(withWarnings(node, warnings)), nil
 
 	case "set_content_status":
 		typeName, ok := stringArg(args, "type_name")
@@ -451,4 +462,19 @@ func intArg(args map[string]any, key string) int {
 func boolArg(args map[string]any, key string) bool {
 	v, _ := args[key].(bool)
 	return v
+}
+
+// withWarnings returns node as the D110 create-result shape when the write
+// returned warnings (D112, D114): the node's JSON object with a "warnings"
+// array added; otherwise node unchanged.
+func withWarnings(node *smeldr.DynamicNode, warnings []smeldr.CreateWarning) any {
+	if len(warnings) == 0 {
+		return node
+	}
+	out := map[string]any{}
+	if b, err := json.Marshal(node); err == nil {
+		_ = json.Unmarshal(b, &out)
+	}
+	out["warnings"] = warnings
+	return out
 }
