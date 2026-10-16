@@ -9,6 +9,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.63.0] - 2026-10-16
+
 ### Changed
 
 - **`create_content` and `update_content` return warnings, and the type tools flag a missing title field (A513).** `create_content` and `update_content` return the node with a `warnings` array when the write returned warnings (`title_missing`, `title_too_long`, `field_too_long`), the same D110 shape as the typed create tools, and the node as before otherwise. `define_content_type` and `redefine_content_type` add a `warnings` array with `title_field_missing` for a record type without a title field. After the instance's title cutover core refuses those writes (-32602).
