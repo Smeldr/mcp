@@ -241,6 +241,16 @@ func (s *Server) handleResourcesSubscribe(ctx smeldr.Context, params json.RawMes
 	if s.subscriptions != nil {
 		if r := ctx.Request(); r != nil {
 			if sid := r.URL.Query().Get("session_id"); sid != "" {
+				// The session belongs to the token that first subscribes it;
+				// another user may not subscribe it.
+				u := ctx.User()
+				if u.ID == "" {
+					return nil, &jsonRPCError{Code: -32001, Message: "forbidden: subscribing a session needs a token identity"}
+				}
+				owner := sessionOwner{userID: u.ID, roles: u.Roles, fingerprint: tokenFingerprint(extractBearerToken(r))}
+				if !s.subscriptions.Bind(sid, owner) {
+					return nil, &jsonRPCError{Code: -32001, Message: "forbidden: this session belongs to another token"}
+				}
 				s.subscriptions.Register(sid, p.URI)
 			}
 		}
@@ -266,6 +276,9 @@ func (s *Server) handleResourcesUnsubscribe(ctx smeldr.Context, params json.RawM
 	if s.subscriptions != nil {
 		if r := ctx.Request(); r != nil {
 			if sid := r.URL.Query().Get("session_id"); sid != "" {
+				if !s.subscriptions.OwnedBy(sid, ctx.User().ID) {
+					return nil, &jsonRPCError{Code: -32001, Message: "forbidden: this session belongs to another token"}
+				}
 				s.subscriptions.Unsubscribe(sid, p.URI)
 			}
 		}

@@ -32,6 +32,8 @@ func TestTransitionItem_NotifiesResourceSubscribers(t *testing.T) {
 
 	var mu sync.Mutex
 	got := 0
+	// The session belongs to the admin, who can read the Signal (governance).
+	srv.subscriptions.Bind("conn-1", sessionOwner{userID: admin.User().ID, roles: admin.User().Roles})
 	srv.subscriptions.Register("conn-1", uri)
 	srv.subscriptions.RegisterSend("conn-1", func(u string) {
 		if u == uri {

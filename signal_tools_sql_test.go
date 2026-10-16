@@ -89,9 +89,11 @@ func TestListSignals_PlaceholdersAreNumbered(t *testing.T) {
 		whereArgs []any
 		limitNo   int
 	}{
-		{"receiver", map[string]any{"receiver": "core"}, " WHERE status = $1 AND receiver = $2", []any{"pending", "core"}, 3},
-		{"sender", map[string]any{"sender": "architect"}, " WHERE status = $1 AND sender = $2", []any{"pending", "architect"}, 3},
-		{"both", map[string]any{"receiver": "core", "sender": "architect"}, " WHERE status = $1 AND receiver = $2 AND sender = $3", []any{"pending", "core", "architect"}, 4},
+		// No state: what awaits action, open and pending (D115).
+		{"receiver", map[string]any{"receiver": "core"}, " WHERE status IN ('open', 'pending') AND receiver = $1", []any{"core"}, 2},
+		{"sender", map[string]any{"sender": "architect"}, " WHERE status IN ('open', 'pending') AND sender = $1", []any{"architect"}, 2},
+		{"both", map[string]any{"receiver": "core", "sender": "architect"}, " WHERE status IN ('open', 'pending') AND receiver = $1 AND sender = $2", []any{"core", "architect"}, 3},
+		{"pending", map[string]any{"receiver": "core", "state": "pending"}, " WHERE status = $1 AND receiver = $2", []any{"pending", "core"}, 3},
 		{"state", map[string]any{"receiver": "core", "state": "read"}, " WHERE status = $1 AND receiver = $2", []any{"read", "core"}, 3},
 	}
 	for _, tt := range tests {

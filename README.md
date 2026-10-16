@@ -313,6 +313,32 @@ both tools are already available.
 
 ---
 
+## Subscriptions and requests (v1.64.0)
+
+When the instance keeps subscriptions (core v1.162.0, `app.Subscriptions()`, which creates `smeldr_subscriptions`), five subscription tools are listed. They are thin layers over core, which applies the owner rule: a subscription that is not yours is not found, unless you hold `administer`.
+
+| Tool | Role | What it does |
+|------|------|--------------|
+| `list_subscriptions` | Author+ | Your subscriptions, the three defaults included; `owner` lists another token's (administer). |
+| `get_subscription` | Author+ | One subscription by address (`N<n>`), slug or ID. |
+| `create_subscription` | Author+ | `name`, `filter` (core's `SubscriptionFilter`, decoded strictly: an unknown key is refused), `include_own`, `paused`, `owner`, `delivery`. |
+| `update_subscription` | Author+ | Change the name, filter or `include_own`, or pause and resume with `paused`. |
+| `delete_subscription` | Author+ | Delete one; the defaults cannot be deleted. |
+
+Two request tools come with the Signal tools (D115):
+
+| Tool | Role | What it does |
+|------|------|--------------|
+| `answer_signal` | Author+ | Answer an open request with `answer`, and optionally `answer_ref` (`Type:ident`, the change it names). |
+| `withdraw_signal` | Author+ | Withdraw an open request with a `reason`. Sender and receiver are routing names, so any caller who may withdraw and can read the request may withdraw it; provenance records the actor. |
+
+- **Gating.** Under governance these seven tools are gated by their capability in core's registry (`subscription` get/list/create/update/delete, `signal` answer/withdraw); a `smeldr_tool_policies` row, when one exists, still wins.
+- **`create_signal`** returns the Signal's real `status` (`open` for a condition or request type, `pending` for a history type) and a `warnings` array when the instance flagged it (`deprecated_signal_type`, `message_too_long`).
+- **`list_signals` with no `state`** lists what awaits action: `open` and `pending` together. An explicit `state` filters on that one state, as before.
+- **Resource sessions belong to their token.** The first `resources/subscribe` on an SSE session binds it to the caller's token; another token may not subscribe or unsubscribe it (-32001). A `notifications/resources/updated` reaches a session only when its token is not revoked and may read the changed item; a revoked token's session is removed.
+
+---
+
 ## Relation graph tools
 
 When `app.Relations(store)` is wired, eight relation management tools are automatically

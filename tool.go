@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -171,11 +172,42 @@ func (s *Server) toolOp(ctx smeldr.Context, toolName string, rs *smeldr.RoleStor
 	}
 	if !found {
 		requiredOp, found = s.deriveToolPolicy(toolName)
-		if !found {
-			return "", &jsonRPCError{Code: -32001, Message: "forbidden"}
-		}
+	}
+	if !found {
+		requiredOp, found = s.capabilityOp(toolName)
+	}
+	if !found {
+		return "", &jsonRPCError{Code: -32001, Message: "forbidden"}
 	}
 	return requiredOp, nil
+}
+
+// toolCapabilities maps the tools added after the capability registry (core
+// C1) to their capability, so they need no smeldr_tool_policies row: the
+// registry's operation word is their gate under governance. A policy row,
+// when one exists, still wins.
+var toolCapabilities = map[string][2]string{
+	"list_subscriptions":  {smeldr.ResourceSubscription, "list"},
+	"get_subscription":    {smeldr.ResourceSubscription, "get"},
+	"create_subscription": {smeldr.ResourceSubscription, "create"},
+	"update_subscription": {smeldr.ResourceSubscription, "update"},
+	"delete_subscription": {smeldr.ResourceSubscription, "delete"},
+	"answer_signal":       {smeldr.ResourceSignal, "answer"},
+	"withdraw_signal":     {smeldr.ResourceSignal, "withdraw"},
+}
+
+// capabilityOp is the operation word of toolName's capability in core's
+// registry, for a tool in [toolCapabilities].
+func (s *Server) capabilityOp(toolName string) (string, bool) {
+	rv, ok := toolCapabilities[toolName]
+	if !ok {
+		return "", false
+	}
+	c, ok := s.app.CapabilityFor(rv[0], rv[1])
+	if !ok {
+		return "", false
+	}
+	return c.Operation, true
 }
 
 // authoriseRead is [Server.authoriseTool] for a tool family whose read tools
@@ -402,6 +434,9 @@ func (s *Server) legacyRoleFor(name string) smeldr.Role {
 			return smeldr.Author
 		}
 	}
+	if isSubscriptionTool(name) {
+		return smeldr.Author
+	}
 	if s.app.Config().DB != nil && (isSignalTool(name) || isSweepRunTool(name) ||
 		isOrchestrationTool(name) || isStewardshipTool(name) || isCheckTool(name)) {
 		return smeldr.Author
@@ -557,6 +592,9 @@ func (s *Server) allToolDefs() []mcpTool {
 		tools = append(tools, stewardshipToolDefs()...)
 		tools = append(tools, checkToolDefs()...)
 		tools = append(tools, addressToolDefs()...)
+	}
+	if s.subscriptionsKept(context.Background()) {
+		tools = append(tools, subscriptionToolDefs()...)
 	}
 	return dedupeToolsByName(tools)
 }
@@ -782,6 +820,15 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return nil, rpcErr
 		}
 		return s.handleAddressTool(ctx, coalesceArgs(p.Arguments))
+	}
+
+	// Subscription tools (D116). Listed and served when the instance keeps
+	// subscriptions; the owner rule is applied inside core.
+	if isSubscriptionTool(p.Name) && s.subscriptionsKept(ctx) {
+		if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), rs, smeldr.AuthTarget{}); rpcErr != nil {
+			return nil, rpcErr
+		}
+		return s.handleSubscriptionTool(ctx, p.Name, coalesceArgs(p.Arguments))
 	}
 
 	// Signal protocol tools. Gated on DB presence (same guard as state tools).

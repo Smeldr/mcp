@@ -28,6 +28,16 @@
 //     smeldr.dev/oauth [*oauth.Server]; once set, all HTTP endpoints require
 //     a Bearer token.
 //
+// # Subscriptions and requests
+//
+// When the App keeps subscriptions (smeldr.dev/core's App.Subscriptions), the
+// server lists list_subscriptions, get_subscription, create_subscription,
+// update_subscription and delete_subscription, thin layers over core's owner
+// rule. answer_signal and withdraw_signal close an open request (D115). A
+// resource-subscription session belongs to the token that first subscribes
+// it, and an update notification reaches it only while that token is not
+// revoked and may read the changed item.
+//
 // [New] returns a [*Server]. Wire it into an [*smeldr.App] with
 // [Server.Register], or mount [Server.Handler] directly on a custom mux.
 package mcp

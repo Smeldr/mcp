@@ -103,6 +103,7 @@ func TestDynamicResources_Notify(t *testing.T) {
 
 	var mu sync.Mutex
 	got := map[string]int{}
+	srv.subscriptions.Bind("c1", sessionOwner{userID: "u1", roles: []smeldr.Role{smeldr.Author}})
 	srv.subscriptions.Register("c1", "smeldr://recipes/"+pub.Slug)
 	srv.subscriptions.RegisterSend("c1", func(u string) { mu.Lock(); got[u]++; mu.Unlock() })
 	if err := recipes.SetStatus(newEditorCtx(), pub.ID, smeldr.Published); err != nil {

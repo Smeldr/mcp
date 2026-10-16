@@ -86,6 +86,11 @@ func pgCall(t *testing.T, srv *Server, tool string, args map[string]any) map[str
 func TestPG_SignalTools_CreateAndList(t *testing.T) {
 	srv, db := newPGSignalServer(t, true)
 	ctx := context.Background()
+	// D113: the subject and task_ref must name a record the caller can read.
+	smeldr.RegisterOrchestrationTypes(srv.app, db)
+	if _, err := db.ExecContext(ctx, `INSERT INTO smeldr_tasks (id, slug, status, created_at, updated_at, address, address_no) VALUES ('t-1', 't-1', 'backlog', now(), now(), 'T1', 1)`); err != nil {
+		t.Fatalf("seed Task: %v", err)
+	}
 
 	created := pgCall(t, srv, "create_signal", map[string]any{
 		"sender": "core", "receiver": "architect", "signal_type": "plan-ready",
@@ -175,5 +180,25 @@ func TestPG_ListSignals_Offset(t *testing.T) {
 		if p2[i-1] < p2[i] {
 			t.Fatalf("same-instant signals not in id DESC order: %s before %s", p2[i-1], p2[i])
 		}
+	}
+}
+
+// D115 on Postgres: a request starts open, answer_signal answers it, and the
+// default list_signals shows what awaits action.
+func TestPG_SignalTools_AnswerAndDefaultList(t *testing.T) {
+	srv, _ := newPGSignalServer(t, true)
+	smeldr.RegisterOrchestrationTypes(srv.app, srv.app.Config().DB)
+	q := pgCall(t, srv, "create_signal", map[string]any{"sender": "core", "receiver": "architect", "signal_type": "question", "message": "which?"})
+	if q["status"] != "open" {
+		t.Fatalf("a request started %v", q["status"])
+	}
+	pgCall(t, srv, "create_signal", map[string]any{"sender": "core", "receiver": "architect", "signal_type": "question", "message": "another"})
+	got := pgCall(t, srv, "answer_signal", map[string]any{"signal": q["address"], "answer": "this one"})
+	if got["status"] != "answered" {
+		t.Fatalf("answer_signal = %v", got)
+	}
+	list := pgCall(t, srv, "list_signals", map[string]any{"receiver": "architect"})
+	if list["total"] != float64(1) {
+		t.Errorf("default list total = %v, want the open one", list["total"])
 	}
 }

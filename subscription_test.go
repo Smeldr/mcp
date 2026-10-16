@@ -3,6 +3,8 @@ package mcp
 import (
 	"sync"
 	"testing"
+
+	"smeldr.dev/core"
 )
 
 // TestSubscriptionRegistry_RegisterAndNotify checks that Notify fans out only
@@ -143,3 +145,12 @@ func TestNewSessionID(t *testing.T) {
 		t.Errorf("two newSessionID calls returned identical value %q", id)
 	}
 }
+
+// userReqCtx is a request context with a user, as the auth middleware leaves
+// it.
+type userReqCtx struct {
+	smeldr.Context
+	u smeldr.User
+}
+
+func (c userReqCtx) User() smeldr.User { return c.u }

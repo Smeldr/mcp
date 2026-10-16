@@ -29,8 +29,10 @@ func signalToolDefs() []mcpTool {
 	return []mcpTool{
 		{
 			Name: "create_signal",
-			Description: "Create a protocol signal in the smeldr_signals table with " +
-				"status 'pending'. Used to record pilot-to-architect or " +
+			Description: "Create a protocol signal in the smeldr_signals table. A condition or " +
+				"request type starts 'open', a history type 'pending' (D115); the result's status " +
+				"says which, and warnings lists what the instance flagged (deprecated_signal_type, " +
+				"message_too_long). Used to record pilot-to-architect or " +
 				"architect-to-pilot hand-offs, or — when receiver is omitted or " +
 				"empty — a broadcast to every subscriber. Requires the smeldr_signals " +
 				"table created by smeldr.CreateOrchestrationTables. Requires Author role. " +
@@ -63,11 +65,44 @@ func signalToolDefs() []mcpTool {
 				"properties": map[string]any{
 					"receiver": map[string]any{"type": "string", "description": "Filter by destination agent identifier. At least one of receiver or sender is required."},
 					"sender":   map[string]any{"type": "string", "description": "Filter by originating agent identifier. At least one of receiver or sender is required."},
-					"state":    map[string]any{"type": "string", "description": "Filter by status (default \"pending\")."},
+					"state":    map[string]any{"type": "string", "description": "Filter by one status. Omitted: what awaits action, open and pending together (D115)."},
 					"limit":    map[string]any{"type": "integer", "description": "Cap the result count, returning the most recent N (created_at descending). Omitted or 0: defaults to 50. Capped at 500."},
 					"offset":   map[string]any{"type": "integer", "description": "Skip this many signals before applying limit (newest first). Omit for 0."},
 				},
 				"required": []string{},
+			},
+		},
+		{
+			Name: "answer_signal",
+			Description: "Answer an open request (D115): it moves to answered, with your answer as the " +
+				"reason and stored on the Signal. answer_ref optionally names the change the answer " +
+				"made, as Type:ident (it must be a record you can read). Sender and receiver are " +
+				"routing names, not identities: any caller who may answer and can read the request " +
+				"may answer it. Requires Author role, and the signal answer capability under governance.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"signal":     map[string]any{"type": "string", "description": "The request: address (S12), slug or ID."},
+					"answer":     map[string]any{"type": "string", "description": "The written answer (required)."},
+					"answer_ref": map[string]any{"type": "string", "description": "Optional: the change the answer names, as Type:ident, e.g. \"Task:T42\"."},
+				},
+				"required": []string{"signal", "answer"},
+			},
+		},
+		{
+			Name: "withdraw_signal",
+			Description: "Withdraw an open request (D115): it moves to withdrawn, with your reason. " +
+				"Meant for the request's sender; since sender is a routing name, not an identity, any " +
+				"caller who may withdraw and can read the request may withdraw it, and the withdrawal is " +
+				"recorded in provenance with its actor. Requires Author role, and the signal withdraw " +
+				"capability under governance.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"signal": map[string]any{"type": "string", "description": "The request: address (S12), slug or ID."},
+					"reason": map[string]any{"type": "string", "description": "Why it is withdrawn (required)."},
+				},
+				"required": []string{"signal", "reason"},
 			},
 		},
 	}
@@ -76,7 +111,7 @@ func signalToolDefs() []mcpTool {
 // isSignalTool reports whether name is one of the two signal protocol tools.
 func isSignalTool(name string) bool {
 	switch name {
-	case "create_signal", "list_signals":
+	case "create_signal", "list_signals", "answer_signal", "withdraw_signal":
 		return true
 	}
 	return false
@@ -129,7 +164,8 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 
 		// InsertSignal takes the Signal's address (D110) in the same
 		// transaction as the INSERT, so a failed insert takes no number.
-		if err := smeldr.InsertSignal(ctx, db, &sig); err != nil {
+		warnings, err := smeldr.InsertSignalWithWarnings(ctx, db, &sig, s.app.SignalCutovers())
+		if err != nil {
 			slog.ErrorContext(ctx, "mcp: create_signal: insert failed", "error", err)
 			return nil, errorFor(err)
 		}
@@ -137,12 +173,19 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		// Module[Signal].MCPCreate, so App.NotifySignalCreated sends the
 		// webhook/event-stream notification, only for a committed row.
 		s.app.NotifySignalCreated(ctx, sig.ID, sig.Slug)
-		return toolResult(map[string]any{
+		result := map[string]any{
 			"id":      sig.ID,
 			"slug":    sig.Slug,
-			"status":  "pending",
+			"status":  sig.Status,
 			"address": sig.Address,
-		}), nil
+		}
+		if len(warnings) > 0 {
+			result["warnings"] = warnings
+		}
+		return toolResult(result), nil
+
+	case "answer_signal", "withdraw_signal":
+		return s.closeSignalRequest(ctx, name, args)
 
 	case "list_signals":
 		receiver := stringArgOr(args, "receiver", "")
@@ -150,7 +193,9 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		if receiver == "" && sender == "" {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: at least one of receiver or sender is required"}
 		}
-		state := stringArgOr(args, "state", "pending")
+		// No state: what awaits action, a request or condition (open) and a
+		// history Signal not yet seen (pending), D115.
+		state := stringArgOr(args, "state", "")
 		// Omitted or explicit 0 both mean "use the default" (01a0d76a) — an
 		// unfiltered call previously returned the entire matching history
 		// unconditionally (confirmed live: ~459KB for a single receiver).
@@ -165,8 +210,12 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		// apart on which filters they apply.
 		// Placeholders are numbered from the argument count so far ($1, $2, ...): that is
 		// what Postgres through pgx understands, and SQLite accepts it as well.
-		where := ` WHERE status = $1`
-		whereArgs := []any{state}
+		where := ` WHERE status IN ('open', 'pending')`
+		var whereArgs []any
+		if state != "" {
+			whereArgs = append(whereArgs, state)
+			where = ` WHERE status = $1`
+		}
 		if receiver != "" {
 			whereArgs = append(whereArgs, receiver)
 			where += fmt.Sprintf(` AND receiver = $%d`, len(whereArgs))
@@ -371,4 +420,29 @@ func signalSlug(sender, signalType, id string) string {
 		suffix = suffix[len(suffix)-8:]
 	}
 	return base + "-" + suffix
+}
+
+// closeSignalRequest is answer_signal and withdraw_signal: core answers or
+// withdraws the request under the caller's read scope and capability, and the
+// result is read back.
+func (s *Server) closeSignalRequest(ctx smeldr.Context, name string, args map[string]any) (any, *jsonRPCError) {
+	ident, ok := stringArg(args, "signal")
+	if !ok || ident == "" {
+		return nil, &jsonRPCError{Code: -32602, Message: "invalid params: signal required"}
+	}
+	var err error
+	if name == "answer_signal" {
+		err = s.app.AnswerSignal(ctx, ident, stringArgOr(args, "answer", ""), stringArgOr(args, "answer_ref", ""))
+	} else {
+		err = s.app.WithdrawSignal(ctx, ident, stringArgOr(args, "reason", ""))
+	}
+	if err != nil {
+		return nil, errorFor(err)
+	}
+	var id, address, status string
+	row := s.app.Config().DB.QueryRowContext(ctx, `SELECT id, address, status FROM smeldr_signals WHERE id = $1 OR slug = $1 OR address = $1`, ident)
+	if err := row.Scan(&id, &address, &status); err != nil {
+		return nil, errorFor(err)
+	}
+	return toolResult(map[string]any{"id": id, "address": address, "status": status}), nil
 }

@@ -9,6 +9,25 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.64.0] - 2026-10-16
+
+### Added
+
+- **Five subscription tools: `list_subscriptions`, `get_subscription`, `create_subscription`, `update_subscription` and `delete_subscription` (D116, A@@AMEND@@).** The tools are listed when the instance keeps subscriptions, that is, when its `smeldr_subscriptions` table exists (core `App.Subscriptions`). They are thin layers over core's owner rule: a subscription that is not yours is not found unless you hold `administer`. `create_subscription` takes `name`, `filter` (core's `SubscriptionFilter`, decoded strictly, so an unknown key is invalid params, `-32602`), `include_own`, `paused`, `owner` and `delivery`. `update_subscription` changes `name`, `filter` or `include_own`, and pauses or resumes with `paused`. The three default subscriptions are listed and cannot be deleted.
+- **`answer_signal` and `withdraw_signal` close an open request (D115, A@@AMEND@@).** `answer_signal` (`signal`, `answer`, optional `answer_ref` as `Type:ident`) and `withdraw_signal` (`signal`, `reason`) close an open request through core's `AnswerSignal` and `WithdrawSignal`. Both return `id`, `address` and `status`. Sender and receiver are routing names, so any caller who may withdraw and can read the request may withdraw it; provenance records the actor.
+- **The seven new tools need no policy row under governance (D115, D116, A@@AMEND@@).** Under governance they are gated by their capability in core's registry (subscription get, list, create, update and delete; signal answer and withdraw). A `smeldr_tool_policies` row, when one exists, still wins.
+
+### Changed
+
+- **`list_signals` with no state lists what awaits action (D115, A@@AMEND@@).** With no `state`, it lists `open` and `pending` together. Before, it listed `pending` only, which since D115 missed every open request and condition. An explicit `state` filters on that one state, as before.
+- **`create_signal` returns the Signal's real status (D115, A@@AMEND@@).** It returns `open` for a condition or request type and `pending` for a history type; before, it always said `pending`. It also returns a `warnings` array when the instance flagged the Signal (`deprecated_signal_type`, `message_too_long`).
+- **A resource-subscription session belongs to the token that first subscribes it (D116, A@@AMEND@@).** Another token may not subscribe or unsubscribe it (`-32001`), and subscribing needs a token identity. A `notifications/resources/updated` reaches a session only when its token is not revoked and may read the changed item under the read rules; a revoked token's session is removed. Before, a session ID was a bearer value anyone could use, and every subscribed session was notified.
+- Requires smeldr.dev/core v1.162.0.
+
+### Fixed
+
+- The Postgres integration test for `create_signal` named a subject that did not exist, which core refuses since v1.161.0 (D113); it now seeds the Task.
+
 ## [1.63.1] - 2026-10-16
 
 ### Changed

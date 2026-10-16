@@ -116,8 +116,13 @@ func TestAuthoriseTool_PolicyCoverage_Enumerated(t *testing.T) {
 		if _, derived := srv.deriveToolPolicy(tool.Name); derived {
 			continue
 		}
+		// A tool added after the capability registry is gated by its
+		// capability's operation word (toolCapabilities).
+		if _, byCapability := srv.capabilityOp(tool.Name); byCapability {
+			continue
+		}
 		uncovered++
-		t.Errorf("tool %q has no smeldr_tool_policies row and no D48 derivation — every caller is silently forbidden", tool.Name)
+		t.Errorf("tool %q has no smeldr_tool_policies row, no D48 derivation and no capability — every caller is silently forbidden", tool.Name)
 	}
 	if uncovered > 0 {
 		t.Fatalf("%d of %d tools in tools/list have no authorization coverage", uncovered, len(tools))

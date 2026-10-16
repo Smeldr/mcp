@@ -82,7 +82,7 @@ func TestResourcesSubscribe_WithSessionID(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/?session_id=sess-abc", nil)
-	ctx := smeldr.ContextFrom(rec, req)
+	ctx := userReqCtx{smeldr.ContextFrom(rec, req), smeldr.User{ID: "u1", Roles: []smeldr.Role{smeldr.Author}}}
 
 	params, _ := json.Marshal(map[string]any{"uri": "smeldr:/posts/my-post"})
 	result, rpcErr := srv.handleResourcesSubscribe(ctx, params)
@@ -150,7 +150,7 @@ func TestResourcesUnsubscribe_WithSessionID(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/?session_id=sess-xyz", nil)
-	ctx := smeldr.ContextFrom(rec, req)
+	ctx := userReqCtx{smeldr.ContextFrom(rec, req), smeldr.User{ID: "u1", Roles: []smeldr.Role{smeldr.Author}}}
 
 	// First subscribe, then unsubscribe.
 	subParams, _ := json.Marshal(map[string]any{"uri": "smeldr:/posts/my-post"})

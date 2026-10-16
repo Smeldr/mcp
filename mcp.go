@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"sync/atomic"
 
 	"smeldr.dev/core"
 	"smeldr.dev/oauth"
@@ -176,8 +177,11 @@ type Server struct {
 	webhookStore  *smeldr.WebhookStore   // non-nil when the app has Webhooks configured
 	webhookPool   smeldr.WebhookJobQueue // non-nil when the app has Webhooks configured
 	subscriptions *subscriptionRegistry  // resource subscription fan-out registry
-	oauth         *oauth.Server          // non-nil when OAuth 2.1 is enabled via WithOAuth
-	fallback      bool                   // accept smeldr bearer tokens as fallback when OAuth enabled
+	// subscriptionTable is set once the smeldr_subscriptions table is found:
+	// the subscription tools are listed from then on (D116).
+	subscriptionTable atomic.Bool
+	oauth             *oauth.Server // non-nil when OAuth 2.1 is enabled via WithOAuth
+	fallback          bool          // accept smeldr bearer tokens as fallback when OAuth enabled
 
 	// blockRepo and edgeStore are non-nil when WithBlocks is set; they back the
 	// block-system node and composition tools.
@@ -246,6 +250,7 @@ func New(app *smeldr.App, opts ...ServerOption) *Server {
 	// runtime-defined type with a public prefix is a resource too, and an
 	// admin-only one (no prefix) is not.
 	subs := s.subscriptions
+	subs.check = s.sessionMayReceive
 	app.AddSignalListener(func(sig smeldr.LifecycleEvent, typeName string, item any) {
 		for _, m := range s.modules {
 			if m.MCPMeta().TypeName != typeName {
@@ -256,7 +261,7 @@ func New(app *smeldr.App, opts ...ServerOption) *Server {
 				return
 			}
 			uri := "smeldr:/" + m.MCPMeta().Prefix + "/" + slug
-			subs.Notify(uri)
+			subs.NotifyItem(uri, typeName, idOf(item))
 			return
 		}
 		node, ok := item.(*smeldr.DynamicNode)
@@ -264,10 +269,12 @@ func New(app *smeldr.App, opts ...ServerOption) *Server {
 			return
 		}
 		if d := app.TypeRegistry().Lookup(typeName); d != nil && d.Kind == "content" && d.Prefix != "" {
-			subs.Notify("smeldr:/" + d.Prefix + "/" + node.Slug)
+			subs.NotifyItem("smeldr:/"+d.Prefix+"/"+node.Slug, typeName, node.ID)
 		}
 	})
-	defs := s.allToolDefs()
+	// The subscription tools are indexed even before their table exists, so
+	// their known-args check holds from the moment they are listed.
+	defs := append(s.allToolDefs(), subscriptionToolDefs()...)
 	s.toolDefsByName = make(map[string]mcpTool, len(defs))
 	for _, t := range defs {
 		s.toolDefsByName[t.Name] = t
@@ -682,6 +689,33 @@ func hasMCPOp(m smeldr.MCPModule, op smeldr.MCPOperation) bool {
 
 // slugOf extracts the Slug field from an item via the smeldr.Node GetSlug method.
 // Returns "" when the item does not implement the interface.
+// sessionMayReceive is the registry's owner check for an item notification:
+// a revoked token's session is dropped (T837 note: CanRead takes a user, so
+// the session's own token is checked here), and otherwise the owner must be
+// able to read the item. A failed check skips the session (fail closed).
+func (s *Server) sessionMayReceive(o sessionOwner, typeName, id string) notifyVerdict {
+	ctx := context.Background()
+	if s.tokenStore != nil && o.fingerprint != "" {
+		gone, err := s.tokenStore.IsRevoked(ctx, o.fingerprint)
+		if err != nil {
+			log.Printf("smeldr.dev/mcp: resource notification skipped: revocation not checked: %v", err)
+			return notifySkip
+		}
+		if gone {
+			return notifyDrop
+		}
+	}
+	ok, err := s.app.CanRead(ctx, smeldr.User{ID: o.userID, Roles: o.roles}, typeName, id)
+	if err != nil {
+		log.Printf("smeldr.dev/mcp: resource notification skipped: read rules not checked: %v", err)
+		return notifySkip
+	}
+	if !ok {
+		return notifySkip
+	}
+	return notifyDeliver
+}
+
 func slugOf(item any) string {
 	type slugger interface{ GetSlug() string }
 	if s, ok := item.(slugger); ok {
