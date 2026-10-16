@@ -280,48 +280,41 @@ func TestReadRules_ListSignalsAndCreateSignal(t *testing.T) {
 		t.Errorf("admin total = %v %v; want 3", res, rpcErr)
 	}
 
-	// create_signal: a hidden subject and a missing one leave the same row
-	// and the same response shape; a readable one is stored by its ID.
+	// create_signal (D113): a hidden subject and a missing one are refused
+	// with the same message; a readable one is stored by its ID.
 	if err := f.store.DefineRole(ctx, smeldr.RoleDefinition{Name: "signal-writer", Operations: []string{"create"}, ScopeMode: smeldr.ScopeGlobal}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.store.Grant(ctx, smeldr.RoleGrant{TokenID: "reader", RoleName: "signal-writer"}); err != nil {
 		t.Fatal(err)
 	}
-	create := func(subject string) (map[string]any, string) {
+	create := func(subject string) (map[string]any, *jsonRPCError) {
 		t.Helper()
 		res, rpcErr := callTool(t, f.srv, f.reader, "create_signal", map[string]any{"sender": "core", "signal_type": "note", "subject_type": "Task", "subject_id": subject})
 		if rpcErr != nil {
-			t.Fatalf("create_signal(%s): %v", subject, rpcErr.Message)
+			return nil, rpcErr
 		}
-		out := unwrapToolResult(t, res)
-		var stored string
-		if err := f.raw.QueryRow(`SELECT subject_id FROM smeldr_signals WHERE id = $1`, out["id"]).Scan(&stored); err != nil {
-			t.Fatal(err)
-		}
-		return out, stored
+		return unwrapToolResult(t, res), nil
 	}
-	hiddenOut, hiddenStored := create(f.hidden["Slug"].(string))
-	missingOut, missingStored := create("no-such-task")
-	if hiddenStored != f.hidden["Slug"] || missingStored != "no-such-task" {
-		t.Errorf("stored subjects = %q, %q; want each kept as given", hiddenStored, missingStored)
+	hiddenSlug := f.hidden["Slug"].(string)
+	_, hiddenErr := create(hiddenSlug)
+	_, missingErr := create("no-such-task")
+	if hiddenErr == nil || missingErr == nil || hiddenErr.Code != -32602 || missingErr.Code != -32602 {
+		t.Fatalf("hidden %v, missing %v; want both refused as invalid params", hiddenErr, missingErr)
 	}
-	keys := func(m map[string]any) string {
-		var ks []string
-		for k := range m {
-			ks = append(ks, k)
-		}
-		b, _ := json.Marshal(len(ks))
-		return string(b) + strings.Join(sortStrings(ks), ",")
+	if strings.ReplaceAll(hiddenErr.Message, hiddenSlug, "X") != strings.ReplaceAll(missingErr.Message, "no-such-task", "X") {
+		t.Errorf("refusals differ: %q vs %q", hiddenErr.Message, missingErr.Message)
 	}
-	if keys(hiddenOut) != keys(missingOut) || hiddenOut["status"] != missingOut["status"] {
-		t.Errorf("responses differ: %v vs %v", hiddenOut, missingOut)
+	if strings.Contains(hiddenErr.Message, f.id(f.hidden)) {
+		t.Errorf("the refusal echoes the hidden subject's ID: %v", hiddenErr.Message)
 	}
-	if strings.Contains(mustJSON(t, hiddenOut), f.id(f.hidden)) {
-		t.Errorf("the response echoes the hidden subject's ID: %v", hiddenOut)
+	out, rpcErr := create(f.seen["Slug"].(string))
+	if rpcErr != nil {
+		t.Fatalf("a readable subject: %v", rpcErr.Message)
 	}
-	if _, stored := create(f.seen["Slug"].(string)); stored != f.id(f.seen) {
-		t.Errorf("a readable subject stored as %q; want its ID", stored)
+	var stored string
+	if err := f.raw.QueryRow(`SELECT subject_id FROM smeldr_signals WHERE id = $1`, out["id"]).Scan(&stored); err != nil || stored != f.id(f.seen) {
+		t.Errorf("a readable subject stored as %q %v; want its ID", stored, err)
 	}
 }
 
@@ -447,24 +440,6 @@ func TestReadRules_CheckStatusAndStewardship(t *testing.T) {
 	if out := unwrapToolResult(t, res); len(out["decisions"].([]any)) != 0 {
 		t.Errorf("inbox = %v; want nothing hidden", out)
 	}
-}
-
-func sortStrings(s []string) []string {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j] < s[j-1]; j-- {
-			s[j], s[j-1] = s[j-1], s[j]
-		}
-	}
-	return s
-}
-
-func mustJSON(t *testing.T, v any) string {
-	t.Helper()
-	b, err := json.Marshal(v)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
 }
 
 // A delegated approver or reviewer reads its one item and moves it through the

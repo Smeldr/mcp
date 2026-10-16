@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,6 +23,16 @@ func newSignalServer(t *testing.T) *Server {
 	srv, db := newDynamicServer(t)
 	if err := smeldr.CreateOrchestrationTables(db); err != nil {
 		t.Fatalf("CreateOrchestrationTables: %v", err)
+	}
+	// D113: a Signal's subject and task_ref must name existing records; the
+	// tests below name Decision D84 and Task T23.
+	for _, q := range []string{
+		`INSERT INTO smeldr_decisions (id, slug, status, created_at, updated_at, address, address_no) VALUES ('d-84', 'd-84', 'proposed', '2026-10-16T00:00:00Z', '2026-10-16T00:00:00Z', 'D84', 84)`,
+		`INSERT INTO smeldr_tasks (id, slug, status, created_at, updated_at, address, address_no) VALUES ('t-23', 't-23', 'backlog', '2026-10-16T00:00:00Z', '2026-10-16T00:00:00Z', 'T23', 23)`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
 	}
 	return srv
 }
@@ -164,8 +175,9 @@ func TestCreateSignal_SubjectFields_Threaded(t *testing.T) {
 		t.Fatalf("len(signals) = %d, want 1", len(signals))
 	}
 	got, _ := signals[0].(map[string]any)
-	if got["subject_type"] != "Decision" || got["subject_id"] != "D84" {
-		t.Errorf("subject_type/subject_id = %v/%v, want Decision/D84", got["subject_type"], got["subject_id"])
+	// D113: the subject named by address (D84) is stored as its ID.
+	if got["subject_type"] != "Decision" || got["subject_id"] != "d-84" {
+		t.Errorf("subject_type/subject_id = %v/%v, want Decision/d-84", got["subject_type"], got["subject_id"])
 	}
 	for _, key := range []string{"from_state", "to_state", "required_role"} {
 		if got[key] != "" {
@@ -1001,5 +1013,20 @@ func TestHandleSignalTool_UnknownName(t *testing.T) {
 	_, rpcErr := srv.handleSignalTool(ctx, "unknown_signal_tool", map[string]any{})
 	if rpcErr == nil || rpcErr.Code != -32602 {
 		t.Errorf("expected -32602, got %v", rpcErr)
+	}
+}
+
+// TestCreateSignal_GuidedRefusal: a task_ref that names no Task is refused as
+// invalid params with core's guidance (D113), not as an internal error.
+func TestCreateSignal_GuidedRefusal(t *testing.T) {
+	srv := newSignalServer(t)
+	_, rpcErr := callTool(t, srv, newAuthorCtx(), "create_signal", map[string]any{
+		"sender": "core", "receiver": "architect", "signal_type": "question", "task_ref": "A185",
+	})
+	if rpcErr == nil || rpcErr.Code != -32602 {
+		t.Fatalf("rpcErr = %v; want invalid params", rpcErr)
+	}
+	if !strings.Contains(rpcErr.Message, "send a Task's address (T273), slug or ID in task_ref") {
+		t.Errorf("message = %q; want the guidance", rpcErr.Message)
 	}
 }

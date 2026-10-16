@@ -109,22 +109,9 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		sequence := intArgOr(args, "sequence", 0)
 		subjectType := stringArgOr(args, "subject_type", "")
 		subjectID := stringArgOr(args, "subject_id", "")
-		// The subject is stored by its ID when the caller may read it (per-item
-		// read rules, answer 3): a slug or an address hides the Signal from
-		// scoped readers. A subject the caller may not read, or that does not
-		// exist, is kept as given, so the row and the response are the same for
-		// both and nothing about the subject is revealed.
-		if subjectType != "" && subjectID != "" {
-			id, err := s.app.ResolveReadableID(ctx, subjectType, subjectID)
-			switch {
-			case err == nil:
-				subjectID = id
-			case errors.Is(err, smeldr.ErrNotFound), errors.Is(err, smeldr.ErrBadRequest):
-			default:
-				return nil, errorFor(err)
-			}
-		}
-
+		// The subject and task_ref are checked by core (D113): each must name a
+		// record the caller can read, the subject is stored by its ID and
+		// task_ref by the Task's address, and a refusal says what to send.
 		id := smeldr.NewID()
 		sig := smeldr.Signal{
 			Sender:      sender,
@@ -144,7 +131,7 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 		// transaction as the INSERT, so a failed insert takes no number.
 		if err := smeldr.InsertSignal(ctx, db, &sig); err != nil {
 			slog.ErrorContext(ctx, "mcp: create_signal: insert failed", "error", err)
-			return nil, &jsonRPCError{Code: -32603, Message: "internal error: " + err.Error()}
+			return nil, errorFor(err)
 		}
 		// InsertSignal announces nothing, and this path bypasses
 		// Module[Signal].MCPCreate, so App.NotifySignalCreated sends the
