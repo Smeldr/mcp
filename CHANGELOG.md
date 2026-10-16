@@ -9,9 +9,11 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.64.1] - 2026-10-16
+
 ### Fixed
 
-- **The relation tools take an address, slug or ID for an item (T875, A@@AMEND@@).** `assert_relation`, `propose_relation`, `observe_relation` (`source_id`, `target_id`), `get_relations` and `get_reachability` (`id`) and `preview_impact` (`target_id`) resolve the item with core's `App.ResolveReadableID`, as the other tools do. Before, an address matched no edge and `get_relations` answered an empty list. A name that resolves to nothing the caller may read is now an error (`-32000` not found), never an empty answer; a hidden item answers the same as a missing one. A type the App does not register (an open relation end) has no address to resolve, and its ident is used as given.
+- **The relation tools take an address, slug or ID for an item (T875, A531).** `assert_relation`, `propose_relation`, `observe_relation` (`source_id`, `target_id`), `get_relations` and `get_reachability` (`id`) and `preview_impact` (`target_id`) resolve the item with core's `App.ResolveReadableID`, as the other tools do. Before, an address matched no edge and `get_relations` answered an empty list. A name that resolves to nothing the caller may read is now an error (`-32000` not found), never an empty answer; a hidden item answers the same as a missing one. A type the App does not register (an open relation end) has no address to resolve, and its ident is used as given.
 
 ## [1.64.0] - 2026-10-16
 
