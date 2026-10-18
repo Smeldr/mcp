@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The places of D142 are addressed types (T882, A542).** `create_root`, `create_domain`, `create_area` and `create_set` (the module tools core generates for Root, Domain, Area and Set since T882) say in their description that the server assigns the address (ROOT, DOM, ARE, SET).
+
 ## [1.65.0] - 2026-10-18
 
 ### Added
