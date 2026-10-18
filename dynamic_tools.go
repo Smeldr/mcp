@@ -55,7 +55,7 @@ func dynamicContentToolDefs() []mcpTool {
 						"type":  "array",
 						"items": map[string]any{"type": "object"},
 						"description": "Field definitions. Each object: {name, type (string|integer|boolean|array|object), " +
-							"required (bool), format (opt), role (opt: title|description|body|summary|og_image|channel)}. A string field with role channel routes the type's event-stream events to the channel its value names and to the topic type:<type_name>; without it they are a broadcast.",
+							"required (bool), format (opt), role (opt: title|description|body|summary|og_image|channel)}. A string field with role channel routes the type's event-stream events to the channel its value names and to the topic type:<type_name>; without it they are a broadcast. search (opt, bool) makes a field searchable by the search tool; when no field sets it, the string fields with role title, description, body or summary or format markdown are searched.",
 					},
 				},
 				"required": []string{"type_name", "fields"},

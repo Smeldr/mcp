@@ -194,6 +194,7 @@ var toolCapabilities = map[string][2]string{
 	"delete_subscription": {smeldr.ResourceSubscription, "delete"},
 	"answer_signal":       {smeldr.ResourceSignal, "answer"},
 	"withdraw_signal":     {smeldr.ResourceSignal, "withdraw"},
+	"search":              {smeldr.ResourceItem, "search"},
 }
 
 // capabilityOp is the operation word of toolName's capability in core's
@@ -396,7 +397,7 @@ func (s *Server) legacyRoleFor(name string) smeldr.Role {
 	if isPreviewTool(name) {
 		return smeldr.Editor
 	}
-	if isUploadTool(name) {
+	if isUploadTool(name) || name == "search" {
 		return smeldr.Author
 	}
 	if s.redirectEnabled && isRedirectTool(name) {
@@ -560,6 +561,7 @@ func (s *Server) allToolDefs() []mcpTool {
 	if s.webhookStore != nil {
 		tools = append(tools, webhookToolDefs()...)
 	}
+	tools = append(tools, searchToolDef())
 	tools = append(tools, previewToolDefs()...)
 	tools = append(tools, uploadToolDefs()...)
 	if s.blockRepo != nil {
@@ -822,6 +824,11 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return nil, rpcErr
 		}
 		return s.handleAddressTool(ctx, coalesceArgs(p.Arguments))
+	}
+
+	// search (T885): the capability gate and the per-item read rules are core's.
+	if p.Name == "search" {
+		return s.handleSearchTool(ctx, coalesceArgs(p.Arguments))
 	}
 
 	// Subscription tools (D116). Listed and served when the instance keeps

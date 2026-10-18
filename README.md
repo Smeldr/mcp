@@ -313,6 +313,12 @@ both tools are already available.
 
 ---
 
+## Search (v1.65.0)
+
+`search` finds records across every type the caller may read, through core's `App.Search` (T885): plain, case-insensitive text over each type's searchable fields, filtered by `types`, `states` and `place` (`none` lists records without a Domain or Area). Records the caller may not read never appear and never change `total`. Each hit carries `awaits_action`, `standing` where the type has it, and `state_since` for Task and Goal. Author role; under governance it needs a caller who reads at least one item (capability `item search`). Needs smeldr.dev/core with `App.Search`.
+
+---
+
 ## Subscriptions and requests (v1.64.0)
 
 When the instance keeps subscriptions (core v1.162.0, `app.Subscriptions()`, which creates `smeldr_subscriptions`), five subscription tools are listed. They are thin layers over core, which applies the owner rule: a subscription that is not yours is not found, unless you hold `administer`.

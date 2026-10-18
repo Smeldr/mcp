@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`search` tool (T885, A538).** Searches every record type the caller may read, with the filters `types`, `states`, `place`, `limit` and `offset`. Each hit carries `awaits_action` and `standing` where the type has it; Task and Goal hits also carry `state_since` and `state_reason`. Gated by core's `item search` capability. Needs the next smeldr.dev/core release with `App.Search`.
+
 ## [1.64.2] - 2026-10-18
 
 ### Changed

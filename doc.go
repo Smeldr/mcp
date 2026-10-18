@@ -28,6 +28,13 @@
 //     smeldr.dev/oauth [*oauth.Server]; once set, all HTTP endpoints require
 //     a Bearer token.
 //
+// # Search
+//
+// The search tool runs smeldr.dev/core's App.Search: plain, case-insensitive
+// text across every record type the caller may read, filtered by types,
+// states and place (none lists unplaced records). Hidden records never appear
+// and never change the total.
+//
 // # Subscriptions and requests
 //
 // When the App keeps subscriptions (smeldr.dev/core's App.Subscriptions), the
