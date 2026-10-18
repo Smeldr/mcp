@@ -9,6 +9,8 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.64.2] - 2026-10-18
+
 ### Changed
 
 - **`get_goal_context` needs the Orchestration add-on (T881, A536).** The tool is listed and callable only when the App registers Goal (core's `RegisterOrchestrationAddOn`, or the combined `RegisterOrchestrationTypes`). An instance with core governance only no longer lists a tool that would fail on a missing table.
