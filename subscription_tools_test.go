@@ -408,7 +408,9 @@ func TestSessionMayReceive(t *testing.T) {
 // tools/list, and the signal family is exactly its four tools: additions
 // only (D97).
 func TestToolsList_SubscriptionAdditionsOnly(t *testing.T) {
-	without := listedTools(newSignalServer(t), newAdminCtx())
+	base := newSignalServer(t)
+	smeldr.RegisterOrchestrationTypes(base.app, base.app.Config().DB) // the same types as newSubscriptionServer
+	without := listedTools(base, newAdminCtx())
 	with := listedTools(newSubscriptionServer(t), newAdminCtx())
 	var added []string
 	for n := range with {

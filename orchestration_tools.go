@@ -6,6 +6,13 @@ import (
 	"smeldr.dev/core"
 )
 
+// goalsRegistered reports whether the App runs the Orchestration add-on, whose
+// Goal get_goal_context reads (T881). Without it the tool is not listed.
+func (s *Server) goalsRegistered() bool {
+	reg := s.app.TypeRegistry()
+	return reg != nil && reg.Lookup("Goal") != nil
+}
+
 // orchestrationToolDefs returns the tool definition for get_goal_context.
 // Registered when App.Config().DB is non-nil (same guard as signal tools).
 //

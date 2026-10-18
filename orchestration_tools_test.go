@@ -20,6 +20,8 @@ func newOrchestrationServer(t *testing.T) (*Server, *sql.DB) {
 	if err := smeldr.CreateOrchestrationTables(db); err != nil {
 		t.Fatalf("CreateOrchestrationTables: %v", err)
 	}
+	// get_goal_context is listed only with the Orchestration add-on (T881).
+	smeldr.RegisterOrchestrationTypes(srv.app, db)
 	return srv, db
 }
 
@@ -166,5 +168,20 @@ func TestHandleOrchestrationTool_UnknownName(t *testing.T) {
 	_, rpcErr := srv.handleOrchestrationTool(newAuthorCtx(), "unknown_orch_tool", map[string]any{})
 	if rpcErr == nil || rpcErr.Code != -32602 {
 		t.Errorf("expected -32602, got %v", rpcErr)
+	}
+}
+
+// Without the Orchestration add-on (Goal not registered) get_goal_context is
+// neither listed nor callable, even with the tables present (T881).
+func TestGetGoalContext_NeedsTheAddOn(t *testing.T) {
+	srv, db := newDynamicServer(t)
+	if err := smeldr.CreateOrchestrationTables(db); err != nil {
+		t.Fatal(err)
+	}
+	if listedTools(srv, newAdminCtx())["get_goal_context"] {
+		t.Error("get_goal_context listed without Goal registered")
+	}
+	if _, rpcErr := callTool(t, srv, newAdminCtx(), "get_goal_context", map[string]any{"goal_id": "G1"}); rpcErr == nil || rpcErr.Code != -32602 {
+		t.Errorf("call without the add-on = %v, want unknown tool", rpcErr)
 	}
 }

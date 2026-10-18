@@ -587,7 +587,9 @@ func (s *Server) allToolDefs() []mcpTool {
 		tools = append(tools, standingToolDefs()...)
 		tools = append(tools, provenanceToolDefs()...)
 		tools = append(tools, signalToolDefs()...)
-		tools = append(tools, orchestrationToolDefs()...)
+		if s.goalsRegistered() {
+			tools = append(tools, orchestrationToolDefs()...)
+		}
 		tools = append(tools, sweepRunToolDefs()...)
 		tools = append(tools, stewardshipToolDefs()...)
 		tools = append(tools, checkToolDefs()...)
@@ -849,9 +851,9 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		return s.handleSweepRunTool(ctx, p.Name, coalesceArgs(p.Arguments))
 	}
 
-	// Orchestration tools (get_goal_context). Gated on DB presence (same guard
-	// as state and signal tools). Requires Author role.
-	if s.app.Config().DB != nil && isOrchestrationTool(p.Name) {
+	// Orchestration tools (get_goal_context). Gated on DB presence and on the
+	// Orchestration add-on: Goal registered (T881). Requires Author role.
+	if s.app.Config().DB != nil && s.goalsRegistered() && isOrchestrationTool(p.Name) {
 		if rpcErr := s.authoriseRead(ctx, p.Name, rs, p.Arguments); rpcErr != nil {
 			return nil, rpcErr
 		}
