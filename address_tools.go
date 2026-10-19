@@ -16,12 +16,12 @@ const createAddressNote = "The address (for example D110) is assigned by the ser
 // addressedCompiledTypes are the compiled types whose items get an address:
 // core's six orchestration types (RegisterOrchestrationTypes), since core
 // v1.156.0 its two authority types (RegisterAuthorityTypes), and since core
-// T882 the four places of D142 (Root, Domain, Area, Set). Every other
+// T882 the four places of D142 (Organization, Domain, Area, Set). Every other
 // compiled module is web content and has none.
 var addressedCompiledTypes = map[string]bool{
 	"Decision": true, "Amendment": true, "Task": true, "Goal": true, "Signal": true, "Run": true,
 	"Rule": true, "AuthorityStub": true,
-	"Root": true, "Domain": true, "Area": true, "Set": true,
+	"Organization": true, "Domain": true, "Area": true, "Set": true,
 }
 
 // createDescription is the description of a generated create_{type} tool,

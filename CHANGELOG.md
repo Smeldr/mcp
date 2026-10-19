@@ -11,8 +11,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **The organization place is `Organization` (core T895, A@@MCP2@@).** `create_organization` and the other module tools of the place core T882 added as Root take the address prefix `ORG`; the module tools are named after core's type name, `Organization`. Tests place Decisions with `belongs_to_organization`.
 - **Approval operation words follow core's D142 roles (T884, A@@MCP@@).** The `delegate_item` `operation` description and `define_state_flow`'s `required_role` description give `"ratify"` as the example, not the retired `"approve"`. A `delegate_item` of `item-approver` names `ratify` or `approve-change` (the role no longer holds `approve`). Tests move to `approver` and place the Decisions they ratify (core T883). No tool behaviour of its own changes.
-- **The places of D142 are addressed types (T882, A542).** `create_root`, `create_domain`, `create_area` and `create_set` (the module tools core generates for Root, Domain, Area and Set since T882) say in their description that the server assigns the address (ROOT, DOM, ARE, SET).
+- **The places of D142 are addressed types (T882, A542).** `create_organization`, `create_domain`, `create_area` and `create_set` (the module tools core generates for Organization, Domain, Area and Set since T882) say in their description that the server assigns the address (ORG, DOM, ARE, SET).
 
 ## [1.65.0] - 2026-10-18
 
