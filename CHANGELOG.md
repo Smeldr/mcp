@@ -9,14 +9,20 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [1.66.0] - 2026-10-19
+
+Requires smeldr.dev/core v1.168.0.
+
 ### Added
 
-- **`decisions_for_paths` and `check_coverage` (core T886, A@@MCP3@@).** `decisions_for_paths` {repository, paths, include_organization} answers which Decisions in force apply to the paths an agent or a pull request touches: the Areas whose coverage rules match, the Decisions placed in them, their Domains and the Organization, and the uncovered paths, under the read rules (Author; at most 3000 paths). `check_coverage` {repository, paths} counts each coverage rule's matches in the repository's full file list, stores the counts and opens or resolves `coverage-matches-nothing` (Editor; at most 100000 paths). Both are listed when the instance has coverage rules. The coverage rule module tools (`create_coverage_rule`, ...) come from core.
+- **`decisions_for_paths` and `check_coverage` (core T886, A551).** `decisions_for_paths` {repository, paths, include_organization} answers which Decisions in force apply to the paths an agent or a pull request touches: the Areas whose coverage rules match, the Decisions placed in them, their Domains and the Organization, and the uncovered paths, under the read rules (Author; at most 3000 paths). `check_coverage` {repository, paths} counts each coverage rule's matches in the repository's full file list, stores the counts and opens or resolves `coverage-matches-nothing` (Editor; at most 100000 paths). Both are listed when the instance has coverage rules. The coverage rule module tools (`create_coverage_rule`, ...) come from core.
 
 ### Changed
 
-- **The organization place is `Organization` (core T895, A@@MCP2@@).** `create_organization` and the other module tools of the place core T882 added as Root take the address prefix `ORG`; the module tools are named after core's type name, `Organization`. Tests place Decisions with `belongs_to_organization`.
-- **Approval operation words follow core's D142 roles (T884, A@@MCP@@).** The `delegate_item` `operation` description and `define_state_flow`'s `required_role` description give `"ratify"` as the example, not the retired `"approve"`. A `delegate_item` of `item-approver` names `ratify` or `approve-change` (the role no longer holds `approve`). Tests move to `approver` and place the Decisions they ratify (core T883). No tool behaviour of its own changes.
+- **The organization place is `Organization` (core T895, A550).** `create_organization` and the other module tools of the place core T882 added as Root take the address prefix `ORG`; the module tools are named after core's type name, `Organization`. Tests place Decisions with `belongs_to_organization`.
+- **Approval operation words follow core's D142 roles (T884, A549).** The `delegate_item` `operation` description and `define_state_flow`'s `required_role` description give `"ratify"` as the example, not the retired `"approve"`. A `delegate_item` of `item-approver` names `ratify` or `approve-change` (the role no longer holds `approve`). Tests move to `approver` and place the Decisions they ratify (core T883). No tool behaviour of its own changes.
 - **The places of D142 are addressed types (T882, A542).** `create_organization`, `create_domain`, `create_area` and `create_set` (the module tools core generates for Organization, Domain, Area and Set since T882) say in their description that the server assigns the address (ORG, DOM, ARE, SET).
 
 ## [1.65.0] - 2026-10-18
