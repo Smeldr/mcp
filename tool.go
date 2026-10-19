@@ -195,6 +195,8 @@ var toolCapabilities = map[string][2]string{
 	"answer_signal":       {smeldr.ResourceSignal, "answer"},
 	"withdraw_signal":     {smeldr.ResourceSignal, "withdraw"},
 	"search":              {smeldr.ResourceItem, "search"},
+	"decisions_for_paths": {smeldr.ResourceItem, "decisions_for_paths"},
+	"check_coverage":      {smeldr.ResourceItem, "check_coverage"},
 }
 
 // capabilityOp is the operation word of toolName's capability in core's
@@ -397,8 +399,11 @@ func (s *Server) legacyRoleFor(name string) smeldr.Role {
 	if isPreviewTool(name) {
 		return smeldr.Editor
 	}
-	if isUploadTool(name) || name == "search" {
+	if isUploadTool(name) || name == "search" || name == "decisions_for_paths" {
 		return smeldr.Author
+	}
+	if name == "check_coverage" {
+		return smeldr.Editor
 	}
 	if s.redirectEnabled && isRedirectTool(name) {
 		return smeldr.Editor
@@ -562,6 +567,9 @@ func (s *Server) allToolDefs() []mcpTool {
 		tools = append(tools, webhookToolDefs()...)
 	}
 	tools = append(tools, searchToolDef())
+	if s.coverageRegistered() {
+		tools = append(tools, decisionsForPathsToolDef(), checkCoverageToolDef())
+	}
 	tools = append(tools, previewToolDefs()...)
 	tools = append(tools, uploadToolDefs()...)
 	if s.blockRepo != nil {
@@ -829,6 +837,15 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// search (T885): the capability gate and the per-item read rules are core's.
 	if p.Name == "search" {
 		return s.handleSearchTool(ctx, coalesceArgs(p.Arguments))
+	}
+
+	// Coverage (core T886): listed and served when the instance has coverage
+	// rules; the capability gate and the read rules are core's.
+	if (p.Name == "decisions_for_paths" || p.Name == "check_coverage") && s.coverageRegistered() {
+		if p.Name == "decisions_for_paths" {
+			return s.handleDecisionsForPathsTool(ctx, coalesceArgs(p.Arguments))
+		}
+		return s.handleCheckCoverageTool(ctx, coalesceArgs(p.Arguments))
 	}
 
 	// Subscription tools (D116). Listed and served when the instance keeps

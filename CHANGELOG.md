@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`decisions_for_paths` and `check_coverage` (core T886, A@@MCP3@@).** `decisions_for_paths` {repository, paths, include_organization} answers which Decisions in force apply to the paths an agent or a pull request touches: the Areas whose coverage rules match, the Decisions placed in them, their Domains and the Organization, and the uncovered paths, under the read rules (Author; at most 3000 paths). `check_coverage` {repository, paths} counts each coverage rule's matches in the repository's full file list, stores the counts and opens or resolves `coverage-matches-nothing` (Editor; at most 100000 paths). Both are listed when the instance has coverage rules. The coverage rule module tools (`create_coverage_rule`, ...) come from core.
+
 ### Changed
 
 - **The organization place is `Organization` (core T895, A@@MCP2@@).** `create_organization` and the other module tools of the place core T882 added as Root take the address prefix `ORG`; the module tools are named after core's type name, `Organization`. Tests place Decisions with `belongs_to_organization`.
