@@ -499,15 +499,15 @@ func TestGrantTools_EndToEnd_MintedGrantRatifiesDecision(t *testing.T) {
 		t.Fatalf("grant_role to second actor: %v", rpcErr.Message)
 	}
 	// admin alone no longer carries review/approve (01a0e3f9-2, A361) -
-	// ratifying a Decision needs the separate decision-steward grant too.
-	if err := smeldr.RegisterDecisionStewardRole(context.Background(), store); err != nil {
-		t.Fatalf("RegisterDecisionStewardRole: %v", err)
+	// ratifying a Decision needs the separate approver grant too.
+	if err := smeldr.RegisterApproverRole(context.Background(), store); err != nil {
+		t.Fatalf("RegisterApproverRole: %v", err)
 	}
 	if _, rpcErr := callGrantTool(t, srv, granterCtx, "grant_role", map[string]any{
 		"token_id": newUserID,
-		"role":     "decision-steward",
+		"role":     "approver",
 	}); rpcErr != nil {
-		t.Fatalf("grant_role decision-steward to second actor: %v", rpcErr.Message)
+		t.Fatalf("grant_role approver to second actor: %v", rpcErr.Message)
 	}
 
 	// Seed a Decision directly (bypassing HTTP) in the "proposed" state.
@@ -520,6 +520,7 @@ func TestGrantTools_EndToEnd_MintedGrantRatifiesDecision(t *testing.T) {
 	if err := repo.Save(context.Background(), d); err != nil {
 		t.Fatalf("seed Decision: %v", err)
 	}
+	placeDecision(t, db, d.ID)
 
 	// Step 3: ratify using the second actor's own bearer credential over the
 	// real HTTP handler — not a direct Go call into the RoleStore.

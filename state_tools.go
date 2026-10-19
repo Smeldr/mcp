@@ -125,7 +125,7 @@ func stateToolDefs() []mcpTool {
 								"to":   map[string]any{"type": "string"},
 								"required_role": map[string]any{
 									"type":        "string",
-									"description": "The operation (e.g. \"approve\", \"manage\") an actor must hold to perform this transition — matched against a role's Operations via RoleStore.Authorized (D63/D64). Field name kept as required_role for wire stability; the value itself is an operation word, not a role name.",
+									"description": "The operation (e.g. \"ratify\", \"manage\") an actor must hold to perform this transition — matched against a role's Operations via RoleStore.Authorized (D63/D64). Field name kept as required_role for wire stability; the value itself is an operation word, not a role name.",
 								},
 							},
 							"required": []string{"from", "to"},

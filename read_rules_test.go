@@ -372,7 +372,7 @@ func TestReadRules_WritesOnHiddenEnds(t *testing.T) {
 	}
 	delegate := func(id string) *jsonRPCError {
 		_, rpcErr := callTool(t, f.srv, f.reader, "delegate_item", map[string]any{
-			"token_id": "someone", "role": "item-approver", "operation": "approve", "type": "Task", "id": id})
+			"token_id": "someone", "role": "item-approver", "operation": "ratify", "type": "Task", "id": id})
 		return rpcErr
 	}
 	sameNotFound(t, "delegate_item", delegate(f.hidden["Slug"].(string)), delegate("no-such-task"))
@@ -455,7 +455,7 @@ func TestReadRules_DelegatesMoveTheirItem(t *testing.T) {
 		Name: "memo-flow", TypeName: "memo",
 		States: []smeldr.State{{Name: "draft", IsInitial: true}, {Name: "approved"}, {Name: "reviewed"}, {Name: "closed"}, {Name: "parked"}},
 		Transitions: []smeldr.Transition{
-			{From: "draft", To: "approved", RequiredOperation: "approve"},
+			{From: "draft", To: "approved", RequiredOperation: "approve-change"},
 			{From: "draft", To: "reviewed", RequiredOperation: "review"},
 			{From: "draft", To: "closed", RequiredOperation: "manage"},
 			{From: "draft", To: "parked"},

@@ -52,7 +52,7 @@ func delegateToolDefs() []mcpTool {
 					},
 					"operation": map[string]any{
 						"type":        "string",
-						"description": "The operation word this delegation is for (e.g. \"approve\") — must be one of role's own operations. Recorded as the delegation's intent; the actual check verifies the caller holds every operation role carries, not only this one.",
+						"description": "The operation word this delegation is for (e.g. \"ratify\") — must be one of role's own operations. Recorded as the delegation's intent; the actual check verifies the caller holds every operation role carries, not only this one.",
 					},
 					"type": map[string]any{
 						"type":        "string",

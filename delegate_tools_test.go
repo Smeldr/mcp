@@ -83,7 +83,7 @@ func createTestDelegation(t *testing.T, srv *Server, store *smeldr.RoleStore, de
 	}
 	delegatorCtx := grantCtx(t, store, delegatorUID, "item-approver", "Decision:d1")
 	result, rpcErr := callGrantTool(t, srv, delegatorCtx, "delegate_item", map[string]any{
-		"token_id": recipientUID, "role": "item-approver", "operation": "approve",
+		"token_id": recipientUID, "role": "item-approver", "operation": "ratify",
 		"type": "Decision", "id": "d1",
 	})
 	if rpcErr != nil {
@@ -338,7 +338,7 @@ func TestHandleDelegateTool_ItemApproverScopesToTargetItemOnly(t *testing.T) {
 	_, rpcErr := callGrantTool(t, srv, delegatorCtx, "delegate_item", map[string]any{
 		"token_id":  "delegate-user",
 		"role":      "item-approver",
-		"operation": "approve",
+		"operation": "ratify",
 		"type":      "Decision",
 		"id":        "d1",
 	})
@@ -346,11 +346,11 @@ func TestHandleDelegateTool_ItemApproverScopesToTargetItemOnly(t *testing.T) {
 		t.Fatalf("delegate_item: %v", rpcErr.Message)
 	}
 
-	authD1, err := store.Authorized(context.Background(), "delegate-user", "approve", smeldr.AuthTarget{TypeName: "Decision", ID: "d1"})
+	authD1, err := store.Authorized(context.Background(), "delegate-user", "ratify", smeldr.AuthTarget{TypeName: "Decision", ID: "d1"})
 	if err != nil || !authD1 {
 		t.Errorf("Authorized(d1) = %v, %v, want true, nil", authD1, err)
 	}
-	authD2, err := store.Authorized(context.Background(), "delegate-user", "approve", smeldr.AuthTarget{TypeName: "Decision", ID: "d2"})
+	authD2, err := store.Authorized(context.Background(), "delegate-user", "ratify", smeldr.AuthTarget{TypeName: "Decision", ID: "d2"})
 	if err != nil || authD2 {
 		t.Errorf("Authorized(d2) = %v, %v, want false, nil — delegation must not spill to a second item", authD2, err)
 	}
@@ -371,7 +371,7 @@ func TestHandleDelegateTool_RepeatSameItem_ReportsStoredExpiry(t *testing.T) {
 	delegatorCtx := grantCtx(t, store, "delegator", "item-approver", "Decision:d1")
 
 	first, rpcErr := callGrantTool(t, srv, delegatorCtx, "delegate_item", map[string]any{
-		"token_id": "delegate-user", "role": "item-approver", "operation": "approve",
+		"token_id": "delegate-user", "role": "item-approver", "operation": "ratify",
 		"type": "Decision", "id": "d1", "expires_in_days": float64(14),
 	})
 	if rpcErr != nil {
@@ -380,7 +380,7 @@ func TestHandleDelegateTool_RepeatSameItem_ReportsStoredExpiry(t *testing.T) {
 	firstFields := unwrapToolResult(t, first)
 
 	second, rpcErr := callGrantTool(t, srv, delegatorCtx, "delegate_item", map[string]any{
-		"token_id": "delegate-user", "role": "item-approver", "operation": "approve",
+		"token_id": "delegate-user", "role": "item-approver", "operation": "ratify",
 		"type": "Decision", "id": "d1", "expires_in_days": float64(90),
 	})
 	if rpcErr != nil {
@@ -417,7 +417,7 @@ func TestHandleDelegateTool_ReadBackError(t *testing.T) {
 	failingStore := smeldr.NewRoleStore(wrapped)
 
 	_, rpcErr := srv.handleDelegateTool(delegatorCtx, failingStore, "delegate_item", map[string]any{
-		"token_id": "delegate-user", "role": "item-approver", "operation": "approve",
+		"token_id": "delegate-user", "role": "item-approver", "operation": "ratify",
 		"type": "Decision", "id": "d1",
 	})
 	if rpcErr == nil || rpcErr.Code != -32603 {
