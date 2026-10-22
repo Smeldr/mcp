@@ -317,6 +317,8 @@ both tools are already available.
 
 `search` finds records across every type the caller may read, through core's `App.Search` (T885): plain, case-insensitive text over each type's searchable fields, filtered by `types`, `states` and `place` (`none` lists records without a Domain or Area). Records the caller may not read never appear and never change `total`. Each hit carries `awaits_action`, `standing` where the type has it, and `state_since` for Task and Goal. Author role; under governance it needs a caller who reads at least one item (capability `item search`). Needs smeldr.dev/core with `App.Search`.
 
+`approvers_of` {place} answers who approves a place (core T911, D147), listed when the instance has places (Area): every approver, the domain-approvers of the place's Domain and, for an Area, its area-approvers, each with token name, role, class and `anchor_address` (empty when the caller may not read the anchor). Only for a place the caller may read; any other place is not found. Expired grants and holders with no live token are left out. Author role; capability `item approvers_of`. Needs smeldr.dev/core with `App.ApproversOf`.
+
 ---
 
 ## Subscriptions and requests (v1.64.0)

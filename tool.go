@@ -196,6 +196,7 @@ var toolCapabilities = map[string][2]string{
 	"withdraw_signal":     {smeldr.ResourceSignal, "withdraw"},
 	"search":              {smeldr.ResourceItem, "search"},
 	"decisions_for_paths": {smeldr.ResourceItem, "decisions_for_paths"},
+	"approvers_of":        {smeldr.ResourceItem, "approvers_of"},
 	"check_coverage":      {smeldr.ResourceItem, "check_coverage"},
 }
 
@@ -399,7 +400,7 @@ func (s *Server) legacyRoleFor(name string) smeldr.Role {
 	if isPreviewTool(name) {
 		return smeldr.Editor
 	}
-	if isUploadTool(name) || name == "search" || name == "decisions_for_paths" {
+	if isUploadTool(name) || name == "search" || name == "decisions_for_paths" || name == "approvers_of" {
 		return smeldr.Author
 	}
 	if name == "check_coverage" {
@@ -569,6 +570,9 @@ func (s *Server) allToolDefs() []mcpTool {
 	tools = append(tools, searchToolDef())
 	if s.coverageRegistered() {
 		tools = append(tools, decisionsForPathsToolDef(), checkCoverageToolDef())
+	}
+	if s.placesRegistered() {
+		tools = append(tools, approversOfToolDef())
 	}
 	tools = append(tools, previewToolDefs()...)
 	tools = append(tools, uploadToolDefs()...)
@@ -846,6 +850,12 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return s.handleDecisionsForPathsTool(ctx, coalesceArgs(p.Arguments))
 		}
 		return s.handleCheckCoverageTool(ctx, coalesceArgs(p.Arguments))
+	}
+
+	// approvers_of (core T911): listed and served when the instance has
+	// places; the capability gate and the read rules are core's.
+	if p.Name == "approvers_of" && s.placesRegistered() {
+		return s.handleApproversOfTool(ctx, coalesceArgs(p.Arguments))
 	}
 
 	// Subscription tools (D116). Listed and served when the instance keeps

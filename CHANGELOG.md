@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`approvers_of` (core T911, D147).** `approvers_of` {place} lists who approves an Organization, Domain or Area the caller may read: token name, role, class and anchor address, through core's `App.ApproversOf`. Listed when the instance has places; Author role; capability `item approvers_of`. Needs smeldr.dev/core with `App.ApproversOf` (the next core MINOR).
+
 ---
 
 ## [1.66.0] - 2026-10-19

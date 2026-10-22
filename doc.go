@@ -35,6 +35,12 @@
 // states and place (none lists unplaced records). Hidden records never appear
 // and never change the total.
 //
+// # Who approves here
+//
+// When the App has places, approvers_of runs smeldr.dev/core's
+// App.ApproversOf: who approves an Organization, Domain or Area the caller
+// may read (token name, role, class, anchor address), without administer.
+//
 // # Subscriptions and requests
 //
 // When the App keeps subscriptions (smeldr.dev/core's App.Subscriptions), the
