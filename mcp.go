@@ -373,9 +373,16 @@ func fieldToProp(f smeldr.MCPField) map[string]any {
 	var prop map[string]any
 	switch f.Type {
 	case "array":
+		// A list of objects (core's MCPField.Items, for example a Decision's
+		// sources, D148) advertises its element's shape; any other list is
+		// of strings.
+		items := map[string]any{"type": "string"}
+		if f.Items != nil {
+			items = f.Items
+		}
 		prop = map[string]any{
 			"type":  "array",
-			"items": map[string]any{"type": "string"},
+			"items": items,
 		}
 	case "datetime":
 		// "datetime" is an internal Smeldr type identifier. JSON Schema
