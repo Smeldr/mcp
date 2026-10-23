@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [1.68.0] - 2026-10-23
+
+Requires smeldr.dev/core v1.172.0.
+
 ### Added
 
 - **`get_rest_counts`, `list_rest_counts`, `confirm_premise` (core T919, D150, D149).** Live rest counts for one item, stored counts for up to 200 items (summed over the places the caller reads, with `counted_at`), and confirming that a Decision still holds although its premise is not in force (ratify over its place, a reason), by the condition (its Signal, core T925) or by the two Decisions. Addresses, slugs and IDs are accepted. Listed when the instance has Decisions; capabilities `item rest_counts` and `item confirm_premise`. Needs smeldr.dev/core with `App.RestCounts`, `App.StoredRestCounts`, `App.ConfirmPremise` and `App.ConfirmPremiseCondition` (the next core MINOR).
