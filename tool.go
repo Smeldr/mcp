@@ -203,6 +203,9 @@ var toolCapabilities = map[string][2]string{
 	"get_change_check":    {smeldr.ResourceItem, "change_checks"},
 	"list_change_checks":  {smeldr.ResourceItem, "change_checks"},
 	"check_coverage":      {smeldr.ResourceItem, "check_coverage"},
+	"get_rest_counts":     {smeldr.ResourceItem, "rest_counts"},
+	"list_rest_counts":    {smeldr.ResourceItem, "rest_counts"},
+	"confirm_premise":     {smeldr.ResourceItem, "confirm_premise"},
 }
 
 // capabilityOp is the operation word of toolName's capability in core's
@@ -582,6 +585,9 @@ func (s *Server) allToolDefs() []mcpTool {
 	if s.placesRegistered() {
 		tools = append(tools, approversOfToolDef())
 	}
+	if s.restCountsRegistered() {
+		tools = append(tools, restCountToolDefs()...)
+	}
 	if s.changeChecksRegistered() {
 		tools = append(tools, changeCheckToolDefs()...)
 	}
@@ -867,6 +873,12 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// places; the capability gate and the read rules are core's.
 	if p.Name == "approvers_of" && s.placesRegistered() {
 		return s.handleApproversOfTool(ctx, coalesceArgs(p.Arguments))
+	}
+
+	// Rest counts and confirm_premise (core T919, D150, D149): listed and
+	// served when the instance has Decisions; core gates and filters.
+	if isRestCountTool(p.Name) && s.restCountsRegistered() {
+		return s.handleRestCountTool(ctx, p.Name, coalesceArgs(p.Arguments))
 	}
 
 	// The pull request check (core T918): core gates check_change and

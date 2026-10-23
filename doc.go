@@ -41,6 +41,14 @@
 // App.ApproversOf: who approves an Organization, Domain or Area the caller
 // may read (token name, role, class, anchor address), without administer.
 //
+// # What rests on what
+//
+// When the App has Decisions, get_rest_counts counts live what rests on an
+// item and what it rests on (core D150), list_rest_counts reads the counts
+// the last sweep stored for up to 200 items, and confirm_premise records
+// that a Decision still holds although its premise is not in force (D149).
+// Core applies the read rules and, for confirm_premise, ratify.
+//
 // # The pull request check
 //
 // When the App has the ChangeCheck type, check_change and record_merge (for
