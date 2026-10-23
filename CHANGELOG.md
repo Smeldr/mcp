@@ -9,6 +9,12 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [1.67.0] - 2026-10-23
+
+Requires smeldr.dev/core v1.171.0.
+
 ### Added
 
 - **The pull request check tools (core T918).** `check_change`, `record_merge` (core's `check_change` capability), `answer_change_check`, `get_change_check` and `list_change_checks`, over core's `App.CheckChange`, `App.RecordMerge`, `App.AnswerChangeCheck`, `App.ChangeCheckOf` and `App.ListChangeChecks`. Listed when the instance has the `ChangeCheck` type. Needs smeldr.dev/core with the pull request check (the next core MINOR).
