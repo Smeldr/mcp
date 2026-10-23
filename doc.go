@@ -41,6 +41,13 @@
 // App.ApproversOf: who approves an Organization, Domain or Area the caller
 // may read (token name, role, class, anchor address), without administer.
 //
+// # The pull request check
+//
+// When the App has the ChangeCheck type, check_change and record_merge (for
+// the host adapter or an operator), answer_change_check, get_change_check and
+// list_change_checks run smeldr.dev/core's pull request check: a Check per
+// checked commit, approval per Area, and the audit after merge.
+//
 // # Subscriptions and requests
 //
 // When the App keeps subscriptions (smeldr.dev/core's App.Subscriptions), the

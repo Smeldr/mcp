@@ -11,6 +11,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **The pull request check tools (core T918).** `check_change`, `record_merge` (core's `check_change` capability), `answer_change_check`, `get_change_check` and `list_change_checks`, over core's `App.CheckChange`, `App.RecordMerge`, `App.AnswerChangeCheck`, `App.ChangeCheckOf` and `App.ListChangeChecks`. Listed when the instance has the `ChangeCheck` type. Needs smeldr.dev/core with the pull request check (the next core MINOR).
 - **`approvers_of` (core T911, D147).** `approvers_of` {place} lists who approves an Organization, Domain or Area the caller may read: token name, role, class and anchor address, through core's `App.ApproversOf`. Listed when the instance has places; Author role; capability `item approvers_of`. Needs smeldr.dev/core with `App.ApproversOf` (the next core MINOR).
 - **Lists of objects in tool schemas (core T914, D148).** A field whose core `MCPField.Items` is set (a slice of structs, such as a Decision's `sources`) is advertised as an array of that object, with its properties, required fields and enums, instead of an array of strings. `create_decision` and `update_decision` then show the shape of a pinned source. Needs smeldr.dev/core with `MCPField.Items` (the next core MINOR).
 

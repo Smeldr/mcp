@@ -197,6 +197,11 @@ var toolCapabilities = map[string][2]string{
 	"search":              {smeldr.ResourceItem, "search"},
 	"decisions_for_paths": {smeldr.ResourceItem, "decisions_for_paths"},
 	"approvers_of":        {smeldr.ResourceItem, "approvers_of"},
+	"check_change":        {smeldr.ResourceItem, "check_change"},
+	"record_merge":        {smeldr.ResourceItem, "check_change"},
+	"answer_change_check": {smeldr.ResourceItem, "answer_change_check"},
+	"get_change_check":    {smeldr.ResourceItem, "change_checks"},
+	"list_change_checks":  {smeldr.ResourceItem, "change_checks"},
 	"check_coverage":      {smeldr.ResourceItem, "check_coverage"},
 }
 
@@ -403,8 +408,11 @@ func (s *Server) legacyRoleFor(name string) smeldr.Role {
 	if isUploadTool(name) || name == "search" || name == "decisions_for_paths" || name == "approvers_of" {
 		return smeldr.Author
 	}
-	if name == "check_coverage" {
+	if name == "check_coverage" || name == "check_change" || name == "record_merge" {
 		return smeldr.Editor
+	}
+	if name == "answer_change_check" || name == "get_change_check" || name == "list_change_checks" {
+		return smeldr.Author
 	}
 	if s.redirectEnabled && isRedirectTool(name) {
 		return smeldr.Editor
@@ -573,6 +581,9 @@ func (s *Server) allToolDefs() []mcpTool {
 	}
 	if s.placesRegistered() {
 		tools = append(tools, approversOfToolDef())
+	}
+	if s.changeChecksRegistered() {
+		tools = append(tools, changeCheckToolDefs()...)
 	}
 	tools = append(tools, previewToolDefs()...)
 	tools = append(tools, uploadToolDefs()...)
@@ -856,6 +867,13 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// places; the capability gate and the read rules are core's.
 	if p.Name == "approvers_of" && s.placesRegistered() {
 		return s.handleApproversOfTool(ctx, coalesceArgs(p.Arguments))
+	}
+
+	// The pull request check (core T918): core gates check_change and
+	// record_merge by its check_change capability and answers by
+	// approve-change over the Area.
+	if isChangeCheckTool(p.Name) && s.changeChecksRegistered() {
+		return s.handleChangeCheckTool(ctx, p.Name, coalesceArgs(p.Arguments))
 	}
 
 	// Subscription tools (D116). Listed and served when the instance keeps

@@ -319,6 +319,8 @@ both tools are already available.
 
 `approvers_of` {place} answers who approves a place (core T911, D147), listed when the instance has places (Area): every approver, the domain-approvers of the place's Domain and, for an Area, its area-approvers, each with token name, role, class and `anchor_address` (empty when the caller may not read the anchor). Only for a place the caller may read; any other place is not found. Expired grants and holders with no live token are left out. Author role; capability `item approvers_of`. Needs smeldr.dev/core with `App.ApproversOf`.
 
+**The pull request check** (core T918), listed when the instance has the `ChangeCheck` type: `check_change` {repository, number, head_commit, paths, files_total} checks one commit of a pull request and returns the Check (`CHK<n>`, its state the verdict), its Areas and the Decisions in force; `record_merge` {repository, number, head_commit, merge_commit} records the merge, opening a `merge-unapproved` condition for each `audit-after-merge` Area without an approval; both need core's `check_change` capability (the host adapter's token or an operator, Editor role). `answer_change_check` {check, area, approve, reason} answers for one Area (core checks approve-change over that Area, or `item-change-approver` on the Check); `get_change_check` {check} and `list_change_checks` {repository, number, area, decision, status, limit} read Checks under the read rules, by filter only (Author role). Needs smeldr.dev/core with the pull request check.
+
 ---
 
 ## Subscriptions and requests (v1.64.0)
