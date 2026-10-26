@@ -11,6 +11,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.70.0] - 2026-10-26
+
+Requires smeldr.dev/core v1.177.0.
+
+### Added
+
+- **`list_findings` (core T953).** Lists recorded findings newest first (detector, subject type, ID and address, provenance, message, first and last seen), with optional `detector`, `subject_type` and `limit`. Listed and served when the App records findings. A caller sees a finding only when it may read its subject, through core's `App.ListFindings`. A test pins `list_findings` as the only tool on the `ops list` capability, which core treats as reads-any filtered per subject. Needs smeldr.dev/core with `App.ListFindings`.
+
+---
+
 ## [1.69.0] - 2026-10-26
 
 Requires smeldr.dev/core v1.175.0.

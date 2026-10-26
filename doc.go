@@ -43,6 +43,8 @@
 // When governance is wired, administrators runs App.Administrators: who
 // administers the instance (token name and class), for any authenticated
 // caller (core T944, D154).
+// When the App records findings, list_findings runs App.ListFindings: what
+// the detectors found, filtered by what the caller may read (core T953).
 //
 // # What rests on what
 //

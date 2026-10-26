@@ -198,6 +198,7 @@ var toolCapabilities = map[string][2]string{
 	"decisions_for_paths": {smeldr.ResourceItem, "decisions_for_paths"},
 	"approvers_of":        {smeldr.ResourceItem, "approvers_of"},
 	"administrators":      {smeldr.ResourceItem, "administrators"},
+	"list_findings":       {smeldr.ResourceOps, "list"},
 	"check_change":        {smeldr.ResourceItem, "check_change"},
 	"record_merge":        {smeldr.ResourceItem, "check_change"},
 	"answer_change_check": {smeldr.ResourceItem, "answer_change_check"},
@@ -409,7 +410,7 @@ func (s *Server) legacyRoleFor(name string) smeldr.Role {
 	if isPreviewTool(name) {
 		return smeldr.Editor
 	}
-	if isUploadTool(name) || name == "search" || name == "decisions_for_paths" || name == "approvers_of" || name == "administrators" {
+	if isUploadTool(name) || name == "search" || name == "decisions_for_paths" || name == "approvers_of" || name == "administrators" || name == "list_findings" {
 		return smeldr.Author
 	}
 	if name == "check_coverage" || name == "check_change" || name == "record_merge" {
@@ -573,6 +574,9 @@ func (s *Server) allToolDefs() []mcpTool {
 		tools = append(tools, grantToolDefs()...)
 		tools = append(tools, delegateToolDefs()...)
 		tools = append(tools, administratorsToolDef())
+	}
+	if s.app.FindingStore() != nil {
+		tools = append(tools, listFindingsToolDef())
 	}
 	if s.navTree != nil {
 		tools = append(tools, navToolDefs(s.navTree.HasDB())...)
@@ -869,6 +873,12 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return s.handleDecisionsForPathsTool(ctx, coalesceArgs(p.Arguments))
 		}
 		return s.handleCheckCoverageTool(ctx, coalesceArgs(p.Arguments))
+	}
+
+	// list_findings (core T953): listed and served when the App records
+	// findings; core filters each finding by its subject.
+	if p.Name == "list_findings" && s.app.FindingStore() != nil {
+		return s.handleListFindingsTool(ctx, coalesceArgs(p.Arguments))
 	}
 
 	// administrators (core T944, D154): listed and served when governance is
