@@ -40,6 +40,9 @@
 // When the App has places, approvers_of runs smeldr.dev/core's
 // App.ApproversOf: who approves an Organization, Domain or Area the caller
 // may read (token name, role, class, anchor address), without administer.
+// When governance is wired, administrators runs App.Administrators: who
+// administers the instance (token name and class), for any authenticated
+// caller (core T944, D154).
 //
 // # What rests on what
 //

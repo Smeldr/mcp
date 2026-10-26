@@ -197,6 +197,7 @@ var toolCapabilities = map[string][2]string{
 	"search":              {smeldr.ResourceItem, "search"},
 	"decisions_for_paths": {smeldr.ResourceItem, "decisions_for_paths"},
 	"approvers_of":        {smeldr.ResourceItem, "approvers_of"},
+	"administrators":      {smeldr.ResourceItem, "administrators"},
 	"check_change":        {smeldr.ResourceItem, "check_change"},
 	"record_merge":        {smeldr.ResourceItem, "check_change"},
 	"answer_change_check": {smeldr.ResourceItem, "answer_change_check"},
@@ -408,7 +409,7 @@ func (s *Server) legacyRoleFor(name string) smeldr.Role {
 	if isPreviewTool(name) {
 		return smeldr.Editor
 	}
-	if isUploadTool(name) || name == "search" || name == "decisions_for_paths" || name == "approvers_of" {
+	if isUploadTool(name) || name == "search" || name == "decisions_for_paths" || name == "approvers_of" || name == "administrators" {
 		return smeldr.Author
 	}
 	if name == "check_coverage" || name == "check_change" || name == "record_merge" {
@@ -571,6 +572,7 @@ func (s *Server) allToolDefs() []mcpTool {
 	if s.app.RoleStore() != nil {
 		tools = append(tools, grantToolDefs()...)
 		tools = append(tools, delegateToolDefs()...)
+		tools = append(tools, administratorsToolDef())
 	}
 	if s.navTree != nil {
 		tools = append(tools, navToolDefs(s.navTree.HasDB())...)
@@ -867,6 +869,12 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 			return s.handleDecisionsForPathsTool(ctx, coalesceArgs(p.Arguments))
 		}
 		return s.handleCheckCoverageTool(ctx, coalesceArgs(p.Arguments))
+	}
+
+	// administrators (core T944, D154): listed and served when governance is
+	// wired; any authenticated caller passes core's gate.
+	if p.Name == "administrators" && s.app.RoleStore() != nil {
+		return s.handleAdministratorsTool(ctx)
 	}
 
 	// approvers_of (core T911): listed and served when the instance has

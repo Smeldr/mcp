@@ -11,6 +11,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.69.0] - 2026-10-26
+
+Requires smeldr.dev/core v1.175.0.
+
+### Added
+
+- **`administrators` (core T944, D154).** Takes no arguments and lists who administers the instance: token name and class only, through `App.Administrators`. Listed and served when governance is wired; any authenticated caller may call it, also a token with no grant yet, so a member knows whom to ask. Needs smeldr.dev/core with `App.Administrators`.
+
+---
+
 ## [1.68.0] - 2026-10-23
 
 Requires smeldr.dev/core v1.172.0.
