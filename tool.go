@@ -361,6 +361,13 @@ func errorFor(err error) *jsonRPCError {
 	if errors.Is(err, smeldr.ErrNotFound) {
 		return &jsonRPCError{Code: -32000, Message: "not found"}
 	}
+	// A refusal whose reason is safe to show keeps it (core T971); every
+	// other forbidden stays bare, since its text could name an item the
+	// caller may not read.
+	var re *smeldr.RefusalError
+	if errors.As(err, &re) {
+		return &jsonRPCError{Code: -32001, Message: "forbidden: " + re.Reason}
+	}
 	if errors.Is(err, smeldr.ErrForbidden) {
 		return &jsonRPCError{Code: -32001, Message: "forbidden"}
 	}

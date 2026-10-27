@@ -9,6 +9,16 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+Requires smeldr.dev/core v1.179.0 (`RefusalError`, core T971).
+
+### Changed
+
+- **A forbidden can carry its reason (core T971, A596).** A `*smeldr.RefusalError` is answered -32001 with `forbidden: <reason>`, for example `forbidden: an agent token never ratifies, supersedes or amends a Decision (D142); a human approver does`. Every other forbidden stays the bare `forbidden`, since its text could name an item the caller may not read. The code is unchanged.
+
+### Fixed
+
+- **`serverInfo.version` is the real version (core T971).** `initialize` answered `"1.0.0"` whatever the release; it now reports the smeldr.dev/mcp version the binary was built with (from build info), or `(devel)`.
+
 ---
 
 ## [1.70.0] - 2026-10-26

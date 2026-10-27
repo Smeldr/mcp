@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"runtime/debug"
+	"sync"
 	"sync/atomic"
 
 	"smeldr.dev/core"
@@ -651,7 +653,7 @@ func (s *Server) handle(ctx smeldr.Context, req jsonRPCRequest) jsonRPCResponse 
 func (s *Server) handleInitialize() any {
 	return map[string]any{
 		"protocolVersion": "2024-11-05",
-		"serverInfo":      map[string]any{"name": "smeldr-mcp", "version": "1.0.0"},
+		"serverInfo":      map[string]any{"name": "smeldr-mcp", "version": moduleVersion()},
 		"capabilities": map[string]any{
 			"resources": map[string]any{"subscribe": true, "listChanged": true},
 			"tools":     map[string]any{"listChanged": false},
@@ -779,4 +781,44 @@ func snakeCase(s string) string {
 		}
 	}
 	return string(out)
+}
+
+// mcpModulePath is this module's path, as a dependency of a server binary.
+const mcpModulePath = "smeldr.dev/mcp"
+
+var (
+	moduleVersionOnce sync.Once
+	moduleVersionText string
+)
+
+// moduleVersion is smeldr.dev/mcp's version for serverInfo (T971): the
+// version of the module this binary was built with, "(devel)" when unknown.
+func moduleVersion() string {
+	moduleVersionOnce.Do(func() {
+		info, _ := debug.ReadBuildInfo()
+		moduleVersionText = versionFrom(info)
+	})
+	return moduleVersionText
+}
+
+// versionFrom finds smeldr.dev/mcp in info: a dependency (the usual case,
+// mcp inside a server binary) or the main module.
+func versionFrom(info *debug.BuildInfo) string {
+	if info == nil {
+		return "(devel)"
+	}
+	for _, d := range info.Deps {
+		if d.Path == mcpModulePath {
+			if d.Replace != nil && d.Replace.Version != "" {
+				return d.Replace.Version
+			}
+			if d.Version != "" {
+				return d.Version
+			}
+		}
+	}
+	if info.Main.Path == mcpModulePath && info.Main.Version != "" {
+		return info.Main.Version
+	}
+	return "(devel)"
 }
