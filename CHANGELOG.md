@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [1.71.0] - 2026-10-27
+
 Requires smeldr.dev/core v1.179.0 (`RefusalError`, core T971).
 
 ### Changed
