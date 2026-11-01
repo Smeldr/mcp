@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"time"
 
 	smeldr "smeldr.dev/core"
@@ -281,7 +280,7 @@ func (s *Server) handleDynamicContentTool(ctx smeldr.Context, name string, args 
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		return toolResult(s.withPlanTime(ctx, typeName, node.ID, s.withItemFact(ctx, typeName, node))), nil
+		return toolResult(s.withItemFact(ctx, typeName, node)), nil
 
 	case "list_content":
 		typeName, ok := stringArg(args, "type_name")
@@ -478,26 +477,4 @@ func withWarnings(node *smeldr.DynamicNode, warnings []smeldr.CreateWarning) any
 	}
 	out["warnings"] = warnings
 	return out
-}
-
-// withPlanTime adds "plan_time" to a task_plan's read (core T1015, G30 phase
-// 1): the Areas and Decisions Smeldr recorded at submit and approve, within
-// the reader's read rights, and "recorded": false when a commit plan has none.
-// Any other type, or a failed read (logged), is returned as it is.
-func (s *Server) withPlanTime(ctx smeldr.Context, typeName, id string, item any) any {
-	if typeName != "task_plan" {
-		return item
-	}
-	record, err := s.app.PlanTimeRecord(ctx, id)
-	if err != nil {
-		slog.WarnContext(ctx, "mcp: plan-time record not read, plan_time left out of the result", "plan", id, "error", err)
-		return item
-	}
-	m := map[string]any{}
-	b, err := json.Marshal(item)
-	if err != nil || json.Unmarshal(b, &m) != nil {
-		return item
-	}
-	m["plan_time"] = record
-	return m
 }

@@ -9,10 +9,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Added
-
-- **`get_content` on a `task_plan` shows its plan-time record (core T1015).** For a `task_plan`, `get_content` now adds a `plan_time` field. It shows the Areas and Decisions the plan rests on, whether a record exists, when it was made, and at which transition. Other types are unchanged. This needs a core version with `App.PlanTimeRecord`.
-
 ---
 
 ## [1.72.0] - 2026-11-01
