@@ -605,6 +605,25 @@ func inputSchemaUpdate(fields []smeldr.MCPField) map[string]any {
 // (core T1010).
 const revDescription = "The rev you read (from get_<type>). Send it on every update and transition: if the item has changed since, the write is refused with rev_conflict, and you must read it again and apply your change only if it still holds. Required on a Decision, Amendment, Organization, Domain, Area or CoverageRule (a rev_missing warning until the instance's cutover, then a refusal)."
 
+// relationRevDescription describes the rev of a relation write (core T1010).
+const relationRevDescription = "The rev of the relation you read (list_relations / get_relations). Needed to re-assert or withdraw a belongs_to_*, grounded_in, contradicts or supersedes relation: a stale one is refused with rev_conflict; read it again. A first assert needs none. Without one: a rev_missing warning until the instance's cutover, then a refusal."
+
+// revPtrArg returns the rev argument, nil when the caller sent none.
+func revPtrArg(args map[string]any) *int {
+	if rev, ok := revArg(args); ok {
+		return &rev
+	}
+	return nil
+}
+
+// withRevWarnings adds warnings to a result map when there are any.
+func withRevWarnings(result map[string]any, warnings []smeldr.CreateWarning) map[string]any {
+	if len(warnings) > 0 {
+		result["warnings"] = warnings
+	}
+	return result
+}
+
 // revArg returns the rev argument, and whether the caller sent one.
 func revArg(args map[string]any) (int, bool) {
 	switch v := args["rev"].(type) {

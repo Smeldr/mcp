@@ -33,6 +33,7 @@ func relationToolDefs() []mcpTool {
 					"relation_kind": map[string]any{"type": "string", "description": "type_name of a registered relation kind, e.g. \"cites\"."},
 					"confidence":    map[string]any{"type": "number", "description": "Confidence score (0.0–1.0) for weighted kinds. Omit for unweighted kinds."},
 					"attributes":    map[string]any{"type": "object", "description": "Arbitrary edge-level metadata."},
+					"rev":           map[string]any{"type": "integer", "description": relationRevDescription},
 				},
 				"required": []string{"source_type", "source_id", "target_type", "target_id", "relation_kind"},
 			},
@@ -49,6 +50,7 @@ func relationToolDefs() []mcpTool {
 				"properties": map[string]any{
 					"id":     map[string]any{"type": "string", "description": "ID of the relation row to end (from get_relations)."},
 					"reason": map[string]any{"type": "string", "description": "Why the relation no longer holds. Required."},
+					"rev":    map[string]any{"type": "integer", "description": relationRevDescription},
 				},
 				"required": []string{"id", "reason"},
 			},
@@ -253,14 +255,14 @@ func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[st
 		if rpcErr := relationEndsReadable(ctx, sourceType, sourceID, targetType, targetID); rpcErr != nil {
 			return nil, rpcErr
 		}
-		edge, err := s.relationStore.MCPAssertRelation(ctx,
+		edge, warnings, err := s.relationStore.MCPAssertRelationAt(ctx,
 			sourceType, sourceID, targetType, targetID, kind,
-			confidence, nil, nil, attrs,
+			confidence, nil, nil, attrs, revPtrArg(args),
 		)
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		return toolResult(relationEdgeMap(edge)), nil
+		return toolResult(withRevWarnings(relationEdgeMap(edge), warnings)), nil
 
 	case "withdraw_relation":
 		id, ok := stringArg(args, "id")
@@ -271,10 +273,11 @@ func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[st
 		if !ok {
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: reason required"}
 		}
-		if err := s.relationStore.Withdraw(ctx, id, reason); err != nil {
+		warnings, err := s.relationStore.WithdrawAt(ctx, id, reason, revPtrArg(args))
+		if err != nil {
 			return nil, errorFor(err)
 		}
-		return toolResult(map[string]any{"id": id, "withdrawn": true}), nil
+		return toolResult(withRevWarnings(map[string]any{"id": id, "withdrawn": true}, warnings)), nil
 
 	case "propose_relation":
 		sourceType, ok := stringArg(args, "source_type")
@@ -474,6 +477,7 @@ func (s *Server) handleRelationTool(ctx smeldr.Context, name string, args map[st
 func relationEdgeMap(e smeldr.RelationEdge) map[string]any {
 	m := map[string]any{
 		"id":            e.ID,
+		"rev":           e.Rev,
 		"source_type":   e.SourceType,
 		"source_id":     e.SourceID,
 		"target_type":   e.TargetType,

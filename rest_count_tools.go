@@ -64,6 +64,7 @@ func restCountToolDefs() []mcpTool {
 					"decision":  map[string]any{"type": "string", "description": "The Decision that rests on the premise."},
 					"premise":   map[string]any{"type": "string", "description": "The Decision it rests on."},
 					"reason":    map[string]any{"type": "string", "description": "Why the Decision still holds."},
+					"rev":       map[string]any{"type": "integer", "description": "The rev of the resting Decision you read. A stale one is refused with rev_conflict and nothing is recorded: read it again, and confirm only if it still holds. Without one: a rev_missing warning until the instance's cutover, then a refusal (core T1010)."},
 				},
 				"required": []string{"reason"},
 			},
@@ -135,17 +136,18 @@ func (s *Server) handleRestCountTool(ctx smeldr.Context, name string, args map[s
 	default: // confirm_premise
 		condition, decision, premise, reason := stringArgOr(args, "condition", ""), stringArgOr(args, "decision", ""), stringArgOr(args, "premise", ""), stringArgOr(args, "reason", "")
 		var err error
+		var warnings []smeldr.CreateWarning
 		switch {
 		case condition != "" && decision == "" && premise == "":
-			err = s.app.ConfirmPremiseCondition(ctx, condition, reason)
+			warnings, err = s.app.ConfirmPremiseConditionAt(ctx, condition, reason, revPtrArg(args))
 		case condition == "" && decision != "" && premise != "":
-			err = s.app.ConfirmPremise(ctx, decision, premise, reason)
+			warnings, err = s.app.ConfirmPremiseAt(ctx, decision, premise, reason, revPtrArg(args))
 		default:
 			return nil, &jsonRPCError{Code: -32602, Message: "name the condition, or the decision and the premise, not both"}
 		}
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		return toolResult(map[string]any{"confirmed": true}), nil
+		return toolResult(withRevWarnings(map[string]any{"confirmed": true}, warnings)), nil
 	}
 }

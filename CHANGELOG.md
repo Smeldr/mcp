@@ -12,6 +12,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - **`rev` on `transition_item`, and described on every update tool (core T1010).** `transition_item` takes an optional integer `rev`. When you send it, the call goes through `TransitionItemAt`, and a stale rev is refused with `rev_conflict`. Every `update_<type>` tool now describes `rev`: send the rev you read from `get_<type>` on every update and every transition. The six governance types require it. Until the instance's cutover a missing rev gives a `rev_missing` warning, and after the cutover it is refused. This needs a core release that includes `TransitionItemAt`.
+- **`rev` on `assert_relation`, `withdraw_relation`, `answer_change_check` and `confirm_premise` (core T1010 part b).** These four tools take an optional integer `rev`. They pass it to the new core methods, which refuse a stale rev and write nothing. Warnings now come back in the result. `assert_relation` shows the edge's `rev` in its result. `answer_change_check` keeps its result shape, with `warnings` beside it when there are any. The tool schemas describe `rev`.
 
 ---
 

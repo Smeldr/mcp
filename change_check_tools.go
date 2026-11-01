@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"encoding/json"
 	smeldr "smeldr.dev/core"
 )
 
@@ -58,6 +59,7 @@ func changeCheckToolDefs() []mcpTool {
 					"area":    map[string]any{"type": "string", "description": "The Area you answer for: address, slug or ID."},
 					"approve": map[string]any{"type": "boolean", "description": "true to approve, false for not approved."},
 					"reason":  map[string]any{"type": "string", "description": "Why; required when not approved."},
+					"rev":     map[string]any{"type": "integer", "description": "The rev of the Check you read (get_change_check). A stale one is refused with rev_conflict and nothing is recorded; read it again. Without one: a rev_missing warning until the instance's cutover, then a refusal (core T1010)."},
 				},
 				"required": []string{"check", "area", "approve"},
 			},
@@ -156,12 +158,21 @@ func (s *Server) handleChangeCheckTool(ctx smeldr.Context, name string, args map
 			return nil, &jsonRPCError{Code: -32602, Message: "invalid params: approve must be true or false"}
 		}
 		check, area := stringArgOr(args, "check", ""), stringArgOr(args, "area", "")
-		if err := s.app.AnswerChangeCheck(ctx, check, area, approve, stringArgOr(args, "reason", "")); err != nil {
+		warnings, err := s.app.AnswerChangeCheckAt(ctx, check, area, approve, stringArgOr(args, "reason", ""), revPtrArg(args))
+		if err != nil {
 			return nil, errorFor(err)
 		}
 		res, err := s.app.ChangeCheckOf(ctx, check)
 		if err != nil {
 			return nil, errorFor(err)
+		}
+		if len(warnings) > 0 {
+			// The result keeps the Check's shape, with the warnings beside it.
+			m := map[string]any{}
+			if b, err := json.Marshal(res); err == nil {
+				_ = json.Unmarshal(b, &m)
+			}
+			return toolResult(withRevWarnings(m, warnings)), nil
 		}
 		return toolResult(res), nil
 	}

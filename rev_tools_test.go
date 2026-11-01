@@ -55,3 +55,29 @@ func TestRevDescribedInSchemas(t *testing.T) {
 		t.Errorf("update rev is not described: %+v", p)
 	}
 }
+
+// assert_relation returns the edge's rev; withdraw_relation with a stale rev is
+// refused with rev_conflict, and with the rev it read the edge ends.
+func TestRelationTools_Rev(t *testing.T) {
+	srv, store := newRelationServer(t)
+	seedRelationKind(t, store, "supersedes")
+	ctx := newAuthorCtx()
+	res, rpcErr := callSeeded(t, srv, ctx, "assert_relation", map[string]any{
+		"source_type": "post", "source_id": "post-1", "target_type": "source", "target_id": "source-1", "relation_kind": "supersedes",
+	})
+	if rpcErr != nil {
+		t.Fatalf("assert_relation: %v", rpcErr.Message)
+	}
+	out := unwrapToolResult(t, res)
+	id, _ := out["id"].(string)
+	rev, ok := out["rev"].(float64)
+	if !ok {
+		t.Fatalf("assert_relation result has no rev: %v", out)
+	}
+	if _, rpcErr := callTool(t, srv, ctx, "withdraw_relation", map[string]any{"id": id, "reason": "r", "rev": rev + 1}); rpcErr == nil || rpcErr.Code != -32002 {
+		t.Fatalf("a stale rev: %+v; want -32002", rpcErr)
+	}
+	if _, rpcErr := callTool(t, srv, ctx, "withdraw_relation", map[string]any{"id": id, "reason": "r", "rev": rev}); rpcErr != nil {
+		t.Fatalf("with the rev it read: %v", rpcErr.Message)
+	}
+}
