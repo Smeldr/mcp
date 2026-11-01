@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	smeldr "smeldr.dev/core"
@@ -612,9 +613,10 @@ func TestDynamicTools_SetContentStatus_ScheduledAccepted(t *testing.T) {
 		"id":        id,
 		"status":    "scheduled",
 	})
-	// The call must NOT return -32602 (invalid params) — "scheduled" passes the enum check.
-	// It may return a different error (e.g. state-flow rejection), but not a params error.
-	if rpcErr != nil && rpcErr.Code == -32602 {
+	// "scheduled" must pass the enum check. It may be refused after it: since
+	// core T1009 a move to scheduled with no scheduled_at is a validation error
+	// (-32602 too), which is past the enum gate, so only an enum rejection fails.
+	if rpcErr != nil && rpcErr.Code == -32602 && !strings.Contains(rpcErr.Message, "without a scheduled_at") {
 		t.Errorf("set_content_status with status=scheduled returned -32602 (enum rejection); expected the value to pass the enum gate")
 	}
 }
