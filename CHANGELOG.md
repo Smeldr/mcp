@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [1.72.0] - 2026-11-01
+
 ### Added
 
 - **`rev` on `transition_item`, and described on every update tool (core T1010).** `transition_item` takes an optional integer `rev`. When you send it, the call goes through `TransitionItemAt`, and a stale rev is refused with `rev_conflict`. Every `update_<type>` tool now describes `rev`: send the rev you read from `get_<type>` on every update and every transition. The six governance types require it. Until the instance's cutover a missing rev gives a `rev_missing` warning, and after the cutover it is refused. This needs a core release that includes `TransitionItemAt`.
