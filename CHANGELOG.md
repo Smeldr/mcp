@@ -12,6 +12,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - **`get_content` on a `task_plan` shows its plan-time record (core T1015).** For a `task_plan`, `get_content` now adds a `plan_time` field. It shows the Areas and Decisions the plan rests on, whether a record exists, when it was made, and at which transition. Other types are unchanged. This needs a core version with `App.PlanTimeRecord`.
+- **`create_token` mints for an identity (core T1014).** `create_token` takes an optional `identity`, given as an address such as `IDN4` or as an id. The token joins that identity and takes its class. If `actor_class` is also given, it must match the identity's class, which is fixed. The result includes `identity` (the address) for a token that has one. This needs a core release that includes `TokenStore.CreateForIdentity`.
 
 ---
 

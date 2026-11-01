@@ -15,6 +15,13 @@ import (
 // provenance wired, plus an admin context holding a real admin grant.
 func newReasonServer(t *testing.T) (*Server, smeldr.Context, *smeldr.TokenStore, *smeldr.RoleStore) {
 	t.Helper()
+	return newReasonServerWith(t, false)
+}
+
+// newReasonServerWith is newReasonServer, with the identity record (D165)
+// when identities is true.
+func newReasonServerWith(t *testing.T, identities bool) (*Server, smeldr.Context, *smeldr.TokenStore, *smeldr.RoleStore) {
+	t.Helper()
 	_, db, rs := newGrantTestApp(t)
 	if _, err := db.ExecContext(context.Background(), `DROP TABLE smeldr_tokens`); err != nil {
 		t.Fatal(err)
@@ -40,7 +47,14 @@ func newReasonServer(t *testing.T) (*Server, smeldr.Context, *smeldr.TokenStore,
 	}
 	app.Provenance(smeldr.NewProvenanceStore(db))
 	app.Handler()
-	return New(app), grantAdminCtx(t, rs, "actor-admin"), ts, rs
+	admin := grantAdminCtx(t, rs, "actor-admin")
+	if identities {
+		// After the admin grant: a grant needs an identity once they exist.
+		if err := smeldr.EnsureIdentities(context.Background(), db); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return New(app), admin, ts, rs
 }
 
 func TestAccessTools_ReasonStoredAndListed(t *testing.T) {

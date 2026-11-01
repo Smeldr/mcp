@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -1342,6 +1343,10 @@ func tokenToolDefs() []mcpTool {
 						"type":        "string",
 						"description": actReasonDescription,
 					},
+					"identity": map[string]any{
+						"type":        "string",
+						"description": identityArgDescription,
+					},
 				},
 				"required": []string{"name", "role", "expires_in_days"},
 			},
@@ -1404,15 +1409,27 @@ func (s *Server) handleTokenTool(ctx smeldr.Context, name string, args map[strin
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
-		raw, tokenID, err := s.tokenStore.CreateClassifiedWithReason(ctx, tokenName, role, class, ttl, reason)
+		identityRef, _ := stringArg(args, "identity")
+		var raw, tokenID string
+		var err error
+		if identityRef != "" {
+			// The token joins the identity and takes its class (D165).
+			raw, tokenID, err = s.joinIdentity(ctx, identityRef, tokenName, role, class, ttl, reason)
+		} else {
+			raw, tokenID, err = s.tokenStore.CreateClassifiedWithReason(ctx, tokenName, role, class, ttl, reason)
+		}
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		return toolResult(map[string]any{
+		out := map[string]any{
 			"token":    raw,
 			"token_id": tokenID,
 			"message":  "Store this token securely — it cannot be retrieved again.",
-		}), nil
+		}
+		if ident, err := s.app.Identity(ctx, tokenID); err == nil {
+			out["identity"] = ident.Address
+		}
+		return toolResult(out), nil
 
 	case "list_tokens":
 		records, err := s.tokenStore.List(ctx)
@@ -1692,6 +1709,13 @@ func pageItems(items []any, offset, limit int) []any {
 	return items[offset:end]
 }
 
+// identityArgDescription is the schema description of create_token's
+// identity parameter (D165).
+const identityArgDescription = "Optional identity (D165), by address (IDN4) or id: the token joins it, " +
+	"is signed with its id, takes its class and acts with its grants, so its history continues; mint, then " +
+	"revoke the old token to rotate. Refused when the identity is not active or has no class. actor_class, " +
+	"if given, must match the identity's class (it is fixed). Without it a classified token gets a new identity."
+
 // actorClassDescription is the schema description of create_token's
 // actor_class parameter.
 const actorClassDescription = "Optional actor classification (D105): agent, job or human. It decides what " +
@@ -1725,4 +1749,18 @@ func actorClassArg(args map[string]any) (smeldr.Role, *jsonRPCError) {
 		return smeldr.Role(s), nil
 	}
 	return "", &jsonRPCError{Code: -32602, Message: `invalid params: actor_class must be "agent", "job" or "human"`}
+}
+
+// joinIdentity mints a token for the identity ref, checking a given class
+// against the identity's, which is fixed (D165).
+func (s *Server) joinIdentity(ctx smeldr.Context, ref, name, role string, class smeldr.Role, ttl time.Duration, reason string) (raw, tokenID string, err error) {
+	ident, err := s.app.Identity(ctx, ref)
+	if err != nil {
+		return "", "", err
+	}
+	if class != "" && string(class) != ident.Class {
+		return "", "", smeldr.Err("actor_class", fmt.Sprintf("identity %s is of class %s, and an identity's class is fixed (D165): leave actor_class out, or mint for a new identity", ident.Address, ident.Class))
+	}
+	raw, err = s.tokenStore.CreateForIdentity(ctx, ident.ID, name, role, ttl, reason)
+	return raw, ident.ID, err
 }
