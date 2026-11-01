@@ -591,11 +591,31 @@ func inputSchemaUpdate(fields []smeldr.MCPField) map[string]any {
 		}
 		props[f.JSONName] = fieldToProp(f)
 	}
+	if _, ok := props["rev"]; ok {
+		props["rev"] = map[string]any{"type": "integer", "description": revDescription}
+	}
 	return map[string]any{
 		"type":       "object",
 		"properties": props,
 		"required":   []string{"slug"},
 	}
+}
+
+// revDescription describes the rev argument of an update or a transition
+// (core T1010).
+const revDescription = "The rev you read (from get_<type>). Send it on every update and transition: if the item has changed since, the write is refused with rev_conflict, and you must read it again and apply your change only if it still holds. Required on a Decision, Amendment, Organization, Domain, Area or CoverageRule (a rev_missing warning until the instance's cutover, then a refusal)."
+
+// revArg returns the rev argument, and whether the caller sent one.
+func revArg(args map[string]any) (int, bool) {
+	switch v := args["rev"].(type) {
+	case float64:
+		return int(v), true
+	case int:
+		return v, true
+	case int64:
+		return int(v), true
+	}
+	return 0, false
 }
 
 // fieldDescription builds the JSON Schema "description" string for a field
