@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [1.75.0] - 2026-11-02
+
 ### Added
 
 - **Refusal types in JSON-RPC errors (core T1061 phase 4, A640).** Every tool's error goes through `errorFor`. A typed refusal from smeldr.dev/core keeps its JSON-RPC code and message and adds `data` with `type` (the RFC 9457 URI), `id`, `class` and `rule`. Where the message itself carries the detail (validation error, bad request, a refusal with its reason, conflict, rev conflict), `data` also has the named `values`, and a validation error's `fields`. The bare `forbidden` and `not found` answers carry no values, because their message hides the detail (T971). An untyped or internal error has no `data`, and callers branch on `data.id`.
