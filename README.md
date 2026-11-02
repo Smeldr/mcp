@@ -419,6 +419,18 @@ access. Do not expose the MCP binary's stdin to untrusted processes.
   authentication succeeded, authorisation failed)
 - All `tools/call` operations require `smeldr.Author` role or above
 
+### Refusal types in errors
+
+A refusal from smeldr.dev/core carries a stable type (core v1.189.0, D171, D174).
+The JSON-RPC error keeps its `code` and `message`, and adds `data`:
+`type` (the RFC 9457 URI `https://smeldr.dev/problems/<id>`), `id`, `class` and
+`rule`. Where the message itself carries the detail (a validation error, a bad
+request, a refusal with its reason, a conflict, a rev conflict), `data` also has
+the named `values` and a validation error's `fields`. The bare `forbidden` and
+`not found` answers carry no values, since their message hides the detail. An
+untyped or internal error has no `data`. Branch on `data.id`; the list is
+smeldr.dev/core's docs/PROBLEM_TYPES.md.
+
 Tokens are minted and verified using the same HMAC mechanism as the Smeldr REST
 API (`smeldr.BearerHMAC`). A token from `smeldr.SignToken(user, secret, 0)` is
 valid for both the REST API and the SSE MCP transport — there is no separate

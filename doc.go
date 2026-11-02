@@ -71,6 +71,12 @@
 // it, and an update notification reaches it only while that token is not
 // revoked and may read the changed item.
 //
+// # Refusal types
+//
+// A typed refusal from smeldr.dev/core answers with its code and message as
+// before, plus data: its type, id, class and rule, and, where the message
+// carries the detail, its values and fields. Callers branch on data.id.
+//
 // [New] returns a [*Server]. Wire it into an [*smeldr.App] with
 // [Server.Register], or mount [Server.Handler] directly on a custom mux.
 package mcp

@@ -116,7 +116,7 @@ func TestListRelations_IDsJoinToListedItems(t *testing.T) {
 		created = append(created, unwrapToolResult(t, res)["ID"].(string))
 	}
 	if _, rpcErr := callSeeded(t, srv, admin, "assert_relation", map[string]any{
-		"source_type": "Decision", "source_id": created[1], "target_type": "Decision", "target_id": created[0], "relation_kind": "supersedes",
+		"source_type": "Decision", "source_id": created[1], "target_type": "Decision", "target_id": created[0], "relation_kind": "grounded_in",
 	}); rpcErr != nil {
 		t.Fatalf("assert_relation: %v", rpcErr.Message)
 	}
@@ -128,7 +128,7 @@ func TestListRelations_IDsJoinToListedItems(t *testing.T) {
 	for _, it := range unwrapToolResult(t, res)["items"].([]any) {
 		listed[it.(map[string]any)["ID"].(string)] = true
 	}
-	res, rpcErr = callTool(t, srv, admin, "list_relations", map[string]any{"kind": "supersedes"})
+	res, rpcErr = callTool(t, srv, admin, "list_relations", map[string]any{"kind": "grounded_in"})
 	if rpcErr != nil {
 		t.Fatalf("list_relations: %v", rpcErr.Message)
 	}

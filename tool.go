@@ -351,34 +351,78 @@ func readTypeFor(toolName string, args map[string]any) string {
 //     is what D38's lease-fencing re-read protocol requires — "lost the race" must be
 //     distinguishable from every other rejected-but-not-transient outcome)
 //   - all other errors         → -32603 (internal error)
+//
+// A typed core refusal (core T1039, T1061) also carries data: its type (the
+// RFC 9457 URI), id, class and rule, and, only where the message shown carries
+// the detail, its named values and a ValidationError's fields. The bare
+// forbidden and not-found answers send no values, since their message hides
+// core's text (T971). An untyped error, and every internal error, carries no
+// data.
 func errorFor(err error) *jsonRPCError {
 	var ve *smeldr.ValidationError
 	if errors.As(err, &ve) {
-		return &jsonRPCError{Code: -32602, Message: ve.Error()}
+		return withProblem(&jsonRPCError{Code: -32602, Message: ve.Error()}, err, true)
 	}
 	if errors.Is(err, smeldr.ErrBadRequest) {
-		return &jsonRPCError{Code: -32602, Message: err.Error()}
+		return withProblem(&jsonRPCError{Code: -32602, Message: err.Error()}, err, true)
 	}
 	if errors.Is(err, smeldr.ErrNotFound) {
-		return &jsonRPCError{Code: -32000, Message: "not found"}
+		return withProblem(&jsonRPCError{Code: -32000, Message: "not found"}, err, false)
 	}
 	// A refusal whose reason is safe to show keeps it (core T971); every
 	// other forbidden stays bare, since its text could name an item the
 	// caller may not read.
 	var re *smeldr.RefusalError
 	if errors.As(err, &re) {
-		return &jsonRPCError{Code: -32001, Message: "forbidden: " + re.Reason}
+		return withProblem(&jsonRPCError{Code: -32001, Message: "forbidden: " + re.Reason}, err, true)
 	}
 	if errors.Is(err, smeldr.ErrForbidden) {
-		return &jsonRPCError{Code: -32001, Message: "forbidden"}
+		return withProblem(&jsonRPCError{Code: -32001, Message: "forbidden"}, err, false)
 	}
 	if errors.Is(err, smeldr.ErrConflict) {
-		return &jsonRPCError{Code: -32001, Message: err.Error()}
+		return withProblem(&jsonRPCError{Code: -32001, Message: err.Error()}, err, true)
 	}
 	if errors.Is(err, smeldr.ErrRevConflict) {
-		return &jsonRPCError{Code: -32002, Message: err.Error()}
+		return withProblem(&jsonRPCError{Code: -32002, Message: err.Error()}, err, true)
 	}
 	return &jsonRPCError{Code: -32603, Message: "internal error: " + err.Error()}
+}
+
+// problemTypeInfo is core's list of refusal types by id, built once.
+var problemTypeInfo = func() map[smeldr.ProblemType]smeldr.ProblemTypeInfo {
+	m := map[smeldr.ProblemType]smeldr.ProblemTypeInfo{}
+	for _, p := range smeldr.ProblemTypes() {
+		m[p.ID] = p
+	}
+	return m
+}()
+
+// withProblem adds err's refusal type to e as data, with its values and
+// fields when shown is true (the message carries the detail). An untyped err
+// leaves e as it is.
+func withProblem(e *jsonRPCError, err error, shown bool) *jsonRPCError {
+	t := smeldr.ProblemTypeOf(err)
+	if t == "" {
+		return e
+	}
+	data := map[string]any{"type": t.URI(), "id": string(t)}
+	if p, ok := problemTypeInfo[t]; ok {
+		data["class"] = p.Class
+		if p.Rule != "" {
+			data["rule"] = p.Rule
+		}
+	}
+	if shown {
+		if v := smeldr.ProblemValuesOf(err); len(v) > 0 {
+			data["values"] = v
+		}
+		var ve *smeldr.ValidationError
+		if errors.As(err, &ve) {
+			data["fields"] = ve.Fields()
+		}
+	}
+	e.Data = data
+	return e
 }
 
 // legacyRoleFor returns the role a caller must hold to invoke the named
