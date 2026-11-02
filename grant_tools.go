@@ -85,13 +85,14 @@ func grantToolDefs() []mcpTool {
 						"type":        "string",
 						"description": actReasonDescription,
 					},
+					"rev": map[string]any{"type": "integer", "description": grantRevDescription},
 				},
 				"required": []string{"token_id", "role"},
 			},
 		},
 		{
 			Name:        "list_grants",
-			Description: "List governance role grants. Requires Admin role. Omit token_id to list every grant on the instance. Each grant carries \"Reason\" when one was given at grant time.",
+			Description: "List governance role grants. Requires Admin role. Omit token_id to list every grant on the instance. Each grant carries \"Reason\" when one was given at grant time. With token_id naming an identity, the result also carries identity_rev: the rev to send with grant_role or revoke_grant for that identity.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -116,6 +117,7 @@ func grantToolDefs() []mcpTool {
 						"type":        "string",
 						"description": actReasonDescription,
 					},
+					"rev": map[string]any{"type": "integer", "description": grantRevDescription},
 				},
 				"required": []string{"id"},
 			},
@@ -170,15 +172,19 @@ func (s *Server) handleGrantTool(ctx smeldr.Context, rs *smeldr.RoleStore, name 
 			expiresAt = &at
 		}
 
+		var rev *int
+		if n, ok := revArg(args); ok {
+			rev = &n
+		}
 		grantRS := rs.WithAudit(ctx.User().ID, s.app.GovernanceAuditStore())
-		grantID, err := grantRS.Grant(ctx, smeldr.RoleGrant{
+		grantID, warnings, err := grantRS.GrantAt(ctx, smeldr.RoleGrant{
 			TokenID:       tokenID,
 			RoleName:      role,
 			ScopeStatic:   scopeStatic,
 			ScopeAnchorID: scopeAnchorID,
 			Reason:        reason,
 			ExpiresAt:     expiresAt,
-		})
+		}, rev)
 		if err != nil {
 			return nil, errorFor(err)
 		}
@@ -186,7 +192,8 @@ func (s *Server) handleGrantTool(ctx smeldr.Context, rs *smeldr.RoleStore, name 
 		if expiresAt != nil {
 			out["expires_at"] = expiresAt.Format(time.RFC3339)
 		}
-		return toolResult(out), nil
+		s.withIdentityRev(ctx, out, tokenID)
+		return toolResult(withRevWarnings(out, warnings)), nil
 
 	case "list_grants":
 		tokenID, _ := stringArg(args, "token_id")
@@ -197,7 +204,11 @@ func (s *Server) handleGrantTool(ctx smeldr.Context, rs *smeldr.RoleStore, name 
 		if grants == nil {
 			grants = []smeldr.RoleGrant{}
 		}
-		return toolResult(map[string]any{"grants": grants}), nil
+		out := map[string]any{"grants": grants}
+		if tokenID != "" {
+			s.withIdentityRev(ctx, out, tokenID)
+		}
+		return toolResult(out), nil
 
 	case "revoke_grant":
 		id, ok := stringArg(args, "id")
@@ -208,13 +219,34 @@ func (s *Server) handleGrantTool(ctx smeldr.Context, rs *smeldr.RoleStore, name 
 		if rpcErr != nil {
 			return nil, rpcErr
 		}
+		var rev *int
+		if n, ok := revArg(args); ok {
+			rev = &n
+		}
 		grantRS := rs.WithAudit(ctx.User().ID, s.app.GovernanceAuditStore())
-		if err := grantRS.RevokeWithReason(ctx, id, reason); err != nil {
+		warnings, err := grantRS.RevokeWithReasonAt(ctx, id, reason, rev)
+		if err != nil {
 			return nil, errorFor(err)
 		}
-		return toolResult(map[string]any{"revoked": true, "id": id}), nil
+		return toolResult(withRevWarnings(map[string]any{"revoked": true, "id": id}, warnings)), nil
 
 	default:
 		return nil, &jsonRPCError{Code: -32602, Message: "unknown grant tool: " + name}
+	}
+}
+
+// grantRevDescription describes the rev argument of grant_role and
+// revoke_grant (core T1010 part c).
+const grantRevDescription = "The rev of the grantee's identity you read (identity_rev from list_grants with " +
+	"token_id). A grant or revoke changes the identity's set of grants: a stale rev is refused with rev_conflict " +
+	"and nothing is changed; read the grants again and apply your change only if it still holds. Without one: " +
+	"a rev_missing warning until the instance's cutover, then a refusal. Leave it out for a grantee that is not " +
+	"an identity yet."
+
+// withIdentityRev adds identity_rev to out when holder is an identity, so the
+// caller can name it on its next grant_role or revoke_grant.
+func (s *Server) withIdentityRev(ctx smeldr.Context, out map[string]any, holder string) {
+	if ident, err := s.app.Identity(ctx, holder); err == nil {
+		out["identity_rev"] = ident.Rev
 	}
 }
