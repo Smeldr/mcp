@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [1.74.0] - 2026-11-02
+
 ### Added
 
 - **`grant_role` and `revoke_grant` name the identity's rev (core T1010 part c).** Both take an optional integer `rev`: the rev of the grantee's identity you read. A stale one is refused with -32002 and nothing changes. Without one, a `rev_missing` warning until the instance's cutover, then a refusal. `list_grants` with `token_id` returns `identity_rev`, the rev to send, and `grant_role` returns the identity's new `identity_rev`. Needs a core release with `RoleStore.GrantAt`.
