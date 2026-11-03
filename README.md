@@ -438,10 +438,11 @@ token format.
 
 ---
 
-## Zero dependencies
+## Dependencies
 
-`smeldr.dev/mcp` has zero external dependencies. All MCP transport and JSON-RPC 2.0
-protocol handling is implemented using the Go standard library only.
+- **The package imports `smeldr.dev/core` and `smeldr.dev/oauth`.** core imports only the Go standard library. oauth brings `modernc.org/sqlite` (pure Go, no cgo) for its SQLite token store, so a program that imports `smeldr.dev/mcp` compiles SQLite in, with the modules listed as indirect in [go.mod](go.mod).
+- **`github.com/jackc/pgx/v5` is there only for tests:** the Postgres integration tests, built with `-tags integration`. A program that imports `smeldr.dev/mcp` does not compile it in.
+- **The MCP transport and JSON-RPC 2.0 are written on the standard library** (net/http, encoding/json), with no MCP or JSON-RPC library.
 
 ---
 
