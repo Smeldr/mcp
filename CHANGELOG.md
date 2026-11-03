@@ -11,6 +11,14 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [1.75.1] - 2026-11-03
+
+### Changed
+
+- **README: what smeldr.dev/mcp depends on (T1084).** The "Zero dependencies" section, which was false, is replaced by the facts: the package imports smeldr.dev/core (standard library only) and smeldr.dev/oauth, which compiles in modernc.org/sqlite (pure Go); pgx is only in the integration tests; the MCP transport and JSON-RPC 2.0 are written on the standard library. No code change.
+
+---
+
 ## [1.75.0] - 2026-11-02
 
 ### Added
