@@ -1077,7 +1077,9 @@ func TestMCPServeStdio_malformedJSON(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- srv.ServeStdio(ctx, pr, &buf) }()
 
-	pw.Write([]byte("not valid json\n"))
+	if _, err := pw.Write([]byte("not valid json\n")); err != nil {
+		t.Fatal(err)
+	}
 	pw.Close()
 
 	select {
@@ -1116,8 +1118,12 @@ func TestMCPServeStdio_emptyLine(t *testing.T) {
 	// Write empty line then a valid request — both should be processed without panic.
 	req := map[string]any{"jsonrpc": "2.0", "id": 3, "method": "initialize", "params": map[string]any{}}
 	b, _ := json.Marshal(req)
-	pw.Write([]byte("\n"))
-	pw.Write(append(b, '\n'))
+	if _, err := pw.Write([]byte("\n")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pw.Write(append(b, '\n')); err != nil {
+		t.Fatal(err)
+	}
 	pw.Close()
 
 	select {
