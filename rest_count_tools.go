@@ -143,11 +143,27 @@ func (s *Server) handleRestCountTool(ctx smeldr.Context, name string, args map[s
 		case condition == "" && decision != "" && premise != "":
 			warnings, err = s.app.ConfirmPremiseAt(ctx, decision, premise, reason, revPtrArg(args))
 		default:
-			return nil, &jsonRPCError{Code: -32602, Message: "name the condition, or the decision and the premise, not both"}
+			return nil, &jsonRPCError{Code: -32602, Message: confirmPremiseShapeMessage(condition, decision, premise)}
 		}
 		if err != nil {
 			return nil, errorFor(err)
 		}
 		return toolResult(withRevWarnings(map[string]any{"confirmed": true}, warnings)), nil
+	}
+}
+
+// confirmPremiseShapeMessage says what is wrong with a confirm_premise call
+// that names neither the condition alone nor the decision and the premise
+// together (T1138). An empty string counts as not named.
+func confirmPremiseShapeMessage(condition, decision, premise string) string {
+	switch {
+	case condition != "":
+		return "name the condition, or the decision and the premise, not both"
+	case decision != "":
+		return "name the premise too, or name the condition instead"
+	case premise != "":
+		return "name the decision too, or name the condition instead"
+	default:
+		return "name the condition, or the decision and the premise"
 	}
 }

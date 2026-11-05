@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 
 	smeldr "smeldr.dev/core"
@@ -168,5 +169,38 @@ func TestRestCountTools(t *testing.T) {
 	}
 	if _, rpcErr := callTool(t, plain, ctx, "get_rest_counts", map[string]any{"type": "Decision", "id": "x"}); rpcErr == nil {
 		t.Error("get_rest_counts served without Decisions")
+	}
+}
+
+// TestConfirmPremise_ArgumentShapes: each wrong argument shape gets its own
+// message (T1138). An empty string counts as not named. Every call carries a
+// reason, so the reason check is not what refuses it.
+func TestConfirmPremise_ArgumentShapes(t *testing.T) {
+	srv, _ := newRestCountServer(t)
+	ctx := newEditorCtx()
+	for _, tc := range []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{"nothing", map[string]any{}, "name the condition, or the decision and the premise"},
+		{"empty condition", map[string]any{"condition": ""}, "name the condition, or the decision and the premise"},
+		{"both", map[string]any{"condition": "S1", "decision": "dec-d"}, "not both"},
+		{"decision only", map[string]any{"decision": "dec-d"}, "name the premise too"},
+		{"premise only", map[string]any{"decision": "", "premise": "dec-p"}, "name the decision too"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.args["reason"] = "still right"
+			_, rpcErr := callTool(t, srv, ctx, "confirm_premise", tc.args)
+			if rpcErr == nil || rpcErr.Code != -32602 {
+				t.Fatalf("rpcErr = %v, want -32602", rpcErr)
+			}
+			if !strings.Contains(rpcErr.Message, tc.want) {
+				t.Errorf("message %q, want %q", rpcErr.Message, tc.want)
+			}
+			if tc.want != "not both" && strings.Contains(rpcErr.Message, "not both") {
+				t.Errorf("message %q says not both", rpcErr.Message)
+			}
+		})
 	}
 }

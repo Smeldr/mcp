@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`confirm_premise` gives each bad argument shape its own message (T1138).** The tool accepts `condition` alone, or `decision` and `premise` together. Every other shape used to answer -32602 with "name the condition, or the decision and the premise, not both", even when nothing was named. Now an empty call gets "name the condition, or the decision and the premise". A condition with a decision or premise gets the "not both" message. A decision without a premise, or a premise without a decision, each names what is missing. The two valid shapes are unchanged.
+
 ---
 
 ## [1.75.1] - 2026-11-03
