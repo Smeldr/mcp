@@ -431,6 +431,14 @@ the named `values` and a validation error's `fields`. The bare `forbidden` and
 untyped or internal error has no `data`. Branch on `data.id`; the list is
 smeldr.dev/core's docs/PROBLEM_TYPES.md.
 
+The tool gate's own refusal (below the role floor, no token ID, no grant for
+the tool's operation, a read scope that reads nothing of the type, an unknown
+tool) is `forbidden` with `data.id` `capability.denied` and no values (core
+T1210). When the gate cannot read the tool policy or the caller's grants, it
+fails closed with a bare `forbidden` and no `data`, and logs the error on the
+server: that caller lacks nothing it could ask for. An item the caller may not
+read is still `not found`, as one that does not exist.
+
 Tokens are minted and verified using the same HMAC mechanism as the Smeldr REST
 API (`smeldr.BearerHMAC`). A token from `smeldr.SignToken(user, secret, 0)` is
 valid for both the REST API and the SSE MCP transport — there is no separate

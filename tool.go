@@ -135,7 +135,7 @@ func (s *Server) authoriseTool(ctx smeldr.Context, toolName string, legacyRole s
 		if smeldr.HasRole(ctx.User().Roles, legacyRole) {
 			return nil
 		}
-		return &jsonRPCError{Code: -32001, Message: "forbidden"}
+		return gateForbidden()
 	}
 	requiredOp, rpcErr := s.toolOp(ctx, toolName, rs)
 	if rpcErr != nil {
@@ -149,12 +149,15 @@ func (s *Server) authoriseTool(ctx smeldr.Context, toolName string, legacyRole s
 			if scope.TypeReadable(target.TypeName) {
 				return nil
 			}
-			return &jsonRPCError{Code: -32001, Message: "forbidden"}
+			return gateForbidden()
 		}
 	}
 	ok, err := rs.Authorized(ctx, ctx.User().ID, requiredOp, target)
-	if err != nil || !ok {
-		return &jsonRPCError{Code: -32001, Message: "forbidden"}
+	if err != nil {
+		return gateLookupFailed(ctx, toolName, "grants", err)
+	}
+	if !ok {
+		return gateForbidden()
 	}
 	return nil
 }
@@ -165,11 +168,11 @@ func (s *Server) authoriseTool(ctx smeldr.Context, toolName string, legacyRole s
 // closed.
 func (s *Server) toolOp(ctx smeldr.Context, toolName string, rs *smeldr.RoleStore) (string, *jsonRPCError) {
 	if ctx.User().ID == "" {
-		return "", &jsonRPCError{Code: -32001, Message: "forbidden"}
+		return "", gateForbidden()
 	}
 	requiredOp, found, err := rs.ToolPolicy(ctx, toolName)
 	if err != nil {
-		return "", &jsonRPCError{Code: -32001, Message: "forbidden"}
+		return "", gateLookupFailed(ctx, toolName, "tool policy", err)
 	}
 	if !found {
 		requiredOp, found = s.deriveToolPolicy(toolName)
@@ -178,9 +181,39 @@ func (s *Server) toolOp(ctx smeldr.Context, toolName string, rs *smeldr.RoleStor
 		requiredOp, found = s.capabilityOp(toolName)
 	}
 	if !found {
-		return "", &jsonRPCError{Code: -32001, Message: "forbidden"}
+		return "", gateForbidden()
 	}
 	return requiredOp, nil
+}
+
+// gateForbidden is the tool gate's refusal of a caller who may not call the
+// tool here (core T1210): -32001 "forbidden", with data naming core's problem
+// type capability.denied (type, id, class, rule) and no values, so it says no
+// more than "you may not" whatever the cause. A failed lookup is not this
+// refusal: see [gateLookupFailed].
+func gateForbidden() *jsonRPCError {
+	data := map[string]any{"type": problemCapabilityDenied.URI(), "id": string(problemCapabilityDenied)}
+	if p, ok := problemTypeInfo[problemCapabilityDenied]; ok {
+		data["class"] = p.Class
+		if p.Rule != "" {
+			data["rule"] = p.Rule
+		}
+	}
+	return &jsonRPCError{Code: -32001, Message: "forbidden", Data: data}
+}
+
+// problemCapabilityDenied is core's refusal type for a capability the caller
+// does not hold (TestCapabilityDeniedKnown keeps it in core's list).
+const problemCapabilityDenied = smeldr.ProblemType("capability.denied")
+
+// gateLookupFailed is the tool gate's answer when it could not read what it
+// needs to decide (the tool policy, the caller's grants): fail closed, with
+// the same code and message as a refusal and no problem type, since the
+// caller lacks nothing it could ask for (T1210). The error is logged here,
+// so an administrator sees what failed.
+func gateLookupFailed(ctx smeldr.Context, toolName, what string, err error) *jsonRPCError {
+	slog.ErrorContext(ctx, "mcp: tool gate lookup failed", "tool", toolName, "lookup", what, "actor", ctx.User().ID, "error", err)
+	return &jsonRPCError{Code: -32001, Message: "forbidden"}
 }
 
 // toolCapabilities maps the tools added after the capability registry (core
@@ -260,7 +293,7 @@ func (s *Server) authoriseState(ctx smeldr.Context, toolName string, rs *smeldr.
 	// The floor first: a caller who may read nothing of the type is forbidden,
 	// which says nothing about any one item.
 	if scope, ok := smeldr.ReadScopeFrom(ctx); ok && !scope.TypeReadable(typeName) {
-		return &jsonRPCError{Code: -32001, Message: "forbidden"}
+		return gateForbidden()
 	}
 	id, err := s.app.ResolveReadableID(ctx, typeName, ident)
 	if err != nil {
@@ -269,7 +302,7 @@ func (s *Server) authoriseState(ctx smeldr.Context, toolName string, rs *smeldr.
 	target := smeldr.AuthTarget{TypeName: typeName, ID: id}
 	ok, err := rs.Authorized(ctx, ctx.User().ID, requiredOp, target)
 	if err != nil {
-		return &jsonRPCError{Code: -32001, Message: "forbidden"}
+		return gateLookupFailed(ctx, toolName, "grants", err)
 	}
 	if ok {
 		return nil
@@ -287,7 +320,7 @@ func (s *Server) authoriseState(ctx smeldr.Context, toolName string, rs *smeldr.
 			return nil
 		}
 	}
-	return &jsonRPCError{Code: -32001, Message: "forbidden"}
+	return gateForbidden()
 }
 
 // transitionOperation is the operation the transition of the item ident to

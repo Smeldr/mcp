@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The MCP tool gate now answers refusals with the `capability.denied` problem type (core T1210).** Seven of nine refusals in the tool gate (`authoriseTool`, `toolOp` and `authoriseState` in `tool.go`) used to return a bare `{"code":-32001,"message":"forbidden"}` with no problem type. Those seven keep code -32001 and message "forbidden" and add `data` naming core's problem type `capability.denied`: `type` (the URI), `id`, and `class` and `rule` when one applies, with no `values`. The seven are: below the legacy role floor with no governance; no token ID under governance; an unknown tool with no policy; no grant for the tool's operation; a read tool on a type the caller's read scope reads nothing of; and, for `transition_item`, a caller who reads nothing of the type, or who holds neither the tool's operation nor the transition's own operation on the item. The other two refusals (the gate could not read the tool policy, or could not read the caller's grants) stay fail-closed with the same code and message and no `data`, since such a caller lacks nothing it could ask for. The gate now logs those two on the server ("mcp: tool gate lookup failed", with the tool, which lookup, the actor and the error). An item the caller may not read still returns -32000 "not found", unchanged. The change is additive under error contract v1 (D97).
+
 ---
 
 ## [1.77.0] - 2026-11-13
