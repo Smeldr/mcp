@@ -28,7 +28,9 @@ func stateToolDefs() []mcpTool {
 			Description: "Move an item — dynamic content or a compiled type (e.g. Signal, " +
 				"Task, Decision) — to a new state. The transition is validated against the " +
 				"registered state flow, including any role requirement; returns an error if " +
-				"the transition is not permitted. Requires Editor role." + standingNote + awaitsActionNote,
+				"the transition is not permitted. Requires Editor role. To replace a Decision use supersede_decision, " +
+				"and to take one out of force without a replacement use retire_decision: a move to superseded with no " +
+				"replacement recorded is deprecated, and core's warning in the result names the date it is refused from." + standingNote + awaitsActionNote,
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{

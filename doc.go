@@ -54,8 +54,12 @@
 // that a Decision still holds although its premise is not in force (D149).
 // get_premise_flags lists a Decision's premise-flagged pairs, naming a
 // premise only to a caller who reads it, and list_sweep_runs lists each
-// sweep detector's newest run (core T1183). Core applies the read rules
-// and, for confirm_premise, ratify.
+// sweep detector's newest run (core T1183). supersede_decision replaces a
+// Decision in one write, with an existing ratified replacement or a new one
+// it creates, places and ratifies; retire_decision takes a Decision out of
+// force without a replacement; repair_superseded repairs one superseded with
+// no replacement recorded (core T1187, D189). Core applies the read rules
+// and, for confirm_premise and these three, ratify.
 //
 // # The pull request check
 //

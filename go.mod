@@ -7,7 +7,7 @@ toolchain go1.26.11
 require (
 	github.com/jackc/pgx/v5 v5.9.2
 	modernc.org/sqlite v1.50.1
-	smeldr.dev/core v1.192.0
+	smeldr.dev/core v1.193.0
 	smeldr.dev/oauth v0.6.0
 )
 

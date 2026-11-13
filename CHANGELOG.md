@@ -9,6 +9,13 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **New tool `supersede_decision` replaces a Decision in one write (core T1187, D189).** It takes `decision`, `rev`, `reason`, and exactly one of `replacement` (an existing ratified Decision) or `new` (a `title`, `body`, and optional `scope` and `sources` for a Decision the write creates). The write is all or nothing. A new replacement is placed where the replaced Decision is and ratified in the same write. Sources of the replaced Decision are not copied. Both or neither of `replacement` and `new` is refused with -32602. An agent or job token gets core's refusal with its problem type. It returns `decision`, `replacement`, `relation`, `created` and `warnings`. Capability `item supersede`. It needs the core version that adds these acts.
+- **New tool `retire_decision` moves a Decision out of force (core T1187, D189).** It takes `decision`, `rev` and `reason`, and moves the Decision to `retired` with no replacement. Capability `item retire`.
+- **New tool `repair_superseded` names a replacement or retires a Decision with no recorded replacement (core T1187, D189).** It takes `decision`, `rev`, `reason`, and exactly one of `replacement` or `retire: true`. Neither (including `retire: false` with no replacement) or both is refused with -32602. Capability `item repair_superseded`.
+- **`transition_item` warns when a Decision is superseded with no replacement (core T1187, D189).** Moving a Decision to `superseded` with no replacement recorded passes core's warning `decision.supersede_without_replacement` through in `warnings`. The tool description now points to `supersede_decision` and `retire_decision`. The three new tools are listed when the instance has Decisions.
+
 ---
 
 ## [1.76.0] - 2026-11-13

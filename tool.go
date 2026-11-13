@@ -209,6 +209,9 @@ var toolCapabilities = map[string][2]string{
 	"get_rest_counts":     {smeldr.ResourceItem, "rest_counts"},
 	"list_rest_counts":    {smeldr.ResourceItem, "rest_counts"},
 	"confirm_premise":     {smeldr.ResourceItem, "confirm_premise"},
+	"supersede_decision":  {smeldr.ResourceItem, "supersede"},
+	"retire_decision":     {smeldr.ResourceItem, "retire"},
+	"repair_superseded":   {smeldr.ResourceItem, "repair_superseded"},
 }
 
 // capabilityOp is the operation word of toolName's capability in core's
@@ -645,6 +648,7 @@ func (s *Server) allToolDefs() []mcpTool {
 	}
 	if s.restCountsRegistered() {
 		tools = append(tools, restCountToolDefs()...)
+		tools = append(tools, decisionSupersedeToolDefs()...)
 	}
 	if s.changeChecksRegistered() {
 		tools = append(tools, changeCheckToolDefs()...)
@@ -949,6 +953,12 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// served when the instance has Decisions; core gates and filters.
 	if isRestCountTool(p.Name) && s.restCountsRegistered() {
 		return s.handleRestCountTool(ctx, p.Name, coalesceArgs(p.Arguments))
+	}
+
+	// Supersede, retire and repair (core T1187, D189): listed with the rest
+	// counts, when the instance has Decisions; core gates each act.
+	if isDecisionSupersedeTool(p.Name) && s.restCountsRegistered() {
+		return s.handleDecisionSupersedeTool(ctx, p.Name, coalesceArgs(p.Arguments))
 	}
 
 	// The pull request check (core T918): core gates check_change and
