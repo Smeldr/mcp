@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [1.77.0] - 2026-11-13
+
 ### Added
 
 - **New tool `supersede_decision` replaces a Decision in one write (core T1187, D189).** It takes `decision`, `rev`, `reason`, and exactly one of `replacement` (an existing ratified Decision) or `new` (a `title`, `body`, and optional `scope` and `sources` for a Decision the write creates). The write is all or nothing. A new replacement is placed where the replaced Decision is and ratified in the same write. Sources of the replaced Decision are not copied. Both or neither of `replacement` and `new` is refused with -32602. An agent or job token gets core's refusal with its problem type. It returns `decision`, `replacement`, `relation`, `created` and `warnings`. Capability `item supersede`. It needs the core version that adds these acts.
