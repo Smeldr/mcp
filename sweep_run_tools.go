@@ -29,18 +29,37 @@ func sweepRunToolDefs() []mcpTool {
 				"required": []string{"detector"},
 			},
 		},
+		{
+			Name: "list_sweep_runs",
+			Description: "What did each sweep last do? Takes no arguments. Returns every detector that has recorded a run, " +
+				"each with its newest run: ran_at, interval, walked, flagged, skipped and err (empty when the run succeeded). " +
+				"A detector that never ran is not listed. Requires Author role.",
+			InputSchema: map[string]any{"type": "object", "properties": map[string]any{}},
+		},
 	}
 }
 
 // isSweepRunTool reports whether name is the sweep run status tool.
 func isSweepRunTool(name string) bool {
-	return name == "get_sweep_run"
+	return name == "get_sweep_run" || name == "list_sweep_runs"
 }
 
 // handleSweepRunTool dispatches the sweep run status tool. Called only when
 // s.app.Config().DB is non-nil and the caller holds Author role (checked by
 // the caller in handleToolsCall).
 func (s *Server) handleSweepRunTool(ctx smeldr.Context, name string, args map[string]any) (any, *jsonRPCError) {
+	if name == "list_sweep_runs" {
+		runs, err := smeldr.LatestSweepRuns(ctx, s.app.Config().DB)
+		if err != nil {
+			return nil, errorFor(err)
+		}
+		out := make([]map[string]any, len(runs))
+		for i, r := range runs {
+			out[i] = map[string]any{"detector": r.Detector, "ran_at": r.RanAt.UTC().Format("2006-01-02T15:04:05Z"),
+				"interval": r.Interval, "walked": r.Walked, "flagged": r.Flagged, "skipped": r.Skipped, "err": r.Err}
+		}
+		return toolResult(map[string]any{"runs": out}), nil
+	}
 	if name != "get_sweep_run" {
 		return nil, &jsonRPCError{Code: -32602, Message: "unknown sweep run tool: " + name}
 	}
@@ -64,5 +83,7 @@ func (s *Server) handleSweepRunTool(ctx smeldr.Context, name string, args map[st
 		"ran_at":   run.RanAt.UTC().Format("2006-01-02T15:04:05Z"),
 		"walked":   run.Walked,
 		"flagged":  run.Flagged,
+		"skipped":  run.Skipped, // T1183
+		"err":      run.Err,
 	}), nil
 }

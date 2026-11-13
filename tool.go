@@ -936,7 +936,7 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 	// administrators (core T944, D154): listed and served when governance is
 	// wired; any authenticated caller passes core's gate.
 	if p.Name == "administrators" && s.app.RoleStore() != nil {
-		return s.handleAdministratorsTool(ctx)
+		return s.handleAdministratorsTool(ctx, coalesceArgs(p.Arguments))
 	}
 
 	// approvers_of (core T911): listed and served when the instance has

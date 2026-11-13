@@ -9,6 +9,19 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`list_signals`, `get_signal`, `create_signal` (core T1183).** `list_signals` rows gain `address` and `signal_class` (`condition`, `request` or `history`). Every other Signal read gains `signal_class` next to `standing` and `awaits_action`. The `create_signal` result gains `signal_class`.
+- **`approvers_of` and `administrators` (core T1183).** Each holder gains `is_caller`. It is true when the holder is the caller's own identity, whichever of its tokens made the call. `administrators` also takes an optional `class` (`human`, `agent`, `job` or `unclassified`) that keeps only holders of that class. Any other value is refused with -32602.
+- **`get_rest_counts` and `list_rest_counts` (core T1183).** `get_rest_counts` takes four new optional arguments: `limit` (1 to 1000), `addresses` (boolean), `address_offset` and `address_limit` (1 to 200). Each direction gains `ratified`, the number of closed items that are ratified. With `addresses` set, each direction also gains `addresses` (a page, nearest first) and `addresses_total`. A non-integer or out-of-range option is refused. Each `list_rest_counts` item gains `ratified`, with `known`, `rests_on_this` and `this_rests_on`. `known` is false until the first sweep that stored the split.
+- **`search` (core T1183).** Takes an optional `narrow` (boolean). A narrow search matches only addresses and external references, from one character. It also takes an optional `after` to continue a narrow search. Narrow hits gain `external_ref` and `match_reason` (`address`, `address-prefix` or `reference`). The result gains `at_least` and `next` when a narrow search reached its ceiling of 200 rows per type. A short page with a `next` is not the end of the results.
+- **`get_premise_flags` (core T1183).** New tool. Takes `decision` and returns the premise-flagged pairs of a resting Decision (D149). Each pair says whether a condition is open (`condition_open`), and gives its address (`signal`) only when the caller may read that Signal. The premise appears only when the caller may read it. The last confirmation shows who confirmed, their class, when, why, and the premise's state at that time. Capability `item premise_flags`. Listed when the instance has Decisions.
+- **`list_sweep_runs` (core T1183).** New tool. Lists every detector with its newest run: `ran_at`, `interval`, `walked`, `flagged`, `skipped` and `err`. `get_sweep_run` gains `skipped` and `err`. Both tools require the Author role.
+
+### Changed
+
+- **Requires smeldr.dev/core v1.192.0.** The new reads above come from that core release.
+
 ---
 
 ## [1.75.2] - 2026-11-05

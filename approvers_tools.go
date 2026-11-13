@@ -12,7 +12,8 @@ func approversOfToolDef() mcpTool {
 		Description: "Who approves here? Give a place (an Organization, Domain or Area by address, slug or ID, for example DOM4 or ARE3). " +
 			"Returns who holds approval authority over it: every approver, the domain-approvers of its Domain and, for an Area, " +
 			"its area-approvers, each with token name, role, class (human, agent, job, unclassified) and anchor_address (where the " +
-			"grant sits; empty when you may not read that place). Ask one of them when a change or a ratification needs approval; " +
+			"grant sits; empty when you may not read that place), and is_caller: true when the holder is you (your identity, any " +
+			"of its tokens). Ask one of them when a change or a ratification needs approval; " +
 			"agents never ratify. Expired grants and holders with no live token are left out. Answers only for a place you can " +
 			"read; any other place is not found. Requires Author role.",
 		InputSchema: map[string]any{

@@ -52,7 +52,10 @@
 // item and what it rests on (core D150), list_rest_counts reads the counts
 // the last sweep stored for up to 200 items, and confirm_premise records
 // that a Decision still holds although its premise is not in force (D149).
-// Core applies the read rules and, for confirm_premise, ratify.
+// get_premise_flags lists a Decision's premise-flagged pairs, naming a
+// premise only to a caller who reads it, and list_sweep_runs lists each
+// sweep detector's newest run (core T1183). Core applies the read rules
+// and, for confirm_premise, ratify.
 //
 // # The pull request check
 //

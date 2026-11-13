@@ -20,11 +20,17 @@ func searchToolDef() mcpTool {
 			"filter is set. No semantic search. Newest first. Returns hits (type, id, slug, address, " +
 			"title, state, the matched field and a snippet, updated_at), count and total." +
 			" Each hit carries \"awaits_action\" and, for a type with standing, \"standing\"; a Task or Goal hit " +
-			"carries \"state_since\" and \"state_reason\" when known. Requires Author role.",
+			"carries \"state_since\" and \"state_reason\" when known. With narrow, the query matches only addresses and " +
+			"external references, from one character (D14 finds D14, D140-D149 and so on; c26 finds the reference C26), " +
+			"each hit with external_ref and match_reason (address, address-prefix or reference); at most 200 rows are read per " +
+			"type, and at_least with next says there are more: pass next as after to continue. A short page with a next is " +
+			"not the end. Requires Author role.",
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"query":  map[string]any{"type": "string", "description": "Text to find, 2 to 200 characters. Optional when a filter is set."},
+				"query":  map[string]any{"type": "string", "description": "Text to find, 2 to 200 characters (1 with narrow). Optional when a filter is set, required with narrow."},
+				"narrow": map[string]any{"type": "boolean", "description": "Match only addresses and external references, from one character."},
+				"after":  map[string]any{"type": "string", "description": "Continue a narrow search after the next it returned."},
 				"types":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Record types to search (e.g. \"Decision\", \"task_plan\"). Omit for every type."},
 				"states": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "States to keep (e.g. \"proposed\"). Omit for any state."},
 				"place":  map[string]any{"type": "string", "description": "\"none\" for records without a place, or a Domain or Area by address, slug or ID. Omit for any place."},
@@ -46,6 +52,8 @@ func (s *Server) handleSearchTool(ctx smeldr.Context, args map[string]any) (any,
 		Place:  stringArgOr(args, "place", ""),
 		Limit:  intArgOr(args, "limit", 0),
 		Offset: intArgOr(args, "offset", 0),
+		Narrow: boolArgOr(args, "narrow", false),
+		After:  stringArgOr(args, "after", ""),
 	}
 	for key, dst := range map[string]*[]string{"types": &q.Types, "states": &q.States} {
 		if _, ok := args[key]; !ok || args[key] == nil {
@@ -61,7 +69,14 @@ func (s *Server) handleSearchTool(ctx smeldr.Context, args map[string]any) (any,
 	if err != nil {
 		return nil, errorFor(err)
 	}
-	return toolResult(map[string]any{"hits": s.searchHitFacts(ctx, res.Hits), "count": len(res.Hits), "total": res.Total}), nil
+	out := map[string]any{"hits": s.searchHitFacts(ctx, res.Hits), "count": len(res.Hits), "total": res.Total}
+	if res.AtLeast {
+		out["at_least"] = true
+	}
+	if res.Next != "" {
+		out["next"] = res.Next
+	}
+	return toolResult(out), nil
 }
 
 // searchHitFacts returns hits as maps with awaits_action, standing and
@@ -76,6 +91,12 @@ func (s *Server) searchHitFacts(ctx smeldr.Context, hits []smeldr.SearchHit) []m
 		}
 		if h.Field != "" {
 			m["field"], m["snippet"] = h.Field, h.Snippet
+		}
+		if h.MatchReason != "" { // a narrow hit (T1183)
+			m["match_reason"] = h.MatchReason
+			if h.ExternalRef != "" {
+				m["external_ref"] = h.ExternalRef
+			}
 		}
 		out[i] = m
 		byType[h.Type] = append(byType[h.Type], i)

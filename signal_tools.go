@@ -178,6 +178,8 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 			"slug":    sig.Slug,
 			"status":  sig.Status,
 			"address": sig.Address,
+			// T1183: the class core derives from the type.
+			"signal_class": string(smeldr.SignalKindOf(sig.SignalType)),
 		}
 		if len(warnings) > 0 {
 			result["warnings"] = warnings
@@ -248,7 +250,7 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 
 		query := `SELECT id, slug, status, created_at, updated_at, sender, receiver,
 			        signal_type, message, task_ref, sequence,
-			        subject_type, subject_id, from_state, to_state, required_role
+			        subject_type, subject_id, from_state, to_state, required_role, address
 			FROM smeldr_signals` + where +
 			// id DESC breaks ties between Signals created in the same instant,
 			// so pages never repeat or skip a row (ids are UUIDv7, time-ordered).
@@ -268,10 +270,11 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 				createdAt, updatedAt                                      string
 				sequence                                                  int
 				subjectType, subjectID, fromState, toState, requiredRole  string
+				address                                                   string
 			)
 			if err := rows.Scan(&id, &slug, &status, &createdAt, &updatedAt,
 				&sender, &recv, &sigType, &message, &taskRef, &sequence,
-				&subjectType, &subjectID, &fromState, &toState, &requiredRole); err != nil {
+				&subjectType, &subjectID, &fromState, &toState, &requiredRole, &address); err != nil {
 				return nil, &jsonRPCError{Code: -32603, Message: "internal error: " + err.Error()}
 			}
 			m := map[string]any{
@@ -286,6 +289,9 @@ func (s *Server) handleSignalTool(ctx smeldr.Context, name string, args map[stri
 				"message":     message,
 				"task_ref":    taskRef,
 				"sequence":    sequence,
+				// T1183: the address, and the class core derives from the type.
+				"address":      address,
+				"signal_class": string(smeldr.SignalKindOf(sigType)),
 			}
 			// subject_type/subject_id/from_state/to_state/required_role (A296)
 			// are always written together by recordAuthorizationRequiredSignal
@@ -333,7 +339,7 @@ func signalTime(ctx context.Context, stored string) string {
 func (s *Server) listReadableSignals(ctx smeldr.Context, scope *smeldr.ReadScope, where string, whereArgs []any, limit, offset int) (any, *jsonRPCError) {
 	rows, err := s.app.Config().DB.QueryContext(ctx, `SELECT id, slug, status, created_at, updated_at, sender, receiver,
 		        signal_type, message, task_ref, sequence,
-		        subject_type, subject_id, from_state, to_state, required_role
+		        subject_type, subject_id, from_state, to_state, required_role, address
 		FROM smeldr_signals`+where+` ORDER BY created_at DESC, id DESC`, whereArgs...)
 	if err != nil {
 		if isMissingTable(err) {
@@ -349,10 +355,11 @@ func (s *Server) listReadableSignals(ctx smeldr.Context, scope *smeldr.ReadScope
 			createdAt, updatedAt                                      string
 			sequence                                                  int
 			subjectType, subjectID, fromState, toState, requiredRole  string
+			address                                                   string
 		)
 		if err := rows.Scan(&id, &slug, &status, &createdAt, &updatedAt,
 			&sender, &recv, &sigType, &message, &taskRef, &sequence,
-			&subjectType, &subjectID, &fromState, &toState, &requiredRole); err != nil {
+			&subjectType, &subjectID, &fromState, &toState, &requiredRole, &address); err != nil {
 			return nil, &jsonRPCError{Code: -32603, Message: "internal error: " + err.Error()}
 		}
 		if !scope.Readable("Signal", id) || (subjectType != "" && !scope.Readable(subjectType, subjectID)) {
@@ -362,6 +369,7 @@ func (s *Server) listReadableSignals(ctx smeldr.Context, scope *smeldr.ReadScope
 			"id": id, "slug": slug, "status": status, "created_at": signalTime(ctx, createdAt), "updated_at": signalTime(ctx, updatedAt),
 			"sender": sender, "receiver": recv, "signal_type": sigType, "message": message,
 			"task_ref": taskRef, "sequence": sequence,
+			"address": address, "signal_class": string(smeldr.SignalKindOf(sigType)), // T1183
 		}
 		if subjectType != "" {
 			m["subject_type"] = subjectType

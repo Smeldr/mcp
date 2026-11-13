@@ -15,13 +15,19 @@ func restCountToolDefs() []mcpTool {
 			Description: "What rests on this item, and what does it rest on? Give a type and an item (address, slug or ID). " +
 				"Counts, live, the items reached over grounded_in, addresses and amends, transitively, each once: rests_on_this " +
 				"(items that rest on it) and this_rests_on (items it rests on), each split into open (its state awaits action) and " +
-				"closed. Only items you may read are counted or walked through. at_least means the walk stopped at 1,000 items. " +
-				"Requires read access to the item.",
+				"closed, with ratified: how many of the closed are ratified (the rest are other closed). Only items you may read " +
+				"are counted or walked through. at_least means the walk stopped at its limit (1,000, or yours). With addresses, " +
+				"each direction lists a page of the items' addresses, nearest first, and addresses_total. Requires read access " +
+				"to the item.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"type": map[string]any{"type": "string", "description": "The item's type, for example Decision."},
-					"id":   map[string]any{"type": "string", "description": "The item: address, slug or ID."},
+					"type":           map[string]any{"type": "string", "description": "The item's type, for example Decision."},
+					"id":             map[string]any{"type": "string", "description": "The item: address, slug or ID."},
+					"limit":          map[string]any{"type": "integer", "description": "The most items each direction walks, 1 to 1000. Default 1000."},
+					"addresses":      map[string]any{"type": "boolean", "description": "Also list a page of the reached items' addresses in each direction."},
+					"address_offset": map[string]any{"type": "integer", "description": "Skip this many addresses. Default 0."},
+					"address_limit":  map[string]any{"type": "integer", "description": "The page size of addresses, 1 to 200. Default 50."},
 				},
 				"required": []string{"type", "id"},
 			},
@@ -30,7 +36,8 @@ func restCountToolDefs() []mcpTool {
 			Name: "list_rest_counts",
 			Description: "Rest counts for a list of items, as the last sweep stored them (at most 200 items). Each count is summed " +
 				"over the places you may read, so it may be lower than get_rest_counts, never higher; counted_at says when the " +
-				"sweep ran (absent: never). Items you may not read are left out.",
+				"sweep ran (absent: never). ratified says how many of each direction's closed items are ratified, when known " +
+				"(known is false before the first sweep that stored it). Items you may not read are left out.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -69,6 +76,21 @@ func restCountToolDefs() []mcpTool {
 				"required": []string{"reason"},
 			},
 		},
+		{
+			Name: "get_premise_flags",
+			Description: "Which premises of a Decision are flagged (D149)? Give the resting Decision (address, slug or ID). " +
+				"Returns one entry per premise-flagged pair: condition_open (whether a premise-flagged condition is open on it), " +
+				"signal (that condition's address, only when you may read the Signal), premise (address, state and whether it has a place, only when you may read it; a premise you may " +
+				"not read is never named) and confirmation (who confirmed it still holds, their class, when, why and the premise's " +
+				"state then). Answers only for a Decision you can read; any other is not found.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"decision": map[string]any{"type": "string", "description": "The resting Decision: address, slug or ID."},
+				},
+				"required": []string{"decision"},
+			},
+		},
 	}
 }
 
@@ -80,20 +102,29 @@ func (s *Server) restCountsRegistered() bool {
 
 // isRestCountTool reports whether name is one of restCountToolDefs.
 func isRestCountTool(name string) bool {
-	return name == "get_rest_counts" || name == "list_rest_counts" || name == "confirm_premise"
+	return name == "get_rest_counts" || name == "list_rest_counts" || name == "confirm_premise" || name == "get_premise_flags"
 }
 
 // handleRestCountTool runs the rest count tools. The capability gate is
 // core's, and so are the read rules and, for confirm_premise, ratify.
 func (s *Server) handleRestCountTool(ctx smeldr.Context, name string, args map[string]any) (any, *jsonRPCError) {
 	verb := "rest_counts"
-	if name == "confirm_premise" {
+	switch name {
+	case "confirm_premise":
 		verb = "confirm_premise"
+	case "get_premise_flags":
+		verb = "premise_flags"
 	}
 	if err := s.app.AuthorizeCapability(ctx, smeldr.ResourceItem, verb, smeldr.AuthTarget{}); err != nil {
 		return nil, errorFor(err)
 	}
 	switch name {
+	case "get_premise_flags":
+		flags, err := s.app.PremiseFlags(ctx, stringArgOr(args, "decision", ""))
+		if err != nil {
+			return nil, errorFor(err)
+		}
+		return toolResult(map[string]any{"decision": stringArgOr(args, "decision", ""), "flags": flags}), nil
 	case "get_rest_counts":
 		typeName, ident := stringArgOr(args, "type", ""), stringArgOr(args, "id", "")
 		if typeName == "" || ident == "" {
@@ -103,11 +134,26 @@ func (s *Server) handleRestCountTool(ctx smeldr.Context, name string, args map[s
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		counts, err := s.app.RestCounts(ctx, typeName, id)
+		for _, key := range []string{"limit", "address_offset", "address_limit"} {
+			if v, ok := args[key]; ok {
+				if _, isNum := v.(float64); !isNum {
+					return nil, &jsonRPCError{Code: -32602, Message: key + " must be an integer"}
+				}
+			}
+		}
+		opt := smeldr.RestCountOptions{
+			Limit:         intArgOr(args, "limit", 0),
+			Addresses:     boolArgOr(args, "addresses", false),
+			AddressOffset: intArgOr(args, "address_offset", 0),
+			AddressLimit:  intArgOr(args, "address_limit", 0),
+		}
+		counts, err := s.app.RestCountsWith(ctx, typeName, id, opt)
 		if err != nil {
 			return nil, errorFor(err)
 		}
-		return toolResult(map[string]any{"type": typeName, "id": id, "rests_on_this": counts.RestsOnThis, "this_rests_on": counts.ThisRestsOn}), nil
+		return toolResult(map[string]any{"type": typeName, "id": id,
+			"rests_on_this": restDirection(counts.RestsOnThis, counts.RestsOnThisDetail, opt.Addresses),
+			"this_rests_on": restDirection(counts.ThisRestsOn, counts.ThisRestsOnDetail, opt.Addresses)}), nil
 	case "list_rest_counts":
 		raw, _ := args["items"].([]any)
 		if len(raw) == 0 {
@@ -150,6 +196,23 @@ func (s *Server) handleRestCountTool(ctx smeldr.Context, name string, args map[s
 		}
 		return toolResult(withRevWarnings(map[string]any{"confirmed": true}, warnings)), nil
 	}
+}
+
+// restDirection is one direction of get_rest_counts: the count's keys as
+// before, with ratified, and the page of addresses when asked for (T1183).
+func restDirection(c smeldr.RestCount, d smeldr.RestCountDetail, addresses bool) map[string]any {
+	out := map[string]any{"open": c.Open, "closed": c.Closed, "ratified": d.Ratified}
+	if c.AtLeast {
+		out["at_least"] = true
+	}
+	if addresses {
+		page := d.Addresses
+		if page == nil {
+			page = []string{}
+		}
+		out["addresses"], out["addresses_total"] = page, d.AddressesTotal
+	}
+	return out
 }
 
 // confirmPremiseShapeMessage says what is wrong with a confirm_premise call

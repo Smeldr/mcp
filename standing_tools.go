@@ -53,12 +53,14 @@ func (s *Server) withItemFacts(ctx smeldr.Context, typeName string, items []any)
 			"type", typeName, "error", err)
 		hasOpen = false
 	}
-	if !hasStanding && !hasOpen {
+	isSignal := typeName == "Signal" // T1183: a Signal also gets its class
+	if !hasStanding && !hasOpen && !isSignal {
 		return items
 	}
 	type itemKey struct {
-		ID     string
-		Status string
+		ID         string
+		Status     string
+		SignalType string `json:"signal_type"`
 	}
 	raw := make([][]byte, len(items))
 	keys := make([]itemKey, len(items))
@@ -95,6 +97,9 @@ func (s *Server) withItemFacts(ctx smeldr.Context, typeName string, items []any)
 		}
 		if hasOpen {
 			kvs = append(kvs, jsonKV{"awaits_action", open[keys[i].Status]})
+		}
+		if isSignal {
+			kvs = append(kvs, jsonKV{"signal_class", string(smeldr.SignalKindOf(keys[i].SignalType))})
 		}
 		if len(kvs) > 0 {
 			out[i] = spliceJSONKeys(raw[i], kvs...)
