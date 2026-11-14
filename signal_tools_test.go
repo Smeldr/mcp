@@ -1026,7 +1026,7 @@ func TestCreateSignal_GuidedRefusal(t *testing.T) {
 	if rpcErr == nil || rpcErr.Code != -32602 {
 		t.Fatalf("rpcErr = %v; want invalid params", rpcErr)
 	}
-	if !strings.Contains(rpcErr.Message, "send a Task's address (T273), slug or ID in task_ref") {
+	if !strings.Contains(rpcErr.Message, "send a Task's address (a T followed by a number), slug or ID in task_ref") {
 		t.Errorf("message = %q; want the guidance", rpcErr.Message)
 	}
 }

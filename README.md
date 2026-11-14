@@ -429,7 +429,11 @@ request, a refusal with its reason, a conflict, a rev conflict), `data` also has
 the named `values` and a validation error's `fields`. The bare `forbidden` and
 `not found` answers carry no values, since their message hides the detail. An
 untyped or internal error has no `data`. Branch on `data.id`; the list is
-smeldr.dev/core's docs/PROBLEM_TYPES.md.
+smeldr.dev/core's docs/PROBLEM_TYPES.md. `rule` names the records of
+Smeldr's own design that the refusal rests on (Decisions and Tasks on
+smeldr.dev's instance), not records on the instance that answered, and is not
+meant for users; it stays and is not deprecated. A message names no record of
+Smeldr's own instance by its address (core T1211); it may name your own.
 
 The tool gate's own refusal (below the role floor, no token ID, no grant for
 the tool's operation, a read scope that reads nothing of the type, an unknown

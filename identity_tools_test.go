@@ -2,8 +2,14 @@ package mcp
 
 import (
 	"encoding/json"
+	"regexp"
+	"strings"
 	"testing"
 )
+
+// recordAddress matches a record address (D12, T884, ...): a message names
+// none (core T1211).
+var recordAddress = regexp.MustCompile(`\b[DTAGSP][0-9]{2,4}\b`)
 
 // create_token with and without an identity (D165): a classified token gets a
 // new identity, a token naming one joins it, and the class of an identity is
@@ -37,6 +43,8 @@ func TestCreateToken_Identity(t *testing.T) {
 	}
 	if _, rpcErr := create(map[string]any{"name": "bot-4", "identity": "IDN1", "actor_class": "job"}); rpcErr == nil {
 		t.Error("a join with another class: want an error")
+	} else if recordAddress.MatchString(rpcErr.Message) || !strings.Contains(rpcErr.Message, "class is fixed") {
+		t.Errorf("a join with another class: message %q; want the rule without a record address (core T1211)", rpcErr.Message)
 	}
 	if _, rpcErr := create(map[string]any{"name": "bot-5", "identity": "IDN99"}); rpcErr == nil {
 		t.Error("a join with an unknown identity: want an error")

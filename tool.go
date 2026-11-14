@@ -1846,7 +1846,7 @@ func (s *Server) joinIdentity(ctx smeldr.Context, ref, name, role string, class 
 		return "", "", err
 	}
 	if class != "" && string(class) != ident.Class {
-		return "", "", smeldr.Err("actor_class", fmt.Sprintf("identity %s is of class %s, and an identity's class is fixed (D165): leave actor_class out, or mint for a new identity", ident.Address, ident.Class))
+		return "", "", smeldr.Err("actor_class", fmt.Sprintf("identity %s is of class %s, and an identity's class is fixed: leave actor_class out, or mint for a new identity", ident.Address, ident.Class))
 	}
 	raw, err = s.tokenStore.CreateForIdentity(ctx, ident.ID, name, role, ttl, reason)
 	return raw, ident.ID, err

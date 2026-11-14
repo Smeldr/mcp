@@ -13,8 +13,8 @@ import (
 // TestErrorFor_Refusal (core T971): a refusal whose reason is safe to show
 // keeps it; any other forbidden stays the bare "forbidden".
 func TestErrorFor_Refusal(t *testing.T) {
-	got := errorFor(fmt.Errorf("Grant: %w", smeldr.Refused("an agent token never holds ratify (D142)")))
-	if got.Code != -32001 || got.Message != "forbidden: an agent token never holds ratify (D142)" {
+	got := errorFor(fmt.Errorf("Grant: %w", smeldr.Refused("an agent token never holds ratify")))
+	if got.Code != -32001 || got.Message != "forbidden: an agent token never holds ratify" {
 		t.Errorf("refusal: %+v", got)
 	}
 	got = errorFor(fmt.Errorf("%w: item secret-item is not yours", smeldr.ErrForbidden))
@@ -24,7 +24,7 @@ func TestErrorFor_Refusal(t *testing.T) {
 }
 
 // TestGrantRole_AgentRefusalShowsReason (core T971): over MCP, granting an
-// agent token a role that holds ratify is refused with core's D142 reason.
+// agent token a role that holds ratify is refused with core's reason.
 func TestGrantRole_AgentRefusalShowsReason(t *testing.T) {
 	app, db, rs := newGrantTestApp(t)
 	ctx := context.Background()
@@ -43,8 +43,8 @@ func TestGrantRole_AgentRefusalShowsReason(t *testing.T) {
 	srv := New(app)
 	admin := grantAdminCtx(t, rs, "actor-admin")
 	_, rpcErr := callTool(t, srv, admin, "grant_role", map[string]any{"token_id": "agent-1", "role": "approver"})
-	if rpcErr == nil || rpcErr.Code != -32001 || !strings.HasPrefix(rpcErr.Message, "forbidden: an agent token never holds ratify (D142)") {
-		t.Errorf("grant_role: %+v, want the D142 reason", rpcErr)
+	if rpcErr == nil || rpcErr.Code != -32001 || !strings.HasPrefix(rpcErr.Message, "forbidden: an agent token never holds ratify: role \"approver\" holds it") {
+		t.Errorf("grant_role: %+v, want the agent-holds-ratify reason", rpcErr)
 	}
 }
 
