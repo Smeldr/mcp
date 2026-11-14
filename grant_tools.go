@@ -75,7 +75,7 @@ func grantToolDefs() []mcpTool {
 					},
 					"scope_anchor_id": map[string]any{
 						"type":        "string",
-						"description": "Optional anchor item ID for dynamic scope. Only used when the role's scope mode is dynamic.",
+						"description": "Optional anchor item for dynamic scope: its address, slug or ID, resolved and stored as its ID (from core v1.193.2). An anchor that names no item the role can be anchored on is refused (grant.anchor_not_found). Only used when the role's scope mode is dynamic.",
 					},
 					"expires_in_days": map[string]any{
 						"type":        "number",
