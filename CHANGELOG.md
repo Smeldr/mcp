@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [1.77.2] - 2026-11-14
+
 ### Changed
 
 - **The `create_token` refusal for a mismatched `actor_class` no longer names a record address (core T1211).** When `actor_class` differs from the identity's class, the refusal previously ended "(D165)". That address names a record on smeldr.dev's instance, so the text now states the refusal without it. The refusal's type and behaviour are unchanged.
