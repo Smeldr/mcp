@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+---
+
+## [1.77.3] - 2026-11-15
+
 ### Changed
 
 - **The grant_role anchor accepts an address, slug or ID (core T1213).** The `scope_anchor_id` description now says the anchor is the item by its address, slug or ID. Core resolves it and stores the ID from core v1.193.2 on. An anchor that names no item the role can be anchored on is refused with `grant.anchor_not_found`. No code change: the argument passes through. A new test grants `domain-reader` on a Domain's address and checks the stored ID, and checks that an unknown address is refused with -32602 and `data.id` `grant.anchor_not_found`.
