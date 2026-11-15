@@ -55,7 +55,7 @@ func grantToolDefs() []mcpTool {
 	return []mcpTool{
 		{
 			Name: "grant_role",
-			Description: "Grant a governance role to a token. Requires Admin role. Distinct from a token's legacy role field: this is an explicit, separately-audited authorization act (D43). " +
+			Description: "Grant a governance role to a token. Requires Admin role. Distinct from a token's legacy role field: this is an explicit, separately-audited authorization act. " +
 				"Optional expires_in_days makes the grant time-boxed: when it expires it stops authorizing anything at once, with no revoke needed, and list_grants still shows it with its ExpiresAt. The response then carries expires_at.",
 			InputSchema: map[string]any{
 				"type": "object",

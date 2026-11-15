@@ -44,7 +44,7 @@ func dynamicContentToolDefs() []mcpTool {
 	return []mcpTool{
 		{
 			Name:        "define_content_type",
-			Description: "Define a new runtime content type by providing its schema. type_name must be unique and lower_snake_case. fields is a JSON array of {name, type, required, format, role} objects. url_prefix sets the public URL prefix (e.g. \"/recipes\"); omit or leave empty for admin-only types. A type without url_prefix is a record type: each item gets an address (D110) made of address_prefix and a number; the result returns the address_prefix that was set or proposed. Requires Admin role.",
+			Description: "Define a new runtime content type by providing its schema. type_name must be unique and lower_snake_case. fields is a JSON array of {name, type, required, format, role} objects. url_prefix sets the public URL prefix (e.g. \"/recipes\"); omit or leave empty for admin-only types. A type without url_prefix is a record type: each item gets an address made of address_prefix and a number; the result returns the address_prefix that was set or proposed. Requires Admin role.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{

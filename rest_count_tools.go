@@ -59,9 +59,9 @@ func restCountToolDefs() []mcpTool {
 		},
 		{
 			Name: "confirm_premise",
-			Description: "Confirm that a Decision still holds although a Decision it rests on is not in force (D149): resolves " +
+			Description: "Confirm that a Decision still holds although a Decision it rests on is not in force: resolves " +
 				"the open premise-flagged condition with your reason, and it stays closed until the premise's state changes. " +
-				"Name the condition (its Signal address, for example S3170), or the decision and the premise (address, slug or " +
+				"Name the condition (its Signal address, for example S1), or the decision and the premise (address, slug or " +
 				"ID), and give a reason. The condition form works even when you may not read the premise. Needs ratify over " +
 				"the Decision's place; agents never confirm.",
 			InputSchema: map[string]any{
@@ -71,14 +71,14 @@ func restCountToolDefs() []mcpTool {
 					"decision":  map[string]any{"type": "string", "description": "The Decision that rests on the premise."},
 					"premise":   map[string]any{"type": "string", "description": "The Decision it rests on."},
 					"reason":    map[string]any{"type": "string", "description": "Why the Decision still holds."},
-					"rev":       map[string]any{"type": "integer", "description": "The rev of the resting Decision you read. A stale one is refused with rev_conflict and nothing is recorded: read it again, and confirm only if it still holds. Without one: a rev_missing warning until the instance's cutover, then a refusal (core T1010)."},
+					"rev":       map[string]any{"type": "integer", "description": "The rev of the resting Decision you read. A stale one is refused with rev_conflict and nothing is recorded: read it again, and confirm only if it still holds. Without one: a rev_missing warning until the instance's cutover, then a refusal."},
 				},
 				"required": []string{"reason"},
 			},
 		},
 		{
 			Name: "get_premise_flags",
-			Description: "Which premises of a Decision are flagged (D149)? Give the resting Decision (address, slug or ID). " +
+			Description: "Which premises of a Decision are flagged? Give the resting Decision (address, slug or ID). " +
 				"Returns one entry per premise-flagged pair: condition_open (whether a premise-flagged condition is open on it), " +
 				"signal (that condition's address, only when you may read the Signal), premise (address, state and whether it has a place, only when you may read it; a premise you may " +
 				"not read is never named) and confirmation (who confirmed it still holds, their class, when, why and the premise's " +

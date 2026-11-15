@@ -30,7 +30,7 @@ func signalToolDefs() []mcpTool {
 		{
 			Name: "create_signal",
 			Description: "Create a protocol signal in the smeldr_signals table. A condition or " +
-				"request type starts 'open', a history type 'pending' (D115); the result's status " +
+				"request type starts 'open', a history type 'pending'; the result's status " +
 				"says which, and warnings lists what the instance flagged (deprecated_signal_type, " +
 				"message_too_long). Used to record pilot-to-architect or " +
 				"architect-to-pilot hand-offs, or — when receiver is omitted or " +
@@ -43,10 +43,10 @@ func signalToolDefs() []mcpTool {
 					"sender":       map[string]any{"type": "string", "description": "Originating agent identifier, e.g. \"core\", \"architect\"."},
 					"receiver":     map[string]any{"type": "string", "description": "Destination agent identifier. Omit or leave empty for a broadcast to every subscriber (no single-recipient filter)."},
 					"signal_type":  map[string]any{"type": "string", "description": "Protocol verb, e.g. \"plan-ready\", \"commit-ready\"."},
-					"task_ref":     map[string]any{"type": "string", "description": "Task or amendment identifier this signal relates to, e.g. \"T23\", \"A185\"."},
+					"task_ref":     map[string]any{"type": "string", "description": "Task or amendment identifier this signal relates to, e.g. \"T1\", \"A2\"."},
 					"message":      map[string]any{"type": "string", "description": "Free-text body of the signal."},
 					"sequence":     map[string]any{"type": "integer", "description": "Per-task monotonic counter that orders signals in a conversation."},
-					"subject_type": map[string]any{"type": "string", "description": "Type name of the item this signal is about, e.g. \"Decision\", \"Task\". Optional — the general way a signal pattern points at a real item (D86)."},
+					"subject_type": map[string]any{"type": "string", "description": "Type name of the item this signal is about, e.g. \"Decision\", \"Task\". Optional — the general way a signal pattern points at a real item."},
 					"subject_id":   map[string]any{"type": "string", "description": "ID or slug of the item this signal is about. Optional, paired with subject_type."},
 				},
 				"required": []string{"sender", "signal_type"},
@@ -65,7 +65,7 @@ func signalToolDefs() []mcpTool {
 				"properties": map[string]any{
 					"receiver": map[string]any{"type": "string", "description": "Filter by destination agent identifier. At least one of receiver or sender is required."},
 					"sender":   map[string]any{"type": "string", "description": "Filter by originating agent identifier. At least one of receiver or sender is required."},
-					"state":    map[string]any{"type": "string", "description": "Filter by one status. Omitted: what awaits action, open and pending together (D115)."},
+					"state":    map[string]any{"type": "string", "description": "Filter by one status. Omitted: what awaits action, open and pending together."},
 					"limit":    map[string]any{"type": "integer", "description": "Cap the result count, returning the most recent N (created_at descending). Omitted or 0: defaults to 50. Capped at 500."},
 					"offset":   map[string]any{"type": "integer", "description": "Skip this many signals before applying limit (newest first). Omit for 0."},
 				},
@@ -74,7 +74,7 @@ func signalToolDefs() []mcpTool {
 		},
 		{
 			Name: "answer_signal",
-			Description: "Answer an open request (D115): it moves to answered, with your answer as the " +
+			Description: "Answer an open request: it moves to answered, with your answer as the " +
 				"reason and stored on the Signal. answer_ref optionally names the change the answer " +
 				"made, as Type:ident (it must be a record you can read). Sender and receiver are " +
 				"routing names, not identities: any caller who may answer and can read the request " +
@@ -82,16 +82,16 @@ func signalToolDefs() []mcpTool {
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"signal":     map[string]any{"type": "string", "description": "The request: address (S12), slug or ID."},
+					"signal":     map[string]any{"type": "string", "description": "The request: address (such as S1), slug or ID."},
 					"answer":     map[string]any{"type": "string", "description": "The written answer (required)."},
-					"answer_ref": map[string]any{"type": "string", "description": "Optional: the change the answer names, as Type:ident, e.g. \"Task:T42\"."},
+					"answer_ref": map[string]any{"type": "string", "description": "Optional: the change the answer names, as Type:ident, e.g. \"Task:T4\"."},
 				},
 				"required": []string{"signal", "answer"},
 			},
 		},
 		{
 			Name: "withdraw_signal",
-			Description: "Withdraw an open request (D115): it moves to withdrawn, with your reason. " +
+			Description: "Withdraw an open request: it moves to withdrawn, with your reason. " +
 				"Meant for the request's sender; since sender is a routing name, not an identity, any " +
 				"caller who may withdraw and can read the request may withdraw it, and the withdrawal is " +
 				"recorded in provenance with its actor. Requires Author role, and the signal withdraw " +
@@ -99,7 +99,7 @@ func signalToolDefs() []mcpTool {
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"signal": map[string]any{"type": "string", "description": "The request: address (S12), slug or ID."},
+					"signal": map[string]any{"type": "string", "description": "The request: address (such as S1), slug or ID."},
 					"reason": map[string]any{"type": "string", "description": "Why it is withdrawn (required)."},
 				},
 				"required": []string{"signal", "reason"},

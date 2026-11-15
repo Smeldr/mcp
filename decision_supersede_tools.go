@@ -21,7 +21,7 @@ func decisionSupersedeToolDefs() []mcpTool {
 	return []mcpTool{
 		{
 			Name: "supersede_decision",
-			Description: "Replace a Decision in one write (D189): the replacement is recorded, the supersedes relation is " +
+			Description: "Replace a Decision in one write: the replacement is recorded, the supersedes relation is " +
 				"asserted and the replaced Decision moves to superseded, all or nothing. Give exactly one of: replacement, " +
 				"an existing ratified Decision; or new, a replacement this write creates from a title and a basis, places " +
 				"where the replaced one is placed and ratifies. The replaced Decision's sources are not copied to a new one. " +
@@ -42,7 +42,7 @@ func decisionSupersedeToolDefs() []mcpTool {
 							"title":   map[string]any{"type": "string", "description": "Its title, at most 120 characters."},
 							"body":    map[string]any{"type": "string", "description": "Its basis: the claim that binds."},
 							"scope":   map[string]any{"type": "string", "description": "Its scope. Default: the replaced Decision's."},
-							"sources": map[string]any{"type": "array", "description": "Its pinned sources (D148), as on update_decision. Not copied from the replaced Decision.", "items": map[string]any{"type": "object"}},
+							"sources": map[string]any{"type": "array", "description": "Its pinned sources, as on update_decision. Not copied from the replaced Decision.", "items": map[string]any{"type": "object"}},
 						},
 						"required": []string{"title", "body"},
 					},
@@ -52,7 +52,7 @@ func decisionSupersedeToolDefs() []mcpTool {
 		},
 		{
 			Name: "retire_decision",
-			Description: "Take a Decision out of force without a replacement (D189): it moves to retired, its own final " +
+			Description: "Take a Decision out of force without a replacement: it moves to retired, its own final " +
 				"state. The reason is required. Needs ratify over its place; an agent or job token is refused. A superseded " +
 				"Decision that already has its replacement recorded is not retired.",
 			InputSchema: map[string]any{
@@ -68,7 +68,7 @@ func decisionSupersedeToolDefs() []mcpTool {
 		{
 			Name: "repair_superseded",
 			Description: "Repair a Decision that is superseded with no replacement recorded (a decision-replacement " +
-				"finding, D189): name its replacement, a Decision that is or was in force, and the supersedes relation is " +
+				"finding): name its replacement, a Decision that is or was in force, and the supersedes relation is " +
 				"asserted onto it; or retire it. Give exactly one of replacement and retire: true. Needs ratify over the " +
 				"places; an agent or job token is refused. Refused for a Decision that already has its replacement recorded.",
 			InputSchema: map[string]any{

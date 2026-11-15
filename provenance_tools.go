@@ -41,9 +41,9 @@ func provenanceToolDefs() []mcpTool {
 			"second resolution; entries of the same second are ordered by record id), verb (create, update, " +
 			"transition, standing-began, standing-ended), from_state, to_state and whether the act was gated " +
 			"(it required an operation under Strict enforcement). Standing events are entries like any other: " +
-			"held and ceased intervals are read from them. By default (view \"members\", D101) every entry " +
+			"held and ceased intervals are read from them. By default (view \"members\") every entry " +
 			"carries its actor: actor_kind, actor_id, surface and reason. actor_kind is job, agent, human or " +
-			"unclassified (D105); rows written before core v1.121.0 say human for an actor with no " +
+			"unclassified; rows written before core v1.121.0 say human for an actor with no " +
 			"classification and mean unclassified, never a verified person. View \"gated\" narrows the answer " +
 			"to the rule for a wider audience: the actor fields appear only on a gated transition and are " +
 			"absent otherwise. A caller can only narrow its view, never widen it. Paged: limit (default 50, " +
@@ -54,7 +54,7 @@ func provenanceToolDefs() []mcpTool {
 			"\"RoleGrant\" (slug: the grant id) reads a token's or a grant's history (minted, granted, revoked, " +
 			"with actor and reason), also after a grant's row is deleted; it requires the same access as " +
 			"list_tokens or list_grants, and these two names take precedence over a content type of the same name. " +
-			"A status change is one transition entry on every path (core D107); entries written before that core " +
+			"A status change is one transition entry on every path; entries written before that core " +
 			"release may repeat one transition two or three times (same verb, states, actor and surface, within " +
 			"the same second): collapse those when counting.",
 		InputSchema: map[string]any{

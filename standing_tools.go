@@ -12,7 +12,7 @@ import (
 // item's standing (D100). The field is omitted both for a type that has no
 // standing and when the lookup failed (fail-open, logged), so a reader must not
 // conclude "no standing" from absence alone.
-const standingNote = " For a type that has standing (D100) each item also carries a separate " +
+const standingNote = " For a type that has standing each item also carries a separate " +
 	"\"standing\" key (holds, ceased or none), next to its state and never merged into it. An " +
 	"absent \"standing\" means either that the type has no standing or that the lookup failed " +
 	"(logged on the server): never conclude \"no standing\" from its absence alone."
@@ -20,7 +20,7 @@ const standingNote = " For a type that has standing (D100) each item also carrie
 // awaitsActionNote ends the description of every tool whose result carries an
 // item's awaits_action (D109).
 const awaitsActionNote = " Each item also carries \"awaits_action\": true when its state waits for " +
-	"someone to act (open, D109), false when it is closed, as the type's flow declares. An absent " +
+	"someone to act (open), false when it is closed, as the type's flow declares. An absent " +
 	"\"awaits_action\" means unknown (no flow could be read, logged on the server), never closed or open."
 
 // withItemFact adds the item's facts to one item of typeName. See
@@ -158,7 +158,7 @@ func isStandingTool(name string) bool { return name == "get_item_standing" }
 func standingToolDefs() []mcpTool {
 	return []mcpTool{{
 		Name: "get_item_standing",
-		Description: "Read one item's standing (D100): whether its claim is in force. Returns " +
+		Description: "Read one item's standing: whether its claim is in force. Returns " +
 			"{type_name, slug, standing} with standing one of holds, ceased or none (an item of a type " +
 			"that has standing but no stored row is none), or just {type_name, slug} when the type has " +
 			"no standing at all or, rarely, when the flow lookup that decides that failed. " +

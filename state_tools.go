@@ -48,7 +48,7 @@ func stateToolDefs() []mcpTool {
 			Description: "List all legal target states for the item's current state — dynamic " +
 				"content or a compiled type. Uses the registered flow for the type, falling " +
 				"back to the default flow. Returns current_state with awaits_action (whether that " +
-				"state is open, D109), and each transition's to_state with to_awaits_action: false " +
+				"state is open), and each transition's to_state with to_awaits_action: false " +
 				"means the transition closes the item. awaits_action is absent when it cannot be " +
 				"read (unknown). Requires Author role.",
 			InputSchema: map[string]any{
@@ -111,9 +111,9 @@ func stateToolDefs() []mcpTool {
 								"is_initial":         map[string]any{"type": "boolean"},
 								"is_terminal":        map[string]any{"type": "boolean"},
 								"suppresses_signals": map[string]any{"type": "boolean"},
-								"locked":             map[string]any{"type": "boolean", "description": "Content edits are refused while an item is in this state (A306)."},
-								"standing":           map[string]any{"type": "string", "enum": []string{"holds"}, "description": "\"holds\" says an item in this state is in force (D100). Leave out for none."},
-								"awaits_action":      map[string]any{"type": "boolean", "description": "True when an item in this state waits for someone to act: \"open\" (D109). Leave out, or false, for closed; a state without it counts as closed."},
+								"locked":             map[string]any{"type": "boolean", "description": "Content edits are refused while an item is in this state."},
+								"standing":           map[string]any{"type": "string", "enum": []string{"holds"}, "description": "\"holds\" says an item in this state is in force. Leave out for none."},
+								"awaits_action":      map[string]any{"type": "boolean", "description": "True when an item in this state waits for someone to act: \"open\". Leave out, or false, for closed; a state without it counts as closed."},
 							},
 							"required": []string{"name"},
 						},
@@ -128,7 +128,7 @@ func stateToolDefs() []mcpTool {
 								"to":   map[string]any{"type": "string"},
 								"required_role": map[string]any{
 									"type":        "string",
-									"description": "The operation (e.g. \"ratify\", \"manage\") an actor must hold to perform this transition — matched against a role's Operations via RoleStore.Authorized (D63/D64). Field name kept as required_role for wire stability; the value itself is an operation word, not a role name.",
+									"description": "The operation (e.g. \"ratify\", \"manage\") an actor must hold to perform this transition — matched against a role's Operations via RoleStore.Authorized. Field name kept as required_role for wire stability; the value itself is an operation word, not a role name.",
 								},
 							},
 							"required": []string{"from", "to"},

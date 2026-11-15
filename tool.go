@@ -1798,14 +1798,14 @@ func pageItems(items []any, offset, limit int) []any {
 
 // identityArgDescription is the schema description of create_token's
 // identity parameter (D165).
-const identityArgDescription = "Optional identity (D165), by address (IDN4) or id: the token joins it, " +
+const identityArgDescription = "Optional identity, by address (IDN4) or id: the token joins it, " +
 	"is signed with its id, takes its class and acts with its grants, so its history continues; mint, then " +
 	"revoke the old token to rotate. Refused when the identity is not active or has no class. actor_class, " +
 	"if given, must match the identity's class (it is fixed). Without it a classified token gets a new identity."
 
 // actorClassDescription is the schema description of create_token's
 // actor_class parameter.
-const actorClassDescription = "Optional actor classification (D105): agent, job or human. It decides what " +
+const actorClassDescription = "Optional actor classification: agent, job or human. It decides what " +
 	"provenance records as actor_kind for everything done with this token. It never grants or changes a " +
 	"permission. You attest it: a token may be human only if every use of it is the direct result of one authenticated request by that person (an interactive session, or a personal token a service uses only inside that person's own request); a token that software uses on its own initiative is never human. Leave it out for an " +
 	"unclassified token, which records unclassified."

@@ -12,7 +12,7 @@ import (
 // create_subscription and update_subscription (core's SubscriptionFilter).
 var subscriptionFilterSchema = map[string]any{
 	"type": "object",
-	"description": "What the subscription delivers (D116). Every key narrows; an absent one means any. " +
+	"description": "What the subscription delivers. Every key narrows; an absent one means any. " +
 		"Keys: types (item types), events (created, updated, transitioned, published, unpublished, scheduled, archived, deleted, relation.asserted, relation.ended), " +
 		"event_names (full names such as \"task.transitioned\"), from_states, to_states, items (\"Type:ident\"), " +
 		"related_to ({anchor: \"Type:ident\", kind, direction}), fields (routing field to values, e.g. {\"band\": [\"core\"]}; band, scope, receiver, sender, priority), " +
@@ -27,7 +27,7 @@ func subscriptionToolDefs() []mcpTool {
 	return []mcpTool{
 		{
 			Name: "list_subscriptions",
-			Description: "List your subscriptions (D116), your three default ones included. A subscription is what you receive on the event stream: " +
+			Description: "List your subscriptions, your three default ones included. A subscription is what you receive on the event stream: " +
 				"connect with ?subscription=<address> to receive one, or without ?channel= to receive all of yours. " +
 				"owner lists another token's, which needs administer. Requires Author role.",
 			InputSchema: map[string]any{
@@ -39,7 +39,7 @@ func subscriptionToolDefs() []mcpTool {
 		},
 		{
 			Name:        "get_subscription",
-			Description: "Get one of your subscriptions (D116). Another token's needs administer; to anyone else it is not found. Requires Author role.",
+			Description: "Get one of your subscriptions. Another token's needs administer; to anyone else it is not found. Requires Author role.",
 			InputSchema: map[string]any{
 				"type":       "object",
 				"properties": map[string]any{"subscription": ident},
@@ -48,7 +48,7 @@ func subscriptionToolDefs() []mcpTool {
 		},
 		{
 			Name: "create_subscription",
-			Description: "Create a subscription (D116): a filter over the events you may read, delivered on the event stream. " +
+			Description: "Create a subscription: a filter over the events you may read, delivered on the event stream. " +
 				"Returns it with its address (N<n>). At most 100 per owner. owner set to another token, or a webhook delivery, needs administer. Requires Author role.",
 			InputSchema: map[string]any{
 				"type": "object",
@@ -65,7 +65,7 @@ func subscriptionToolDefs() []mcpTool {
 		},
 		{
 			Name: "update_subscription",
-			Description: "Change a subscription (D116): its name, filter or include_own, or pause and resume it (paused true or false). " +
+			Description: "Change a subscription: its name, filter or include_own, or pause and resume it (paused true or false). " +
 				"An omitted argument is left as it is. A default subscription can be paused, not refiltered. Requires Author role.",
 			InputSchema: map[string]any{
 				"type": "object",
@@ -81,7 +81,7 @@ func subscriptionToolDefs() []mcpTool {
 		},
 		{
 			Name:        "delete_subscription",
-			Description: "Delete a subscription (D116). The three defaults cannot be deleted; pause them instead. Requires Author role.",
+			Description: "Delete a subscription. The three defaults cannot be deleted; pause them instead. Requires Author role.",
 			InputSchema: map[string]any{
 				"type":       "object",
 				"properties": map[string]any{"subscription": ident},

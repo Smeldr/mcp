@@ -59,7 +59,7 @@ func changeCheckToolDefs() []mcpTool {
 					"area":    map[string]any{"type": "string", "description": "The Area you answer for: address, slug or ID."},
 					"approve": map[string]any{"type": "boolean", "description": "true to approve, false for not approved."},
 					"reason":  map[string]any{"type": "string", "description": "Why; required when not approved."},
-					"rev":     map[string]any{"type": "integer", "description": "The rev of the Check you read (get_change_check). A stale one is refused with rev_conflict and nothing is recorded; read it again. Without one: a rev_missing warning until the instance's cutover, then a refusal (core T1010)."},
+					"rev":     map[string]any{"type": "integer", "description": "The rev of the Check you read (get_change_check). A stale one is refused with rev_conflict and nothing is recorded; read it again. Without one: a rev_missing warning until the instance's cutover, then a refusal."},
 				},
 				"required": []string{"check", "area", "approve"},
 			},

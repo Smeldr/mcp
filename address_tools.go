@@ -10,7 +10,7 @@ import (
 // type (D110 7.1): the caller learns in advance that the address is the
 // server's, not theirs. A web-content type (one with a URL prefix) has no
 // address and does not get it.
-const createAddressNote = "The address (for example D110) is assigned by the server and returned in the result. " +
+const createAddressNote = "The address (such as D1) is assigned by the server and returned in the result. " +
 	"Do not send one. To record your own numbering, use external_ref."
 
 // addressedCompiledTypes are the compiled types whose items get an address:
@@ -43,7 +43,7 @@ const identifierDescription = "ID, slug or address, all accepted."
 func addressPrefixProp(empty string) map[string]any {
 	return map[string]any{
 		"type": "string",
-		"description": "The record address prefix (D110): 2 to 4 capital letters, for example \"INV\". " +
+		"description": "The record address prefix: 2 to 4 capital letters, for example \"INV\". " +
 			empty + " A type with url_prefix is web content and has none. A prefix already used by another type is refused.",
 	}
 }
@@ -58,7 +58,7 @@ func addressToolDefs() []mcpTool {
 	return []mcpTool{
 		{
 			Name: "migrate_addresses",
-			Description: "Give every record that has no address yet its address (D110), in one transaction. " +
+			Description: "Give every record that has no address yet its address, in one transaction. " +
 				"Without apply (the default) this is a dry run: the same code runs and is rolled back, so the " +
 				"report shows exactly what an apply would do and nothing is written. Applying is a governance " +
 				"act: read a dry run first, and back up the database. The report lists, per type, the prefix, " +

@@ -21,7 +21,7 @@ func searchToolDef() mcpTool {
 			"title, state, the matched field and a snippet, updated_at), count and total." +
 			" Each hit carries \"awaits_action\" and, for a type with standing, \"standing\"; a Task or Goal hit " +
 			"carries \"state_since\" and \"state_reason\" when known. With narrow, the query matches only addresses and " +
-			"external references, from one character (D14 finds D14, D140-D149 and so on; c26 finds the reference C26), " +
+			"external references, from one character (D1 finds D1 and every address that starts with D1; c2 finds the reference C2), " +
 			"each hit with external_ref and match_reason (address, address-prefix or reference); at most 200 rows are read per " +
 			"type, and at_least with next says there are more: pass next as after to continue. A short page with a next is " +
 			"not the end. Requires Author role.",
