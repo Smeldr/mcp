@@ -111,10 +111,9 @@ func (s *Server) handleDecisionSupersedeTool(ctx smeldr.Context, name string, ar
 	replacement := strings.TrimSpace(stringArgOr(args, "replacement", ""))
 	switch name {
 	case "supersede_decision":
+		// Neither or both forms is core's decision.supersede_form (T1236):
+		// the request goes to core as given, so the answer carries the type.
 		raw, hasNew := args["new"]
-		if (replacement != "") == hasNew {
-			return nil, &jsonRPCError{Code: -32602, Message: "give exactly one of replacement and new"}
-		}
 		req := smeldr.SupersedeRequest{Decision: decision, Rev: rev, Reason: reason, Replacement: replacement}
 		if hasNew {
 			nr, rpcErr := newReplacementArg(raw)
@@ -135,13 +134,8 @@ func (s *Server) handleDecisionSupersedeTool(ctx smeldr.Context, name string, ar
 		}
 		return toolResult(res), nil
 	default: // repair_superseded
+		// Neither or both is core's decision.supersede_form, act repair (T1236).
 		retire := boolArgOr(args, "retire", false)
-		if (replacement != "") == retire {
-			if replacement == "" {
-				return nil, &jsonRPCError{Code: -32602, Message: "give exactly one of replacement and retire: true; neither was given"}
-			}
-			return nil, &jsonRPCError{Code: -32602, Message: "give exactly one of replacement and retire: true, not both"}
-		}
 		res, err := s.app.RepairSupersededVia(ctx, surfaceMCP, smeldr.RepairRequest{Decision: decision, Rev: rev, Reason: reason, Replacement: replacement, Retire: retire})
 		if err != nil {
 			return nil, errorFor(err)

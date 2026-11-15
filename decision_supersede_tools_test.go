@@ -68,6 +68,18 @@ func newSupersedeServer(t *testing.T) (*Server, *sql.DB) {
 	return srv, db
 }
 
+// formAct is the act value of a decision.supersede_form answer.
+func formAct(e *jsonRPCError) any {
+	v, _ := e.Data["values"].(map[string]any)
+	if v == nil {
+		if m, ok := e.Data["values"].(map[string]string); ok {
+			return m["act"]
+		}
+		return nil
+	}
+	return v["act"]
+}
+
 func humanCtx() smeldr.Context {
 	return smeldr.NewTestContext(smeldr.User{ID: "human-1", Roles: []smeldr.Role{smeldr.Editor, smeldr.Human}})
 }
@@ -97,8 +109,9 @@ func TestSupersedeTools(t *testing.T) {
 		{"decision": "old", "reason": "r"},
 		{"decision": "old", "reason": "r", "replacement": "new", "new": map[string]any{"title": "t", "body": "b"}},
 	} {
-		if _, rpcErr := callTool(t, srv, ctx, "supersede_decision", args); rpcErr == nil || rpcErr.Code != -32602 {
-			t.Errorf("supersede %v: %+v, want -32602", args, rpcErr)
+		_, rpcErr := callTool(t, srv, ctx, "supersede_decision", args)
+		if rpcErr == nil || rpcErr.Code != -32602 || rpcErr.Data["id"] != "decision.supersede_form" || formAct(rpcErr) != "supersede" {
+			t.Errorf("supersede %v: %+v, want -32602 decision.supersede_form, act supersede (core T1236)", args, rpcErr)
 		}
 	}
 	// An agent: core's refusal with its problem type.
@@ -160,8 +173,9 @@ func TestSupersedeTools(t *testing.T) {
 		{"decision": "lost", "reason": "r", "retire": false},
 		{"decision": "lost", "reason": "r", "replacement": "new", "retire": true},
 	} {
-		if _, rpcErr := callTool(t, srv, ctx, "repair_superseded", args); rpcErr == nil || rpcErr.Code != -32602 {
-			t.Errorf("repair %v: %+v, want -32602", args, rpcErr)
+		_, rpcErr := callTool(t, srv, ctx, "repair_superseded", args)
+		if rpcErr == nil || rpcErr.Code != -32602 || rpcErr.Data["id"] != "decision.supersede_form" || formAct(rpcErr) != "repair" {
+			t.Errorf("repair %v: %+v, want -32602 decision.supersede_form, act repair (core T1236)", args, rpcErr)
 		}
 	}
 	if _, rpcErr := callTool(t, srv, ctx, "repair_superseded", map[string]any{"decision": "lost", "reason": "it was replaced", "replacement": "new"}); rpcErr != nil {

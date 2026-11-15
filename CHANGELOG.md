@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`supersede_decision` and `repair_superseded` answer a form mistake with core's type (core T1236).** Naming both forms or neither (`replacement` and `new` for supersede; `replacement` and `retire: true` for repair) was answered by the tool itself with `-32602` and no `data`. The request now goes to core as given, and the answer is `-32602` with `data.id` `decision.supersede_form` and `values.act` (`supersede` or `repair`), the type the refusal-types page lists. Core checks `reason` first, so a request with no reason gets `field.required` for it before the form. A malformed `new` keeps the tool's own message.
+
 ---
 
 ## [1.77.3] - 2026-11-15
