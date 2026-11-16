@@ -142,6 +142,14 @@ func WithDynamicContent() ServerOption {
 // issuance; all MCP requests (both GET /mcp SSE and POST /mcp/message) must
 // carry a valid OAuth Bearer access token.
 //
+// An access token acts as exactly the Smeldr token pasted at sign-in: at each
+// request the server reads that token again from the App's
+// [smeldr.TokenStore] ([smeldr.TokenStore.ActingUser]) and the request acts
+// with its identity, class and rights, with [smeldr.User.Via] set to the
+// client. The scope gives nothing. An access token whose token is unknown,
+// revoked or expired, or that carries no token (made before this), gets the
+// OAuth challenge (401); an App with no TokenStore answers 500.
+//
 // The OAuth endpoints are served at the same HTTP address as the MCP endpoints.
 // [Server.Handler] mounts:
 //
@@ -158,9 +166,17 @@ func WithDynamicContent() ServerOption {
 //	store, _ := oauth.NewSQLiteStore("./oauth.db")
 //	oauthSrv := oauth.New(oauth.Config{
 //	    Issuer: "https://cms.example.com",
-//	    VerifyBearer: func(token string) bool {
-//	        _, ok := smeldr.VerifyTokenString(token, app.Secret(), app.TokenStore())
-//	        return ok
+//	    ResolveBearer: func(token string) (oauth.Subject, bool) {
+//	        u, ok := smeldr.VerifyTokenString(token, app.Secret(), app.TokenStore())
+//	        if !ok || u.TokenID == "" {
+//	            return oauth.Subject{}, false
+//	        }
+//	        _, exp, ok, _ := app.TokenStore().ActingUser(context.Background(), u.TokenID)
+//	        return oauth.Subject{UserID: u.ID, TokenID: u.TokenID, ExpiresAt: exp}, ok
+//	    },
+//	    TokenActive: func(tokenID string) (oauth.Subject, bool) {
+//	        u, exp, ok, _ := app.TokenStore().ActingUser(context.Background(), tokenID)
+//	        return oauth.Subject{UserID: u.ID, TokenID: tokenID, ExpiresAt: exp}, ok
 //	    },
 //	}, store)
 //	mcpSrv := mcp.New(app, mcp.WithOAuth(oauthSrv))

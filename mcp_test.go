@@ -2210,15 +2210,14 @@ func TestOAuth_ProtectedResourceMetadata(t *testing.T) {
 // a valid OAuth access token returns a 200 JSON-RPC response.
 func TestOAuth_Message_ValidToken_Returns200(t *testing.T) {
 	app := newTestApp(t, smeldr.MCP(smeldr.MCPRead))
-	oauthSrv, store := newTestOAuthServer(t)
-	seedOAuthToken(t, store, "valid-access-token-001", "https://chatgpt.com", "mcp")
-
-	srv := New(app, WithOAuth(oauthSrv))
+	srv := New(app)
+	o := newOAuthActing(t, srv)
+	at := o.access(t, o.mint(t, "author", smeldr.Human), "mcp")
 
 	body := bytes.NewBufferString(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
 	req := httptest.NewRequest(http.MethodPost, "/mcp/message", body)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer valid-access-token-001")
+	req.Header.Set("Authorization", "Bearer "+at)
 	w := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(w, req)
 

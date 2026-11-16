@@ -21,22 +21,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// ─── oauthScopeToRole ────────────────────────────────────────────────────────
-
-func TestOAuthScopeToRole_AdminBranch(t *testing.T) {
-	got := oauthScopeToRole("mcp:admin")
-	if got != smeldr.Admin {
-		t.Errorf("oauthScopeToRole(mcp:admin) = %v, want Admin", got)
-	}
-}
-
-func TestOAuthScopeToRole_AdminAmongMany(t *testing.T) {
-	got := oauthScopeToRole("read write mcp:admin")
-	if got != smeldr.Admin {
-		t.Errorf("oauthScopeToRole with mcp:admin among scopes = %v, want Admin", got)
-	}
-}
-
 // ─── handle — unknown method ──────────────────────────────────────────────────
 
 func TestHandle_UnknownMethod(t *testing.T) {

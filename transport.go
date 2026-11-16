@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -205,8 +206,13 @@ func (s *Server) sseHandler(w http.ResponseWriter, r *http.Request) {
 			s.writeOAuthChallenge(w)
 			return
 		}
-		_, err := s.oauth.ValidateAccessToken(r.Context(), token)
-		if err != nil {
+		at, err := s.oauth.ValidateAccessToken(r.Context(), token)
+		if err == nil {
+			if _, status := s.oauthUser(r, at); status != 0 {
+				s.writeOAuthFailure(w, status)
+				return
+			}
+		} else {
 			if s.fallback && errors.Is(err, oauth.ErrTokenNotFound) {
 				if _, ok := smeldr.VerifyTokenString(token, s.secret, s.tokenStore); !ok {
 					s.writeOAuthChallenge(w)
@@ -278,10 +284,12 @@ func (s *Server) messageHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		at, err := s.oauth.ValidateAccessToken(r.Context(), token)
 		if err == nil {
-			smeldrCtx = newRequestContext(r, smeldr.User{
-				ID:    at.ClientID,
-				Roles: []smeldr.Role{oauthScopeToRole(at.Scope)},
-			})
+			user, status := s.oauthUser(r, at)
+			if status != 0 {
+				s.writeOAuthFailure(w, status)
+				return
+			}
+			smeldrCtx = newRequestContext(r, user)
 		} else if s.fallback && errors.Is(err, oauth.ErrTokenNotFound) {
 			// Token not found in OAuth store — try forge bearer token as fallback.
 			user, ok := smeldr.VerifyTokenString(token, s.secret, s.tokenStore)
@@ -378,21 +386,46 @@ func extractBearerToken(r *http.Request) string {
 	return token
 }
 
-// oauthScopeToRole maps an OAuth scope string to a Smeldr role.
+// oauthUser is the user an OAuth access token acts as: exactly the Smeldr
+// token pasted at sign-in (D195), read again from the token store at each
+// request, so a revoked token, a lowered role or a changed grant takes effect
+// at once. The scope gives nothing. Via names the client the request came
+// through; it is a note of the route and changes no right.
 //
-//	"mcp:admin"      → smeldr.Admin
-//	all other values → smeldr.Author  (standard operator scope for AI clients)
-//
-// The scope "offline_access" is a modifier (enables refresh tokens) and does
-// not affect role mapping — it is combined with the primary scope as a
-// space-separated string (e.g. "mcp offline_access" → Author).
-func oauthScopeToRole(scope string) smeldr.Role {
-	for _, s := range strings.Fields(scope) {
-		if s == "mcp:admin" {
-			return smeldr.Admin
-		}
+// status is 0 when the request may go on, http.StatusUnauthorized when the
+// access token stands for no live token (made before it carried one, or its
+// token is unknown, revoked or expired, or now belongs to another identity),
+// and http.StatusInternalServerError when the token store cannot be read or
+// is not configured: never a pass.
+func (s *Server) oauthUser(r *http.Request, at *oauth.AccessToken) (smeldr.User, int) {
+	if at.TokenID == "" || at.UserID == "" {
+		return smeldr.GuestUser, http.StatusUnauthorized
 	}
-	return smeldr.Author
+	if s.tokenStore == nil {
+		slog.Error("mcp: an OAuth access token cannot be checked: the app has no TokenStore")
+		return smeldr.GuestUser, http.StatusInternalServerError
+	}
+	user, _, ok, err := s.tokenStore.ActingUser(r.Context(), at.TokenID)
+	if err != nil {
+		slog.Error("mcp: an OAuth access token cannot be checked", "error", err)
+		return smeldr.GuestUser, http.StatusInternalServerError
+	}
+	if !ok || user.ID != at.UserID {
+		return smeldr.GuestUser, http.StatusUnauthorized
+	}
+	user.Via = at.ClientID
+	return user, 0
+}
+
+// writeOAuthFailure answers a request whose access token failed oauthUser:
+// the OAuth challenge for 401, so the client signs in again, and a plain
+// error otherwise.
+func (s *Server) writeOAuthFailure(w http.ResponseWriter, status int) {
+	if status == http.StatusUnauthorized {
+		s.writeOAuthChallenge(w)
+		return
+	}
+	http.Error(w, "internal error", status)
 }
 
 // writeOAuthChallenge writes HTTP 401 Unauthorized with a WWW-Authenticate

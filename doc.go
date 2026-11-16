@@ -26,7 +26,10 @@
 //     at runtime rather than compiled in.
 //   - [WithOAuth] — enables OAuth 2.1 authorization via a
 //     smeldr.dev/oauth [*oauth.Server]; once set, all HTTP endpoints require
-//     a Bearer token.
+//     a Bearer token. An access token acts as exactly the Smeldr token pasted
+//     at sign-in: that token's identity, class and rights, read again from
+//     the App's [smeldr.TokenStore] at each request. The scope gives nothing,
+//     and the request's [smeldr.User.Via] names the client.
 //
 // # Search
 //

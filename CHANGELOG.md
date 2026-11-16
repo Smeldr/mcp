@@ -12,6 +12,9 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Security
 
 - **Without governance the change check tools apply their role floor (core T1302).** `check_change` and `record_merge` need Editor, and `answer_change_check`, `get_change_check` and `list_change_checks` need Author, as their descriptions say. They reached the handler before the role gate, and core checks nothing without governance, so any token passed. Under governance nothing changes.
+- **An OAuth access token acts as exactly the Smeldr token pasted at sign-in (core T1287, D195).** Before, a request with an access token acted as the client, with Admin when its scope held `mcp:admin` and Author otherwise, so any valid token could reach Admin tools. Now the server reads the pasted token again at each request (core's `TokenStore.ActingUser`) and the request has that token's identity, class and rights; under governance its grants decide. A revoked token or a lowered role takes effect at the next request. The scope gives nothing, and an agent or job token still never ratifies. `User.Via` names the client, and provenance records it beside the token's identity.
+- **Sign in again.** An access token issued before this carries no token and gets the OAuth challenge (401), as does one whose token is unknown, revoked, expired or now belongs to another identity. An App with no `TokenStore` answers such a request 500, never a pass.
+- **A Go server on oauth's `VerifyBearer` only must move to `ResolveBearer` and `TokenActive`** (smeldr.dev/oauth's next release; the `WithOAuth` example shows the wiring). Needs smeldr.dev/core with `TokenStore.ActingUser` and `User.Via` (A745).
 
 ### Fixed
 
