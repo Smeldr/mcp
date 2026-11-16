@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+	"time"
 
 	smeldr "smeldr.dev/core"
 
@@ -224,6 +225,52 @@ func TestWebhookTools_RetryWebhook_noPool(t *testing.T) {
 	})
 	if rpcErr == nil || rpcErr.Code != -32603 {
 		t.Errorf("expected -32603 (no pool), got %v", rpcErr)
+	}
+}
+
+// retry_webhook against core's own pool (core T1266): a dead and a pending job
+// are queued again, a delivered job is refused with webhook.job_delivered and
+// its status, and an id that names no job with webhook.job_not_found. The App
+// is not run, so no worker delivers anything.
+func TestWebhookTools_RetryWebhook_corePool(t *testing.T) {
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Skipf("sqlite unavailable: %v", err)
+	}
+	db.SetMaxOpenConns(1)
+	t.Cleanup(func() { db.Close() })
+	if err := smeldr.CreateWebhookTables(db); err != nil {
+		t.Fatal(err)
+	}
+	app := smeldr.New(smeldr.Config{BaseURL: "http://localhost", Secret: []byte(webhookTestSecret), DB: db})
+	app.Webhooks(smeldr.NewWebhookStore(db, []byte(webhookTestSecret)))
+	srv := New(app)
+	now := time.Now().UTC()
+	for id, status := range map[string]string{"dead-job": "dead", "pending-job": "pending", "delivered-job": "delivered"} {
+		if _, err := db.ExecContext(context.Background(), `INSERT INTO smeldr_outbound_jobs (id, endpoint_id, target_url, secret_enc, payload, event, attempts, next_retry_at, created_at, expires_at, status)
+			VALUES ($1, 'ep', 'https://example.com/hook', 'enc', '{}', 'post.created', 3, $2, $2, $3, $4)`, id, now.Add(time.Hour), now.Add(2*time.Hour), status); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, id := range []string{"dead-job", "pending-job"} {
+		res, rpcErr := callTool(t, srv, newAdminCtx(), "retry_webhook", map[string]any{"job_id": id})
+		if rpcErr != nil {
+			t.Fatalf("retry %s: %s", id, rpcErr.Message)
+		}
+		if got := unwrapToolResult(t, res); got["retried"] != true || got["job_id"] != id {
+			t.Errorf("retry %s = %v", id, got)
+		}
+	}
+	_, rpcErr := callTool(t, srv, newAdminCtx(), "retry_webhook", map[string]any{"job_id": "delivered-job"})
+	if rpcErr == nil || rpcErr.Code != -32001 || rpcErr.Data["id"] != "webhook.job_delivered" {
+		t.Fatalf("retry of a delivered job = %+v; want -32001 webhook.job_delivered", rpcErr)
+	}
+	if values, _ := rpcErr.Data["values"].(map[string]string); values["status"] != "delivered" {
+		t.Errorf("values = %v; want status delivered", rpcErr.Data["values"])
+	}
+	_, rpcErr = callTool(t, srv, newAdminCtx(), "retry_webhook", map[string]any{"job_id": "no-such-job"})
+	if rpcErr == nil || rpcErr.Code != -32000 || rpcErr.Data["id"] != "webhook.job_not_found" {
+		t.Errorf("retry of an unknown id = %+v; want -32000 webhook.job_not_found", rpcErr)
 	}
 }
 

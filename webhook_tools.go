@@ -75,13 +75,13 @@ func webhookToolDefs() []mcpTool {
 		},
 		{
 			Name:        "retry_webhook",
-			Description: "Manually retry a dead-lettered webhook job. Resets attempts to zero and re-queues for delivery. Requires Admin role.",
+			Description: "Retry a dead or pending webhook job: resets attempts to zero and queues it for delivery now. A job that was already delivered is refused (webhook.job_delivered) and is not sent again; an id that names no job is refused (webhook.job_not_found). Requires Admin role.",
 			InputSchema: map[string]any{
 				"type": "object",
 				"properties": map[string]any{
 					"job_id": map[string]any{
 						"type":        "string",
-						"description": "ID of the dead-lettered job to retry.",
+						"description": "ID of the job to retry.",
 					},
 				},
 				"required": []string{"job_id"},
