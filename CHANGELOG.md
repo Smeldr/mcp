@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- **Without governance the change check tools apply their role floor (core T1302).** `check_change` and `record_merge` need Editor, and `answer_change_check`, `get_change_check` and `list_change_checks` need Author, as their descriptions say. They reached the handler before the role gate, and core checks nothing without governance, so any token passed. Under governance nothing changes.
+
 ### Fixed
 
 - **Tool and argument descriptions name no record of Smeldr's own instance (core T1222).** 46 description texts in 15 files cited a record on smeldr.dev's instance ("Answer an open request (D115)", "Create a subscription (D116)", "its address (for example G12)"); an agent reads them in its tool list, and on its own instance that address is another record or none. The citations are gone, and an example address is a one-digit shape (`G1`, `S1`, `Task:T4`; search's prefix example is "D1 finds D1 and every address that starts with D1"). Tool names and argument names are unchanged. A new test reads every tool and argument description of the tool list and fails on an address; field descriptions that come from core's schemas are core's text and are guarded in core. Those (`title`'s "Required (D112)", the deprecated number fields' "Deprecated (D110)" and a few more) still carry the address in this release and change when mcp pins a core with core T1222's part (A736).

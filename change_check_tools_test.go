@@ -2,10 +2,13 @@ package mcp
 
 import (
 	"testing"
+
+	smeldr "smeldr.dev/core"
 )
 
 // The pull request check tools (core T918). The coverage server has no
-// governance, so core's capability and authority checks are skipped.
+// governance, so core's capability and authority checks are skipped and
+// mcp's role floor applies (core T1302).
 
 const (
 	toolHeadA = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -104,5 +107,49 @@ func TestChangeCheckTools(t *testing.T) {
 	}
 	if _, rpcErr := callTool(t, plain, ctx, "check_change", map[string]any{"repository": "acme/app"}); rpcErr == nil {
 		t.Error("check_change served without the type")
+	}
+}
+
+// Without governance the change check tools apply their legacy role floor
+// before the handler (core T1302): Editor for the writes, Author for the
+// answer and the reads. A refusal enters no handler and writes nothing.
+func TestChangeCheckTools_RoleFloorWithoutGovernance(t *testing.T) {
+	srv, area := newCoverageServer(t)
+	if srv.app.RoleStore() != nil {
+		t.Fatal("the coverage server has governance; this test needs none")
+	}
+	guest := smeldr.NewTestContext(smeldr.User{ID: "g1"})
+	check := map[string]any{"repository": "acme/app", "number": float64(21), "head_commit": toolHeadA, "paths": []any{"internal/billing/a.go"}}
+	for _, tc := range []struct {
+		name string
+		ctx  smeldr.Context
+		tool string
+		args map[string]any
+	}{
+		{"author checks", newAuthorCtx(), "check_change", check},
+		{"author checks an uncovered change", newAuthorCtx(), "check_change", map[string]any{"repository": "other/app", "number": float64(1), "head_commit": toolHeadA, "paths": []any{"x.go"}}},
+		{"author records a merge", newAuthorCtx(), "record_merge", map[string]any{"repository": "acme/app", "number": float64(21), "head_commit": toolHeadA, "merge_commit": toolMerge}},
+		{"guest answers", guest, "answer_change_check", map[string]any{"check": "CHK1", "area": area, "approve": true}},
+		{"guest reads one", guest, "get_change_check", map[string]any{"check": "CHK1"}},
+		{"guest lists", guest, "list_change_checks", map[string]any{"repository": "acme/app"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, rpcErr := callTool(t, srv, tc.ctx, tc.tool, tc.args)
+			if rpcErr == nil || rpcErr.Code != -32001 {
+				t.Errorf("%s = %+v; want -32001", tc.tool, rpcErr)
+			}
+		})
+	}
+	// Nothing was written: an Editor finds no Check for the refused change.
+	res, rpcErr := callTool(t, srv, newEditorCtx(), "list_change_checks", map[string]any{"repository": "acme/app", "number": float64(21)})
+	if rpcErr != nil || len(unwrapToolResult(t, res)["checks"].([]any)) != 0 {
+		t.Errorf("after the refusals: %v %v", res, rpcErr)
+	}
+	// At the floor the tools are served.
+	if _, rpcErr := callTool(t, srv, newEditorCtx(), "check_change", check); rpcErr != nil {
+		t.Errorf("editor check_change: %s", rpcErr.Message)
+	}
+	if _, rpcErr := callTool(t, srv, newAuthorCtx(), "list_change_checks", map[string]any{"repository": "acme/app"}); rpcErr != nil {
+		t.Errorf("author list_change_checks: %s", rpcErr.Message)
 	}
 }

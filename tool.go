@@ -994,10 +994,17 @@ func (s *Server) handleToolsCall(ctx smeldr.Context, params json.RawMessage) (an
 		return s.handleDecisionSupersedeTool(ctx, p.Name, coalesceArgs(p.Arguments))
 	}
 
-	// The pull request check (core T918): core gates check_change and
-	// record_merge by its check_change capability and answers by
-	// approve-change over the Area.
+	// The pull request check (core T918): under governance core gates
+	// check_change and record_merge by its check_change capability and answers
+	// by approve-change over the Area. Without governance core checks nothing,
+	// so the tool's legacy role floor applies here first, as for every other
+	// tool (core T1302).
 	if isChangeCheckTool(p.Name) && s.changeChecksRegistered() {
+		if s.app.RoleStore() == nil {
+			if rpcErr := s.authoriseTool(ctx, p.Name, s.legacyRoleFor(p.Name), nil, smeldr.AuthTarget{}); rpcErr != nil {
+				return nil, rpcErr
+			}
+		}
 		return s.handleChangeCheckTool(ctx, p.Name, coalesceArgs(p.Arguments))
 	}
 
