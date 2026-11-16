@@ -235,6 +235,7 @@ var toolCapabilities = map[string][2]string{
 	"list_findings":       {smeldr.ResourceOps, "list"},
 	"check_change":        {smeldr.ResourceItem, "check_change"},
 	"record_merge":        {smeldr.ResourceItem, "check_change"},
+	"record_close":        {smeldr.ResourceItem, "check_change"},
 	"answer_change_check": {smeldr.ResourceItem, "answer_change_check"},
 	"get_change_check":    {smeldr.ResourceItem, "change_checks"},
 	"list_change_checks":  {smeldr.ResourceItem, "change_checks"},
@@ -501,7 +502,7 @@ func (s *Server) legacyRoleFor(name string) smeldr.Role {
 	if isUploadTool(name) || name == "search" || name == "decisions_for_paths" || name == "approvers_of" || name == "administrators" || name == "list_findings" {
 		return smeldr.Author
 	}
-	if name == "check_coverage" || name == "check_change" || name == "record_merge" {
+	if name == "check_coverage" || name == "check_change" || name == "record_merge" || name == "record_close" {
 		return smeldr.Editor
 	}
 	if name == "answer_change_check" || name == "get_change_check" || name == "list_change_checks" {

@@ -4,3 +4,6 @@ cov.out
 cov_mcp
 coverage
 coverage/
+
+# Test coverage profiles (ci.yml runs go test -coverprofile=coverage.out)
+coverage.out

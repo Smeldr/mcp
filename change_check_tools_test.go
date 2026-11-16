@@ -22,7 +22,7 @@ func TestChangeCheckTools(t *testing.T) {
 	for _, tool := range srv.allToolDefs() {
 		listed[tool.Name] = true
 	}
-	for _, name := range []string{"check_change", "record_merge", "answer_change_check", "get_change_check", "list_change_checks"} {
+	for _, name := range []string{"check_change", "record_merge", "record_close", "answer_change_check", "get_change_check", "list_change_checks"} {
 		if !listed[name] {
 			t.Errorf("%s not listed", name)
 		}
@@ -97,6 +97,29 @@ func TestChangeCheckTools(t *testing.T) {
 		t.Error("a bad merge commit accepted")
 	}
 
+	// A close: the live Check's requests are withdrawn, its state stays.
+	if _, rpcErr := callTool(t, srv, ctx, "update_area", map[string]any{"slug": area, "approval_mode": "requires-approval"}); rpcErr != nil {
+		t.Fatalf("update_area: %s", rpcErr.Message)
+	}
+	if _, rpcErr := callTool(t, srv, ctx, "check_change", map[string]any{"repository": "acme/app", "number": float64(9), "head_commit": toolHeadA, "paths": []any{"internal/billing/a.go"}}); rpcErr != nil {
+		t.Fatalf("check_change: %s", rpcErr.Message)
+	}
+	res, rpcErr = callTool(t, srv, ctx, "record_close", map[string]any{"repository": "acme/app", "number": float64(9), "head_commit": toolHeadA})
+	if rpcErr != nil {
+		t.Fatalf("record_close: %s", rpcErr.Message)
+	}
+	closed := unwrapToolResult(t, res)
+	if closed["covered"] != true || closed["check"].(map[string]any)["Status"] != "awaiting-approval" {
+		t.Errorf("record_close = %v", closed)
+	}
+	res, rpcErr = callTool(t, srv, ctx, "record_close", map[string]any{"repository": "acme/app", "number": float64(99), "head_commit": toolHeadA})
+	if rpcErr != nil || unwrapToolResult(t, res)["covered"] != false {
+		t.Errorf("record_close with no Check: %v %v", res, rpcErr)
+	}
+	if _, rpcErr := callTool(t, srv, ctx, "record_close", map[string]any{"repository": "acme/app", "number": float64(9), "head_commit": "x"}); rpcErr == nil || rpcErr.Code != -32602 {
+		t.Errorf("a bad head accepted: %+v", rpcErr)
+	}
+
 	// Without the type they are neither listed nor served.
 	app, _ := newWriteApp(t)
 	plain := New(app)
@@ -129,6 +152,7 @@ func TestChangeCheckTools_RoleFloorWithoutGovernance(t *testing.T) {
 		{"author checks", newAuthorCtx(), "check_change", check},
 		{"author checks an uncovered change", newAuthorCtx(), "check_change", map[string]any{"repository": "other/app", "number": float64(1), "head_commit": toolHeadA, "paths": []any{"x.go"}}},
 		{"author records a merge", newAuthorCtx(), "record_merge", map[string]any{"repository": "acme/app", "number": float64(21), "head_commit": toolHeadA, "merge_commit": toolMerge}},
+		{"author records a close", newAuthorCtx(), "record_close", map[string]any{"repository": "acme/app", "number": float64(21), "head_commit": toolHeadA}},
 		{"guest answers", guest, "answer_change_check", map[string]any{"check": "CHK1", "area": area, "approve": true}},
 		{"guest reads one", guest, "get_change_check", map[string]any{"check": "CHK1"}},
 		{"guest lists", guest, "list_change_checks", map[string]any{"repository": "acme/app"}},
@@ -151,5 +175,24 @@ func TestChangeCheckTools_RoleFloorWithoutGovernance(t *testing.T) {
 	}
 	if _, rpcErr := callTool(t, srv, newAuthorCtx(), "list_change_checks", map[string]any{"repository": "acme/app"}); rpcErr != nil {
 		t.Errorf("author list_change_checks: %s", rpcErr.Message)
+	}
+}
+
+// Under governance record_close needs core's check_change capability: a
+// caller with no grant is refused before anything is recorded.
+func TestRecordClose_NeedsCapability(t *testing.T) {
+	app, db, _ := newGrantTestApp(t)
+	if err := smeldr.CreateOrchestrationTables(db); err != nil {
+		t.Fatal(err)
+	}
+	smeldr.RegisterOrchestrationTypes(app, db)
+	srv := New(app)
+	_, rpcErr := callTool(t, srv, smeldr.NewTestContext(smeldr.User{ID: "nobody"}), "record_close",
+		map[string]any{"repository": "acme/app", "number": float64(9), "head_commit": toolHeadA})
+	if rpcErr == nil || rpcErr.Code != -32001 {
+		t.Fatalf("record_close without the capability = %+v; want -32001", rpcErr)
+	}
+	if rpcErr.Data["id"] != "capability.denied" {
+		t.Errorf("refusal data = %v; want id capability.denied", rpcErr.Data)
 	}
 }

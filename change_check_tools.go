@@ -47,6 +47,21 @@ func changeCheckToolDefs() []mcpTool {
 			},
 		},
 		{
+			Name: "record_close",
+			Description: "Record that a pull request was closed without a merge. The change is no longer open: its live Check is not reopened when the Decisions " +
+				"for its Areas change, and its open approval requests are withdrawn; the Check's state does not move. Any check_change after the close " +
+				"makes the change open again (the host sends one when the pull request is reopened). No live Check: the close is still recorded. Requires the check_change capability.",
+			InputSchema: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"repository":  map[string]any{"type": "string", "description": "The repository, owner/name."},
+					"number":      map[string]any{"type": "number", "description": "The change's number on the host."},
+					"head_commit": map[string]any{"type": "string", "description": "The change's head commit when it was closed, 40-character SHA."},
+				},
+				"required": []string{"repository", "number", "head_commit"},
+			},
+		},
+		{
 			Name: "answer_change_check",
 			Description: "Answer for one Area of a Check: approve, or not approve with a reason. You must hold approve-change over that Area (its area-approver, its " +
 				"domain-approver or an approver) or item-change-approver on the Check; an agent only through an area-approver grant on that Area or that role. " +
@@ -97,7 +112,7 @@ func changeCheckToolDefs() []mcpTool {
 // isChangeCheckTool reports whether name is one of the tools above.
 func isChangeCheckTool(name string) bool {
 	switch name {
-	case "check_change", "record_merge", "answer_change_check", "get_change_check", "list_change_checks":
+	case "check_change", "record_merge", "record_close", "answer_change_check", "get_change_check", "list_change_checks":
 		return true
 	}
 	return false
@@ -131,6 +146,15 @@ func (s *Server) handleChangeCheckTool(ctx smeldr.Context, name string, args map
 		res, err := s.app.RecordMerge(ctx, smeldr.MergeInput{
 			Repository: stringArgOr(args, "repository", ""), Number: intArgOr(args, "number", 0),
 			HeadCommit: stringArgOr(args, "head_commit", ""), MergeCommit: stringArgOr(args, "merge_commit", ""),
+		})
+		if err != nil {
+			return nil, errorFor(err)
+		}
+		return toolResult(res), nil
+	case "record_close":
+		res, err := s.app.RecordClose(ctx, smeldr.CloseInput{
+			Repository: stringArgOr(args, "repository", ""), Number: intArgOr(args, "number", 0),
+			HeadCommit: stringArgOr(args, "head_commit", ""),
 		})
 		if err != nil {
 			return nil, errorFor(err)
