@@ -584,11 +584,15 @@ func (s *Server) legacyRoleFor(name string) smeldr.Role {
 // empty field). Shallow: only checks top-level argument keys, never recurses
 // into a nested object value - dynamic content's own "fields" map is
 // intentionally schema-free per type and must not be validated here.
+//
+// The grant tools are checked too (core T1248): a grant is the act where a
+// dropped argument changes who may do what. A smeldr-cli flag name sent to
+// grant_role gets the argument it means as a hint.
 func (s *Server) validateKnownArgs(name string, args map[string]any) *jsonRPCError {
 	if len(args) == 0 {
 		return nil
 	}
-	if !strings.HasPrefix(name, "create_") && !strings.HasPrefix(name, "update_") {
+	if !strictArgTools[name] && !strings.HasPrefix(name, "create_") && !strings.HasPrefix(name, "update_") {
 		return nil
 	}
 	def, ok := s.toolDefsByName[name]
@@ -611,11 +615,22 @@ func (s *Server) validateKnownArgs(name string, args map[string]any) *jsonRPCErr
 			if msg, data, retired := smeldr.RetiredFieldGuidance(key); retired {
 				return &jsonRPCError{Code: -32602, Message: "invalid params: " + msg, Data: data}
 			}
+			if hint, ok := grantArgHints[key]; ok && name == "grant_role" {
+				return &jsonRPCError{Code: -32602, Message: "invalid params: unknown parameter: " + key + " (did you mean " + hint + "?)"}
+			}
 			return &jsonRPCError{Code: -32602, Message: "invalid params: unknown parameter: " + key}
 		}
 	}
 	return nil
 }
+
+// strictArgTools are the tools, besides create_* and update_*, whose
+// arguments validateKnownArgs checks (core T1248).
+var strictArgTools = map[string]bool{"grant_role": true, "list_grants": true, "revoke_grant": true}
+
+// grantArgHints maps a smeldr-cli grant flag name, sent to grant_role as an
+// argument, to the argument it means.
+var grantArgHints = map[string]string{"anchor": "scope_anchor_id", "scope": "scope_static", "expires-in-days": "expires_in_days"}
 
 // handleToolsList returns the tools/list result: a "tools" array built by
 // allToolDefs, filtered to the tools ctx's own role could ever successfully

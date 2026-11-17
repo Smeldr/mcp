@@ -223,6 +223,8 @@ during the deprecation window (T87 removes legacy accept).
 (lowercase, respecting any `json:` tag). For `Title string` with no json tag,
 the argument key is `"title"`. For `Tags string \`json:"tags"\``, the key is `"tags"`.
 
+**Unknown arguments:** a `create_*` or `update_*` tool, and the grant tools `grant_role`, `list_grants` and `revoke_grant`, refuse an argument their schema does not declare with `-32602 invalid params: unknown parameter: <key>`, so a misspelt argument is never a silent success. `grant_role` names the argument a smeldr-cli flag name means: `anchor` (`scope_anchor_id`), `scope` (`scope_static`), `expires-in-days` (`expires_in_days`). Other tools still ignore an undeclared argument.
+
 ---
 
 ## Admin read tools
